@@ -58,13 +58,22 @@ PADRAO: dict[str, Any] = {
         # Vazio = escolhido pelo perfil de hardware
         "modelo": "",
         "modelo_rapido": "",
+        # Modelo para o modo programador e os sub-agentes Dev/DevOps (vazio = o principal)
+        "modelo_codigo": "",
         "contexto": 0,
         "threads": 0,
         "temperatura": 0.6,
         "manter_carregado": "30m",
+        # Raciocínio interno (qwen3, deepseek-r1...). Desligado: em CPU deixa tudo muito lento.
+        "pensar": False,
+        "hardware_assinatura": "",
     },
     "agente": {
-        "max_passos": 12,
+        "max_passos": 8,
+        # Tempo máximo de um pedido, em segundos
+        "tempo_maximo": 600,
+        # auto = só as ferramentas da intenção do pedido (rápido) | todas
+        "ferramentas": "auto",
         # seguro | equilibrado | autonomo
         "modo": "equilibrado",
         "pasta_trabalho": "",
@@ -76,8 +85,11 @@ PADRAO: dict[str, Any] = {
         "modelo_stt": "",
         # auto | piper | sistema | edge | nenhum
         "tts": "auto",
-        # feminina | masculina | id de uma voz (veja: optimus vozes)
-        "voz": "feminina",
+        # Prime, Valkyrie, Nexus, Cyber, Stealth, Elite, Aurora, Lyra, Titan (optimus vozes)
+        "voz": "valkyrie",
+        # Voz Elite (ElevenLabs): chave da conta e id da voz (vazio = Daniel)
+        "elevenlabs_chave": "",
+        "elevenlabs_voz": "",
         "velocidade": 1.0,
         "falar_respostas": True,
     },
@@ -90,6 +102,22 @@ PADRAO: dict[str, Any] = {
         "porta": 8765,
         # Senha para acessar a interface de outro aparelho (celular). Vazio = só neste PC.
         "senha": "",
+        # Token para o Home Assistant/Alexa mandarem comandos (POST /api/comando). Vazio = off.
+        "token_comando": "",
+    },
+    "escuta": {
+        # Escuta contínua do serviço (optimus servico): microfone sempre ligado esperando a
+        # palavra de ativação ou duas palmas. Tudo é processado no PC.
+        "ligada": True,
+        "palmas": True,
+        # Sensibilidade do microfone: 0.5 (pouca) a 2.0 (muita)
+        "sensibilidade": 1.0,
+        # Dispositivo de entrada (vazio = o padrão do sistema; veja optimus voz-diagnostico)
+        "microfone": "",
+        # Segundos de conversa sem repetir "Optimus"
+        "janela_conversa": 25,
+        # Guardar o que for falado perto do microfone (mesmo sem chamar) na memória local
+        "memoria_ambiente": False,
     },
     "recursos": {
         # Quanto do PC o Optimus pode usar: economico | equilibrado | maximo
@@ -108,15 +136,26 @@ PADRAO: dict[str, Any] = {
         "lembretes": True,
         "memoria": True,
         "casa": True,
+        "controle": True,
         "plugins": True,
     },
     "casa": {
         # Home Assistant: http://IP:8123 e um token de longa duração (Perfil > Segurança)
         "url": "",
         "token": "",
+        "alexa": "",  # ex.: media_player.echo_sala (Alexa Media Player no Home Assistant)
+    },
+    "imagem": {
+        # Stable Diffusion local (AUTOMATIC1111/Forge com --api). Sem ele, usa o online.
+        "url": "http://127.0.0.1:7860",
+        "online": True,
     },
     # Outros computadores e outras IAs (veja docs/rede.md)
     "destinos": [],
+    # Outros PCs da casa para ligar (Wake-on-LAN) e comandar por SSH (veja docs/controle.md)
+    "computadores": [],
+    # Câmeras IP sem Home Assistant: [[cameras]] nome = "Portão" url = "rtsp://..."
+    "cameras": [],
 }
 
 

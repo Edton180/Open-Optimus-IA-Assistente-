@@ -66,18 +66,21 @@ fi
 
 # 6. Atalho no menu de aplicativos
 mkdir -p "$HOME/.local/share/applications" "$DADOS/icone"
-cp "$PASTA/optimus/web/static/logo.svg" "$DADOS/icone/optimus.svg"
+cp "$PASTA/optimus/web/static/icone-512.png" "$DADOS/icone/optimus.png"
 cat > "$HOME/.local/share/applications/optimus.desktop" <<DESK
 [Desktop Entry]
 Type=Application
 Name=Optimus
 Comment=Assistente de IA local
 Exec=$DADOS/venv/bin/optimus gui
-Icon=$DADOS/icone/optimus.svg
+Icon=$DADOS/icone/optimus.png
 Terminal=false
 Categories=Utility;
 DESK
 ok "Atalho \"Optimus\" criado no menu de aplicativos"
+
+# 7. Iniciar junto com o computador (remova com: optimus startup remove)
+"$DADOS/venv/bin/optimus" startup install || aviso "Rode depois: optimus startup install"
 
 echo
 ok "Pronto! Abra o Optimus pelo menu ou rode:  optimus gui"

@@ -11,11 +11,15 @@ import logging
 from pathlib import Path
 
 from optimus.config import pasta_base
-from optimus.tools import arquivos, casa, desktop, internet, memoria, sistema  # noqa: F401
+from optimus.tools import (  # noqa: F401
+    agentes, arquivos, assistente, casa, codigo, controle, desktop, internet, memoria, sistema,
+)
 from optimus.tools.base import Contexto, Ferramenta, ferramenta, registradas
 
 log = logging.getLogger(__name__)
 _PLUGINS_CARREGADOS = False
+_PRECISAM_HA = {"casa_dispositivos", "casa_controlar", "casa_relatorio",
+                "casa_falar", "casa_varios", "alexa_anunciar"}
 
 
 def carregar_plugins(pasta: Path | None = None) -> list[str]:
@@ -44,7 +48,7 @@ def ferramentas_ativas(config) -> dict[str, Ferramenta]:
     ativas = {}
     sem_casa = not (config.get("casa", "url") and config.get("casa", "token"))
     for nome, item in registradas().items():
-        if sem_casa and nome in ("casa_dispositivos", "casa_controlar"):
+        if sem_casa and nome in _PRECISAM_HA:
             continue
         if item.grupo in ("geral",) or grupos.get(item.grupo, True):
             ativas[nome] = item

@@ -141,6 +141,16 @@ def cmd_voz(args) -> int:
     return 0
 
 
+def cmd_startup(args) -> int:
+    from optimus import startup
+
+    acoes = {"install": lambda: startup.instalar(abrir_navegador=not args.sem_navegador),
+             "remove": startup.remover, "status": startup.status,
+             "restart": startup.reiniciar, "logs": startup.logs}
+    print(acoes[args.acao]())
+    return 0
+
+
 def cmd_hardware(args) -> int:
     from optimus import hardware
 
@@ -208,16 +218,17 @@ def cmd_vozes(args) -> int:
                  "92" if ok else "91"))
         return 0 if ok else 1
     config = cfg.carregar()
-    atual = tts.escolher_voz(config.get("voz", "voz"))
+    chave = config.get("voz", "elevenlabs_chave", "")
+    atual = tts.escolher_voz(config.get("voz", "voz"), chave_elevenlabs=chave)
     print(f"Voz em uso: {atual.nome} ({atual.descricao})\n")
     for voz in tts.VOZES:
-        pronta = (tts.kokoro_instalado() if voz.motor == "kokoro" else
-                  tts.edge_instalado() if voz.motor == "edge" else True)
+        pronta = tts.voz_disponivel(voz, True, chave)
         marca = "✓" if pronta else " "
-        print(f" {marca} {voz.id:42} {voz.genero:10} {voz.descricao}")
-    print("\nTrocar: optimus config voz.voz masculina   (ou um id da lista)")
+        print(f" {marca} {voz.nome:20} {voz.genero:10} {voz.descricao}")
+    print('\nTrocar: optimus config voz.voz nexus   ou diga "Optimus, mude para a voz Nexus"')
     if args.testar:
-        tts.Falante(config.get("voz", "voz")).falar("Olá! Eu sou o Optimus. Tudo pronto.")
+        tts.Falante(config.get("voz", "voz"), config=config).falar(
+            "Olá! Eu sou o Optimus. Tudo pronto.")
     return 0
 
 
@@ -314,6 +325,11 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("tarefa", help="modo autônomo")
     p.add_argument("objetivo")
     p.set_defaults(func=cmd_tarefa)
+    p = sub.add_parser("startup", help="iniciar junto com o computador")
+    p.add_argument("acao", choices=["install", "remove", "status", "restart", "logs"])
+    p.add_argument("--sem-navegador", action="store_true",
+                   help="não abrir o núcleo (HUD) no navegador ao ligar")
+    p.set_defaults(func=cmd_startup)
     p = sub.add_parser("hardware", help="perfil de hardware")
     p.add_argument("--json", action="store_true")
     p.set_defaults(func=cmd_hardware)

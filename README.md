@@ -1,8 +1,8 @@
 <div align="center">
 
-<img src="docs/imagens/logo.svg" alt="Optimus" width="150">
+<img src="docs/imagens/logo.png" alt="Open Optimus" width="260">
 
-# Optimus
+# Open Optimus
 
 **Assistente de IA pessoal, autônomo e de código aberto, que roda no seu próprio computador.
 Conversa por voz, pesquisa na internet, controla o PC e a casa, aprende e lembra. Windows, Linux e Android.**
@@ -49,8 +49,16 @@ Veja [o que mudou](docs/o-que-mudou.md).
 
 ## Telas
 
+![Núcleo do Optimus](docs/imagens/telas/00-nucleo-hud.jpg)
+
+**Núcleo (HUD):** o orbe reage à sua voz e à voz do Optimus. Ligue **🎙️ Ao vivo**, diga
+*"Optimus, ..."* (ou bata duas palmas) e converse; ele responde falando frase por frase enquanto o texto
+ainda está chegando, e para quando você diz *"pare"*.
+
 | | |
 |---|---|
+| ![Confirmação no núcleo](docs/imagens/telas/19-confirmacao-hud.jpg) **Aprovar ou negar ações (clique ou voz)** | <img src="docs/imagens/telas/18-celular-ao-vivo.jpg" width="220" alt="Celular ao vivo"> **Ao vivo no celular** |
+| ![Câmeras](docs/imagens/telas/20-cameras.jpg) **Câmeras da casa ao vivo** | ![Conversa](docs/imagens/telas/02-conversa.jpg) **Modo conversa clássico** |
 | ![Conversa](docs/imagens/telas/02-conversa.jpg) **Conversa com ferramentas** | ![Confirmação](docs/imagens/telas/03-confirmacao.jpg) **Confirmação de ação crítica** |
 | ![Vozes](docs/imagens/telas/11-vozes.jpg) **Vozes femininas e masculinas prontas** | ![Motor](docs/imagens/telas/10-motor.jpg) **Motor escolhido pelo hardware** |
 | ![Rede](docs/imagens/telas/12-rede.jpg) **Outras IAs e outros PCs** | ![Ferramentas](docs/imagens/telas/13-ferramentas.jpg) **Você liga o que ele pode fazer** |
@@ -65,13 +73,13 @@ frases de resposta vêm de regras simples, sem modelo de IA. Com o Ollama, as re
 
 | Grupo | O que faz |
 |---|---|
-| Motor de IA | Ollama, llama.cpp, LM Studio, vLLM ou qualquer API compatível com OpenAI. **Escolhe o modelo pelo hardware** (6 perfis, de 0,8 a 35 bilhões de parâmetros), modelo rápido para voz, **guarda de recursos** (troca para o modelo leve se faltar RAM, prioridade baixa, modo econômico), lê chamadas de ferramenta escritas no texto por modelos pequenos |
+| Motor de IA | Ollama, llama.cpp, LM Studio, vLLM ou qualquer API compatível com OpenAI. Modelos de **várias famílias** (Qwen, Gemma, Llama, DeepSeek, Phi, Mistral, gpt-oss) com o melhor de cada uma para o seu PC, e **aviso para trocar por um maior quando o hardware melhora**. **Escolhe o modelo pelo hardware** (6 perfis, de 0,8 a 35 bilhões de parâmetros), modelo rápido para voz, **guarda de recursos** (troca para o modelo leve se faltar RAM, prioridade baixa, modo econômico), lê chamadas de ferramenta escritas no texto por modelos pequenos |
 | Outras IAs e PCs | Usa a placa de vídeo de outro PC da rede, OpenAI, Claude, Gemini, Groq, OpenRouter, DeepSeek, Mistral; ordem de prioridade e troca automática se um falhar |
 | Agente autônomo | Ciclo de ferramentas (ReAct), **modo autônomo** que planeja e executa até concluir (`optimus tarefa "..."`), roteador rápido para comandos óbvios, proteção contra laços |
-| Internet | Pesquisa, notícias, leitura de páginas, clima (sem chave de API) |
+| Internet | Pesquisa com buscadores de reserva (DuckDuckGo, Bing, Wikipédia), notícias do Google Notícias, leitura de páginas, clima (sem chave de API), **gerar imagens** (Stable Diffusion do PC ou gerador online gratuito) |
 | Controle do PC | Arquivos e pastas (listar, ler, criar, copiar, mover, apagar, buscar), comandos (PowerShell/bash), abrir programas e sites, processos, energia (desligar, reiniciar, suspender, bloquear), teclado, mouse, prints e área de transferência |
-| Casa inteligente | Home Assistant (Wi-Fi, Bluetooth, Zigbee, Matter, **infravermelho**), câmeras (Home Assistant, http ou rtsp), procurar aparelhos Bluetooth, ver quem está no Wi-Fi |
-| Voz | Palavra de ativação "Optimus", **modo conversa** (continua sem repetir o nome), reconhecimento offline (Whisper), **vozes naturais femininas e masculinas offline e online**, fala frase por frase, confirmação por voz |
+| Casa inteligente | Home Assistant (Wi-Fi, Bluetooth, Zigbee, Matter, **infravermelho**), **comandos encadeados** ("apague a sala e ligue o ventilador"), relatório com **sugestões** (calor, umidade, portas abertas), **Alexa** falando avisos, **câmeras ao vivo** (Home Assistant, http ou rtsp), procurar e **conectar** aparelhos Bluetooth, ver quem está no Wi-Fi |
+| Voz | **Conversa ao vivo** no navegador: escuta contínua, palavra "Optimus", **duas palmas**, interrupção com "pare", resposta falada frase por frase enquanto chega. Reconhecimento do navegador ou offline (Whisper). Vozes **Prime, Valkyrie, Nexus, Cyber, Stealth**, Aurora, Lyra, Titan e **Elite** (ElevenLabs); troque falando "mude para a voz Nexus". Confirmação por voz |
 | Memória | Fatos de longo prazo, **base de conhecimento** que aprende com sites, arquivos e PDFs e é consultada sozinha, lembretes e alarmes (com repetição) |
 | Interface | Painel web local com histórico, **projetos**, **personas**, **biblioteca de prompts**, **conversa em grupo** (várias personas respondem), uso de CPU/RAM ao vivo, registro de ações, tema escuro, funciona no celular e pode virar app (PWA) |
 | Segurança | 4 níveis de risco, 3 modos (seguro, equilibrado, autônomo), confirmação estrita (negação sempre vence), comandos que destroem o sistema bloqueados, registro de tudo com senhas mascaradas, senha para acesso pela rede |
@@ -104,7 +112,8 @@ cd optimus && bash scripts/instalar-android.sh
 
 O instalador coloca o Python se faltar, instala o Optimus, **baixa as vozes naturais**, instala o
 **Ollama**, **escolhe e baixa o modelo certo para o seu PC** e cria o atalho "Optimus". Depois é só abrir o
-atalho ou rodar `optimus gui`.
+atalho ou rodar `optimus gui`. O instalador também liga o **início automático** (o Optimus sobe junto
+com o computador); para tirar: `optimus startup remove`.
 
 Passo a passo, instalação manual e requisitos: [docs/instalacao.md](docs/instalacao.md).
 
@@ -116,6 +125,7 @@ optimus                     # conversa no terminal
 optimus voz                 # fale "Optimus, que horas são?"
 optimus tarefa "organize minha pasta Downloads por tipo de arquivo"   # modo autônomo
 optimus hardware            # perfil escolhido para este PC
+optimus startup install     # iniciar junto com o computador (status, restart, logs, remove)
 optimus doutor              # diagnóstico
 optimus --demo gui          # testar a interface sem modelo de IA
 ```

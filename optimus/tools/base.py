@@ -32,6 +32,7 @@ class Contexto:
     banco: Any = None
     pasta_trabalho: Path = field(default_factory=Path.home)
     perfil: Any = None
+    agente: Any = None  # o agente que está usando a ferramenta (para sub-agentes)
 
 
 Risco = int | Callable[[dict[str, Any], Contexto], Avaliacao]

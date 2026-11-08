@@ -34,34 +34,54 @@ from optimus.voice import tts
 
 log = logging.getLogger(__name__)
 ESTATICOS = Path(__file__).parent / "static"
-_SEGREDOS = ("chave_api", "token", "senha")
+_SEGREDOS = ("chave_api", "token", "senha", "elevenlabs_chave", "token_comando")
 
 
 class Tarefa:
+    """Um pedido em andamento: pendente → executando → concluida / falhou / cancelada."""
+
     def __init__(self):
         self.id = uuid.uuid4().hex[:12]
         self.eventos: list[dict[str, Any]] = []
-        self.terminou = False
+        self.estado = "pendente"
         self.pendente: dict[str, Any] | None = None
         self._resposta: queue.Queue[bool] = queue.Queue()
+        self._cancelar = threading.Event()
+        self._contador = 0
         self.criada = time.time()
+
+    @property
+    def terminou(self) -> bool:
+        return self.estado in ("concluida", "falhou", "cancelada")
 
     def evento(self, dados: dict[str, Any]) -> None:
         dados["quando"] = time.time()
         self.eventos.append(dados)
 
     def confirmar(self, chamada, avaliacao) -> bool:
-        self.pendente = {"nome": chamada.nome, "argumentos": chamada.argumentos,
-                         "motivo": avaliacao.motivo, "nivel": avaliacao.nivel}
-        try:
-            aprovado = self._resposta.get(timeout=600)
-        except queue.Empty:
-            aprovado = False
+        self._contador += 1
+        self.pendente = {"id": f"{self.id}-{self._contador}", "nome": chamada.nome,
+                         "argumentos": chamada.argumentos, "motivo": avaliacao.motivo,
+                         "nivel": avaliacao.nivel}
+        aprovado = False
+        limite = time.monotonic() + 600
+        while time.monotonic() < limite and not self._cancelar.is_set():
+            try:
+                aprovado = self._resposta.get(timeout=0.5)
+                break
+            except queue.Empty:
+                continue
         self.pendente = None
         return aprovado
 
     def responder(self, aprovado: bool) -> None:
         self._resposta.put(aprovado)
+
+    def cancelar(self) -> None:
+        self._cancelar.set()
+
+    def cancelada(self) -> bool:
+        return self._cancelar.is_set()
 
 
 class Estado:
@@ -78,7 +98,8 @@ class Estado:
     def falante(self, voz: str) -> tts.Falante:
         if voz not in self._falantes:
             self._falantes[voz] = tts.Falante(
-                voz, self.optimus.config.get("voz", "velocidade", 1.0))
+                voz, self.optimus.config.get("voz", "velocidade", 1.0),
+                config=self.optimus.config)
         return self._falantes[voz]
 
     def ouvinte(self):
@@ -91,12 +112,22 @@ class Estado:
 
     def limpar(self) -> None:
         limite = time.time() - 3600
-        for chave in [k for k, t in self.tarefas.items() if t.terminou and t.criada < limite]:
+        for chave in [k for k, t in list(self.tarefas.items())
+                      if t.terminou and t.criada < limite]:
             del self.tarefas[chave]
+
+
+_SENHA_EM_LINK = re.compile(r"(://[^:/@\s]+:)[^@\s]+@")
 
 
 def _mascarar_config(dados: dict) -> dict:
     copia = json.loads(json.dumps(dados))
+    for secao in copia.values():
+        for item in (secao if isinstance(secao, list) else [secao]):
+            if isinstance(item, dict):
+                for chave, valor in item.items():
+                    if isinstance(valor, str):
+                        item[chave] = _SENHA_EM_LINK.sub(r"\1••••••@", valor)
     for secao in copia.values():
         itens = secao if isinstance(secao, list) else [secao]
         for item in itens:
@@ -107,9 +138,23 @@ def _mascarar_config(dados: dict) -> dict:
     return copia
 
 
+_MODOS = {
+    "web": "Pesquise na internet sobre ",
+    "imagem": "Gere uma imagem de ",
+}
+
+
+def _aplicar_modo(texto: str, modo: str) -> str:
+    """Os botões de modo da interface (pesquisar, gerar imagem) viram parte do pedido."""
+    prefixo = _MODOS.get(modo, "")
+    return prefixo + texto if prefixo and not texto.lower().startswith(prefixo[:12].lower()) \
+        else texto
+
+
 def _executar_pedido(estado: Estado, tarefa: Tarefa, corpo: dict[str, Any]) -> None:
     optimus = estado.optimus
     banco = optimus.banco
+    tarefa.estado = "executando"
     try:
         conversa_id = int(corpo.get("conversa") or 0)
         texto = str(corpo.get("texto", "")).strip()
@@ -125,10 +170,19 @@ def _executar_pedido(estado: Estado, tarefa: Tarefa, corpo: dict[str, Any]) -> N
         banco.adicionar_mensagem(conversa_id, "user", texto)
         participantes = corpo.get("grupo") or [corpo.get("persona") or conversa.get("persona")
                                                or "optimus"]
+        if corpo.get("modo") == "programar" and not corpo.get("grupo") and \
+                banco.persona("programador"):
+            participantes = ["programador"]
         for chave in participantes[:5]:
             persona = banco.persona(chave) or banco.persona("optimus")
+            if tarefa.cancelada():
+                break
             agente = optimus.criar_agente(confirmar=tarefa.confirmar, ao_evento=tarefa.evento)
-            pedido = texto
+            agente.cancelado = tarefa.cancelada
+            modo = corpo.get("modo") or ""
+            if modo == "pensar":
+                agente.pensar = True
+            pedido = _aplicar_modo(texto, modo)
             if len(participantes) > 1:
                 pedido = (f"{texto}\n\n(Conversa em grupo. Você é {persona['nome']}. Responda do "
                           "seu ponto de vista, sem repetir o que os outros já disseram.)")
@@ -141,11 +195,11 @@ def _executar_pedido(estado: Estado, tarefa: Tarefa, corpo: dict[str, Any]) -> N
             historico += [{"role": "user", "content": pedido},
                           {"role": "assistant", "content": f"[{persona['nome']}] {resposta}"}]
             tarefa.evento({"tipo": "final", "texto": resposta, **extra})
-    except Exception as erro:  # noqa: BLE001
+        tarefa.estado = "cancelada" if tarefa.cancelada() else "concluida"
+    except Exception as erro:  # noqa: BLE001 - o erro vai para a tela, não some
         log.exception("Falha no pedido")
         tarefa.evento({"tipo": "erro", "texto": f"{type(erro).__name__}: {erro}"})
-    finally:
-        tarefa.terminou = True
+        tarefa.estado = "falhou"
 
 
 def _baixar_modelo(estado: Estado, modelo: str) -> None:
@@ -268,6 +322,7 @@ class Manipulador(BaseHTTPRequestHandler):
                         "ram_livre_gb": round(memoria.available / 1024**3, 1)},
                 "modo": optimus.config.get("agente", "modo"),
                 "avisos": estado.avisos[-10:],
+                "aviso_modelo": optimus.aviso_modelo,
             })
         if recurso == "conversas":
             if metodo == "GET" and not ident:
@@ -296,12 +351,22 @@ class Manipulador(BaseHTTPRequestHandler):
             tarefa = estado.tarefas[ident]
             desde = int((consulta.get("desde") or ["0"])[0])
             return self._json({"eventos": tarefa.eventos[desde:], "total": len(tarefa.eventos),
-                               "pendente": tarefa.pendente, "terminou": tarefa.terminou})
+                               "pendente": tarefa.pendente, "terminou": tarefa.terminou,
+                               "estado": tarefa.estado})
+        if recurso == "cancelar" and metodo == "POST":
+            tarefa = estado.tarefas.get(self._corpo().get("tarefa", ""))
+            if tarefa:
+                tarefa.cancelar()
+            return self._json({"ok": bool(tarefa)})
         if recurso == "confirmar" and metodo == "POST":
             corpo = self._corpo()
             tarefa = estado.tarefas.get(corpo.get("tarefa", ""))
             if not tarefa:
                 return self._json({"erro": "tarefa não encontrada"}, 404)
+            if not tarefa.pendente:
+                return self._json({"erro": "não há confirmação pendente nesta tarefa"}, 409)
+            if corpo.get("id") and corpo["id"] != tarefa.pendente.get("id"):
+                return self._json({"erro": "esta confirmação já foi respondida"}, 409)
             aprovado = corpo.get("aprovar")
             if isinstance(aprovado, str):
                 nivel = (tarefa.pendente or {}).get("nivel", 1)
@@ -324,7 +389,7 @@ class Manipulador(BaseHTTPRequestHandler):
                     optimus.config.dados[secao] = valores
                     continue
                 for chave, valor in (valores or {}).items():
-                    if chave in _SEGREDOS and valor == "••••••":
+                    if isinstance(valor, str) and "••••••" in valor:  # mascarado na tela: mantém
                         continue
                     optimus.config.definir(secao, chave, valor)
             optimus.config.salvar()
@@ -374,20 +439,67 @@ class Manipulador(BaseHTTPRequestHandler):
         if recurso == "acoes":
             return self._json({"acoes": optimus.auditoria.ultimas(100)})
         if recurso == "vozes":
+            chave = optimus.config.get("voz", "elevenlabs_chave", "")
             return self._json({
-                "vozes": [v.__dict__ for v in tts.VOZES],
+                "vozes": [dict(v.__dict__, disponivel=tts.voz_disponivel(v, True, chave))
+                          for v in tts.VOZES],
                 "kokoro": tts.kokoro_instalado(), "edge": tts.edge_instalado(),
-                "atual": tts.escolher_voz(optimus.config.get("voz", "voz")).__dict__})
+                "atual": tts.escolher_voz(optimus.config.get("voz", "voz"),
+                                          chave_elevenlabs=chave).__dict__})
         if recurso == "falar" and metodo == "POST":
+            # Uma frase (ou um trecho) por vez: a interface pede frase por frase e toca em
+            # sequência, então a fala começa logo e a resposta inteira é falada.
             corpo = self._corpo()
             falante = estado.falante(corpo.get("voz") or optimus.config.get("voz", "voz"))
             frases = tts.dividir_frases(corpo.get("texto", ""))
-            audio, formato = falante.sintetizar(" ".join(frases)[:1500] or "Pronto.")
+            if not frases:
+                return self._json({"erro": "nada para falar"}, 400)
+            try:
+                audio, formato = falante.sintetizar(" ".join(frases)[:4000])
+            except Exception as erro:  # noqa: BLE001 - a interface usa a voz do navegador
+                log.warning("Fala falhou: %s", erro)
+                return self._json({"erro": f"{type(erro).__name__}: {erro}",
+                                   "voz": falante.voz.nome}, 503)
+            if not audio:
+                return self._json({"erro": "o motor de voz não gerou áudio"}, 503)
             return self._bytes(audio, "audio/mpeg" if formato == "mp3" else "audio/wav")
         if recurso == "ouvir" and metodo == "POST":
             tamanho = int(self.headers.get("Content-Length") or 0)
             audio = self.rfile.read(tamanho)
-            return self._json({"texto": estado.ouvinte().transcrever(audio)})
+            try:
+                texto = estado.ouvinte().transcrever(audio)
+            except ImportError:
+                return self._json({"erro": "O reconhecimento offline (faster-whisper) não está "
+                                           "instalado: pip install faster-whisper"}, 503)
+            except Exception as erro:  # noqa: BLE001
+                log.warning("Reconhecimento falhou: %s", erro)
+                return self._json({"erro": f"{type(erro).__name__}: {erro}"}, 503)
+            return self._json({"texto": texto})
+        if recurso == "cameras" and metodo == "GET":
+            from optimus.tools.casa import cameras_configuradas
+
+            return self._json({"cameras": cameras_configuradas(optimus.config)})
+        if recurso == "camera" and metodo == "GET":
+            from optimus.tools.casa import cameras_configuradas, imagem_da_camera
+
+            ident_camera = (consulta.get("id") or [""])[0]
+            # Só câmeras conhecidas: a interface não vira um proxy para qualquer endereço.
+            if ident_camera not in {c["id"] for c in cameras_configuradas(optimus.config)}:
+                return self._json({"erro": "câmera desconhecida"}, 404)
+            try:
+                foto = imagem_da_camera(optimus.config, ident_camera)
+                return self._bytes(foto, "image/png" if foto[:4] == b"\x89PNG" else "image/jpeg")
+            except Exception as erro:  # noqa: BLE001
+                return self._json({"erro": f"{type(erro).__name__}: {erro}"}, 502)
+        if recurso == "midia" and metodo == "GET" and len(partes) == 3:
+            pasta, nome = partes[1], partes[2]
+            if pasta not in ("imagens", "cameras") or "/" in nome or ".." in nome:
+                return self._json({"erro": "arquivo não permitido"}, 403)
+            alvo = cfg.pasta_base() / pasta / nome
+            if not alvo.is_file():
+                return self._json({"erro": "não encontrado"}, 404)
+            tipo = mimetypes.guess_type(alvo.name)[0] or "application/octet-stream"
+            return self._bytes(alvo.read_bytes(), tipo)
         if recurso == "modelos" and ident == "baixar" and metodo == "POST":
             modelo = self._corpo().get("modelo", "")
             if modelo and estado.downloads.get(modelo, {}).get("terminou") is not False:
@@ -395,9 +507,54 @@ class Manipulador(BaseHTTPRequestHandler):
                 threading.Thread(target=_baixar_modelo, args=(estado, modelo),
                                  daemon=True).start()
             return self._json({"ok": True})
+        if recurso == "modelos" and ident == "catalogo":
+            from optimus import modelos
+
+            memoria, gpu = modelos.memoria_util_gb(optimus.hardware)
+            return self._json({"memoria_util_gb": memoria, "gpu": gpu,
+                               "familias": modelos.melhores_por_familia(optimus.hardware),
+                               "catalogo": [m.para_dict() for m in modelos.CATALOGO]})
+        if recurso == "modelo" and ident in ("atualizar", "dispensar") and metodo == "POST":
+            from optimus import modelos
+
+            aviso = optimus.aviso_modelo
+            if not aviso:
+                return self._json({"erro": "não há troca de modelo pendente"}, 409)
+            if ident == "dispensar":
+                modelos.dispensar_aviso(optimus.config, optimus.hardware)
+            else:
+                modelos.aceitar_upgrade(optimus.config, optimus.hardware, aviso["modelo"])
+                if estado.downloads.get(aviso["modelo"], {}).get("terminou") is not False:
+                    estado.downloads[aviso["modelo"]] = {"pct": 0, "terminou": False}
+                    threading.Thread(target=_baixar_modelo, args=(estado, aviso["modelo"]),
+                                     daemon=True).start()
+                optimus.recarregar()
+            optimus.aviso_modelo = None
+            return self._json({"ok": True, "modelo": aviso["modelo"]})
         if recurso == "modelos" and ident == "progresso":
             return self._json(estado.downloads)
         self._json({"erro": "rota não encontrada"}, 404)
+
+
+def aquecer_modelos(optimus: Optimus) -> list[str]:
+    """Deixa o modelo rápido (voz) e o principal carregados: a 1ª resposta não espera o disco."""
+    motor = optimus.motor
+    alvos = getattr(motor, "destinos", None)
+    motores = [d.motor for d in alvos] if alvos else [motor]
+    manter = optimus.config.get("motor", "manter_carregado", "30m") or "30m"
+    modelos = []
+    for nome in (optimus.config.get("motor", "modelo_rapido") or optimus.perfil.modelo_rapido,
+                 optimus.modelo_atual()):
+        if nome and nome not in modelos:
+            modelos.append(nome)
+    aquecidos = []
+    for m in motores:
+        if not hasattr(m, "aquecer"):
+            continue
+        for nome in modelos:
+            if m.aquecer(nome, manter):
+                aquecidos.append(nome)
+    return aquecidos
 
 
 def iniciar(host: str = "127.0.0.1", porta: int = 8765, abrir_navegador: bool = True,
@@ -408,6 +565,7 @@ def iniciar(host: str = "127.0.0.1", porta: int = 8765, abrir_navegador: bool = 
         raise SystemExit("Para abrir a interface na rede (celular), defina uma senha: "
                          "optimus config web.senha SUA_SENHA")
     Manipulador.estado = Estado(optimus)
+    threading.Thread(target=aquecer_modelos, args=(optimus,), daemon=True).start()
     Manipulador.senha = senha
     servidor = ThreadingHTTPServer((host, porta), Manipulador)
     servidor.daemon_threads = True

@@ -100,6 +100,7 @@ class Banco:
             self._con.executemany("INSERT INTO prompts (titulo, texto, categoria) VALUES (?,?,?)",
                                   PROMPTS_INICIAIS)
         self._con.commit()
+        self.limpar_lixo_da_v01()
 
     def _exec(self, sql: str, args: tuple = ()) -> sqlite3.Cursor:
         with self._trava:
@@ -173,12 +174,28 @@ class Banco:
         self._exec("DELETE FROM fatos WHERE id=?", (fato_id,))
 
     def buscar_fatos(self, consulta: str, limite: int = 8) -> list[str]:
-        palavras = [p for p in consulta.lower().split() if len(p) > 3]
-        todos = [f["texto"] for f in self.fatos()]
+        """Só os fatos que têm a ver com a consulta (antes vinham todos, sempre)."""
+        palavras = {p for p in re.findall(r"\w+", consulta.lower()) if len(p) > 3}
         if not palavras:
-            return todos[-limite:]
-        pontuados = sorted(todos, key=lambda t: -sum(p in t.lower() for p in palavras))
-        return pontuados[:limite]
+            return []
+        pontuados = []
+        for fato in self.fatos():
+            nota = sum(p in fato["texto"].lower() for p in palavras)
+            if nota:
+                pontuados.append((nota, fato["texto"]))
+        pontuados.sort(key=lambda item: -item[0])
+        return [texto for _, texto in pontuados[:limite]]
+
+    def buscar_mensagens(self, consulta: str, limite: int = 10) -> list[dict[str, Any]]:
+        """Procura nas conversas antigas (memória de conversas anteriores)."""
+        termos = [t for t in re.findall(r"\w+", consulta.lower()) if len(t) > 3][:6]
+        if not termos:
+            return []
+        filtro = " OR ".join("lower(m.conteudo) LIKE ?" for _ in termos)
+        return self._todos(
+            "SELECT m.conversa, m.papel, substr(m.conteudo, 1, 400) AS trecho, m.quando, "
+            f"c.titulo FROM mensagens m JOIN conversas c ON c.id = m.conversa WHERE {filtro} "
+            "ORDER BY m.id DESC LIMIT ?", (*[f"%{t}%" for t in termos], limite))
 
     # Base de conhecimento (o que o Optimus aprendeu com sites, arquivos e textos)
     def aprender(self, fonte: str, titulo: str, texto: str, tamanho: int = 1200) -> int:
@@ -217,6 +234,10 @@ class Banco:
 
     # Lembretes
     def criar_lembrete(self, texto: str, quando: float, repetir_minutos: int = 0) -> int:
+        repetido = self._todos("SELECT id FROM lembretes WHERE feito=0 AND texto=? AND "
+                               "abs(quando-?) < 600", (texto, quando))
+        if repetido:  # o mesmo lembrete já existe: não duplica
+            return repetido[0]["id"]
         return self._exec("INSERT INTO lembretes (texto, quando, repetir_minutos) VALUES (?,?,?)",
                           (texto, quando, repetir_minutos)).lastrowid
 
@@ -235,6 +256,25 @@ class Banco:
                        (time.time() + lembrete["repetir_minutos"] * 60, lembrete["id"]))
         else:
             self._exec("UPDATE lembretes SET feito=1 WHERE id=?", (lembrete["id"],))
+
+    def cancelar_lembretes(self, filtro: str = "") -> int:
+        """Cancela os lembretes pendentes (todos, ou os que contêm o filtro)."""
+        if filtro:
+            return self._exec("DELETE FROM lembretes WHERE feito=0 AND lower(texto) LIKE ?",
+                              (f"%{filtro.lower()}%",)).rowcount
+        return self._exec("DELETE FROM lembretes WHERE feito=0").rowcount
+
+    def limpar_lixo_da_v01(self) -> int:
+        """A v0.1 com modelos pequenos chegou a criar lembretes e fatos com o próprio texto
+        de sistema ("Fale em português do Brasil, educado..."). Remove esse lixo."""
+        marcas = ("%fale em portugu%educado%", "%assistente pessoal%criado%",
+                  "%assistente criado%", "%optimus voz%", "%direto e com%humor%")
+        total = 0
+        for marca in marcas:
+            total += self._exec("DELETE FROM lembretes WHERE lower(texto) LIKE ?",
+                                (marca,)).rowcount
+            total += self._exec("DELETE FROM fatos WHERE lower(texto) LIKE ?", (marca,)).rowcount
+        return total
 
     def apagar_lembrete(self, lembrete_id: int) -> None:
         self._exec("DELETE FROM lembretes WHERE id=?", (lembrete_id,))

@@ -60,15 +60,20 @@ if (-not $SemIA) {
 
 # 5. Atalhos na área de trabalho e no menu Iniciar
 $Shell = New-Object -ComObject WScript.Shell
+$Icone = & (Join-Path $Dados "venv\Scripts\python.exe") -c "import optimus, os; print(os.path.join(os.path.dirname(optimus.__file__), 'web', 'static', 'optimus.ico'))"
 foreach ($Destino in @([Environment]::GetFolderPath("Desktop"), (Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs"))) {
     $Atalho = $Shell.CreateShortcut((Join-Path $Destino "Optimus.lnk"))
     $Atalho.TargetPath = (Join-Path $Dados "venv\Scripts\pythonw.exe")
     $Atalho.Arguments = "-m optimus gui"
     $Atalho.WorkingDirectory = $env:USERPROFILE
     $Atalho.Description = "Optimus - assistente de IA local"
+    if ($Icone -and (Test-Path $Icone)) { $Atalho.IconLocation = $Icone }
     $Atalho.Save()
 }
 Ok "Atalho 'Optimus' criado na área de trabalho e no menu Iniciar"
+
+# 6. Iniciar junto com o Windows (remova com: optimus startup remove)
+& $Optimus startup install
 
 Write-Host ""
 Ok "Pronto! Abra pelo atalho ou rode: optimus gui"

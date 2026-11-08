@@ -1,6 +1,7 @@
 import json
 
-from optimus.agent import Agente, roteador_rapido
+from optimus.agent import Agente
+from optimus.roteador import roteador_rapido
 from optimus.banco import Banco
 from optimus.config import Config
 from optimus.engine.base import ChamadaFerramenta, Motor, Resposta, extrair_chamadas_do_texto
@@ -12,9 +13,11 @@ class MotorRoteiro(Motor):
     def __init__(self, respostas):
         self.respostas = list(respostas)
         self.recebidas = []
+        self.ferramentas_recebidas = []
 
     def conversar(self, mensagens, modelo, ferramentas=None, opcoes=None):
         self.recebidas.append(list(mensagens))
+        self.ferramentas_recebidas.append([f["function"]["name"] for f in ferramentas or []])
         return self.respostas.pop(0)
 
     def disponivel(self):
@@ -57,7 +60,7 @@ def test_acao_critica_negada_nao_executa(tmp_path):
     a = agente(motor, tmp_path, confirmar=lambda c, av: perguntas.append(av) or False)
     a.responder("apague")
     assert alvo.exists() and len(perguntas) == 1
-    assert "não autorizou" in motor.recebidas[1][-1]["content"]
+    assert "não autorizou" in motor.recebidas[1][-1]["content"].lower()
 
 
 def test_acao_critica_aprovada_executa(tmp_path):
@@ -77,7 +80,8 @@ def test_comando_destrutivo_bloqueado_sem_perguntar(tmp_path):
         Resposta(chamadas=[ChamadaFerramenta("executar_comando", {"comando": "rm -rf /"})]),
         Resposta(texto="Não posso."),
     ])
-    agente(motor, tmp_path, confirmar=lambda c, av: perguntas.append(1) or True).responder("x")
+    agente(motor, tmp_path, confirmar=lambda c, av: perguntas.append(1) or True).responder(
+        "rode este comando no terminal")
     assert perguntas == []
     assert "bloqueada" in motor.recebidas[1][-1]["content"]
 
@@ -114,7 +118,7 @@ def test_laco_repetido_e_interrompido(tmp_path):
     chamada = lambda: Resposta(chamadas=[ChamadaFerramenta("data_hora", {})])  # noqa: E731
     motor = MotorRoteiro([chamada() for _ in range(4)] + [Resposta(texto="fim")])
     assert agente(motor, tmp_path).responder("hora?") == "fim"
-    assert "já chamou" in motor.recebidas[-1][-1]["content"]
+    assert "não repita" in motor.recebidas[-1][-1]["content"].lower()
 
 
 def test_memoria_e_conhecimento_entram_no_prompt(tmp_path):

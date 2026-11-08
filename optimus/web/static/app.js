@@ -11,6 +11,7 @@ const estado = {
   config: null, vozes: [], ocupado: false, projeto: "", conversas: [], nome: "Optimus",
 };
 try { estado.falar = localStorage.getItem("optimus_falar") === "1"; } catch (e) {}
+const aoVivo = { ligado: false, janelaAte: 0 };
 
 // ---------- API ----------
 let senha = "";
@@ -79,19 +80,38 @@ function quando(ts) {
   return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }) + " " + d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
 }
 function definirEstado(tipo, texto) {
+  // Ao vivo, "pronto" quer dizer "ouvindo": o microfone continua aberto.
+  if (tipo === "pronto" && aoVivo.ligado) { tipo = "ouvindo"; texto = texto === "Pronto" ? "Ouvindo… diga “Optimus”" : texto; }
   $("#orbe").className = "orbe " + tipo;
   $("#estado-texto").textContent = texto;
+  Hud.estado(tipo);
 }
 
 // ---------- Navegação ----------
+let modoHud = true;
+try { modoHud = localStorage.getItem("optimus_hud") !== "0"; } catch (e) {}
 function irPara(tela) {
-  $$(".menu button").forEach((b) => b.classList.toggle("ativo", b.dataset.tela === tela));
+  if (tela === "hud" || tela === "chat") {
+    modoHud = tela === "hud";
+    try { localStorage.setItem("optimus_hud", modoHud ? "1" : "0"); } catch (e) {}
+    document.body.classList.toggle("modo-hud", modoHud);
+    tela = "chat";
+  }
+  const ativo = tela === "chat" ? (modoHud ? "hud" : "chat") : tela;
+  $$(".menu button").forEach((b) => b.classList.toggle("ativo", b.dataset.tela === ativo));
+  $$("#hud-nav button").forEach((b) => b.classList.toggle("ativo", b.dataset.ir === (tela === "chat" ? "painel-conversa" : tela)));
   $$(".tela").forEach((t) => t.classList.toggle("ativa", t.id === "tela-" + tela));
+  document.body.classList.toggle("fora-do-chat", tela !== "chat");
   app.classList.remove("lateral-aberta");
   const carregar = { personas: carregarPersonas, prompts: carregarPrompts, memoria: carregarMemoria, acoes: carregarAcoes, config: carregarConfig, casa: carregarCasa }[tela];
   if (carregar) carregar();
 }
 $$(".menu button").forEach((b) => b.addEventListener("click", () => irPara(b.dataset.tela)));
+$$("#hud-nav button").forEach((b) => b.addEventListener("click", () => {
+  const destino = b.dataset.ir;
+  if (destino === "painel-conversa") document.body.classList.toggle("transcricao-aberta");
+  else irPara(destino);
+}));
 $("#abrir-lateral").onclick = () => app.classList.add("lateral-aberta");
 $("#fechar-lateral").onclick = () => app.classList.remove("lateral-aberta");
 $("#alternar-painel").onclick = () => {
@@ -111,7 +131,17 @@ async function atualizarSistema() {
     for (const [id, valor] of [["cpu", d.uso.cpu], ["ram", d.uso.ram]]) {
       const barra = $("#" + id + "-barra"); barra.style.width = valor + "%"; barra.classList.toggle("alto", valor > 85);
       $("#" + id + "-valor").textContent = Math.round(valor) + "%";
+      Hud.anel("anel-" + id, valor / 100, Math.round(valor) + "%");
     }
+    historicoCpu.push(d.uso.cpu); if (historicoCpu.length > 40) historicoCpu.shift();
+    Hud.grafico($("#grafico-cpu"), historicoCpu);
+    const aviso = $("#aviso-modelo");
+    if (d.aviso_modelo && !aviso.dataset.mostrado) {
+      aviso.dataset.mostrado = "1";
+      aviso.innerHTML = "🧠 " + esc(d.aviso_modelo.texto) + `<div class="linha">${d.aviso_modelo.automatico ? "" : `<button class="botao pequeno primario" id="aceitar-modelo">Usar ${esc(d.aviso_modelo.modelo)}</button>`}<button class="botao pequeno" id="dispensar-modelo">${d.aviso_modelo.automatico ? "Entendi" : "Agora não"}</button></div>`;
+      aviso.classList.remove("oculto");
+    }
+    else if (!d.aviso_modelo) aviso.classList.add("oculto");
     const hw = d.hardware;
     $("#hw-info").innerHTML = [
       ["Sistema", `${hw.sistema} ${hw.versao_sistema}`], ["CPU", hw.cpu], ["Núcleos", `${hw.nucleos_fisicos} / ${hw.nucleos_logicos} threads`],
@@ -128,6 +158,17 @@ async function atualizarSistema() {
     mostrarLembretes(d.avisos);
   } catch (e) { if (e.message !== "senha") definirEstado("erro", "Sem conexão com o Optimus"); }
 }
+const historicoCpu = [];
+document.addEventListener("click", async (e) => {
+  if (e.target.closest("#dispensar-modelo")) {
+    try { await api("/api/modelo/dispensar", { method: "POST", json: {} }); } catch (err) {}
+    $("#aviso-modelo").classList.add("oculto"); return;
+  }
+  if (!e.target.closest("#aceitar-modelo")) return;
+  e.target.disabled = true;
+  try { await api("/api/modelo/atualizar", { method: "POST", json: {} }); e.target.textContent = "Baixando… acompanhe em Configurações"; }
+  catch (err) { e.target.textContent = "Falhou: " + err.message; }
+});
 const avisados = new Set();
 function mostrarLembretes(avisos) {
   for (const a of avisos) {
@@ -135,9 +176,9 @@ function mostrarLembretes(avisos) {
     if (avisados.has(chave)) continue;
     avisados.add(chave);
     if (Date.now() / 1000 - a.quando > 60) continue;
-    if ("Notification" in window && Notification.permission === "granted") new Notification("Optimus", { body: a.texto, icon: "/logo.svg" });
+    if ("Notification" in window && Notification.permission === "granted") new Notification("Optimus", { body: a.texto, icon: "/icone-192.png" });
     adicionarMensagem("optimus", `⏰ **Lembrete:** ${a.texto}`, { nome: "Lembrete" });
-    if (estado.falar) falar("Lembrete: " + a.texto);
+    if (estado.falar || aoVivo.ligado) falar("Lembrete: " + a.texto);
   }
 }
 
@@ -218,7 +259,7 @@ function adicionarMensagem(quem, texto, extra = {}) {
   const alvo = $(".texto", div);
   if (quem === "usuario") alvo.textContent = texto; else alvo.innerHTML = markdown(texto);
   const [ouvir, copiar] = $$(".quem button", div);
-  if (ouvir) ouvir.onclick = () => falar(texto);
+  if (ouvir) ouvir.onclick = () => Voz.falar(texto);
   if (copiar) copiar.onclick = () => navigator.clipboard && navigator.clipboard.writeText(texto);
   $("#mensagens").appendChild(div);
   $("#mensagens").scrollTop = $("#mensagens").scrollHeight;
@@ -230,38 +271,75 @@ function nomePersona(chave) {
 }
 
 // ---------- Enviar e acompanhar ----------
+let tarefaAtual = "";
+function legenda(quem, texto) {
+  const el = $(quem === "usuario" ? "#legenda-usuario" : "#legenda-optimus");
+  const t = String(texto || "").replace(/```[\s\S]*?```/g, " [código] ").replace(/[*#`>]/g, "").trim();
+  el.textContent = t.length > 260 ? "…" + t.slice(-260) : t;
+}
+
 async function enviar(textoVoz) {
   const entrada = $("#entrada");
-if (window.innerWidth <= 760) entrada.placeholder = "Fale com o Optimus…";
   const texto = (textoVoz || entrada.value).trim();
   if (!texto || estado.ocupado) return;
   entrada.value = ""; ajustarEntrada();
   estado.ocupado = true;
+  $("#parar").classList.remove("oculto");
   adicionarMensagem("usuario", texto);
+  legenda("usuario", texto); legenda("optimus", "");
   const resposta = adicionarMensagem("optimus", "", { persona: estado.persona });
   $(".texto", resposta).innerHTML = '<div class="digitando"><span></span><span></span><span></span></div>';
   definirEstado("pensando", "Pensando…");
   const grupo = estado.grupo ? $$("#grupo-escolha input:checked").map((i) => i.value) : null;
+  const modo = estado.modo; desmarcarModo();
   try {
-    const { tarefa } = await api("/api/enviar", { method: "POST", json: { conversa: estado.conversa, texto, persona: estado.persona, grupo: grupo && grupo.length ? grupo : null, voz: !!textoVoz, projeto: $("#filtro-projeto").value } });
-    await acompanhar(tarefa, resposta);
+    const { tarefa } = await api("/api/enviar", { method: "POST", json: { conversa: estado.conversa, texto, persona: estado.persona, grupo: grupo && grupo.length ? grupo : null, voz: !!textoVoz, projeto: $("#filtro-projeto").value, modo } });
+    tarefaAtual = tarefa;
+    await acompanhar(tarefa, resposta, !!textoVoz);
   } catch (e) {
-    if (e.message !== "senha") $(".texto", resposta).innerHTML = `<p>⚠️ ${esc(e.message)}</p>`;
+    if (e.message !== "senha") { $(".texto", resposta).innerHTML = `<p>⚠️ ${esc(e.message)}</p>`; legenda("optimus", "⚠️ " + e.message); }
   }
+  tarefaAtual = "";
   estado.ocupado = false;
-  definirEstado("pronto", "Pronto");
+  $("#parar").classList.add("oculto");
+  if (!Voz.falando()) definirEstado("pronto", "Pronto");
   carregarConversas();
 }
 
-async function acompanhar(tarefa, bolha) {
-  let desde = 0; let pendenteMostrado = false; let atual = bolha; let primeiraFinal = true;
+$("#parar").onclick = async () => {
+  Voz.parar();
+  if (tarefaAtual) { try { await api("/api/cancelar", { method: "POST", json: { tarefa: tarefaAtual } }); } catch (e) {} }
+  definirEstado("pronto", "Pronto");
+};
+
+function deveFalar(porVoz) { return estado.falar || aoVivo.ligado || porVoz; }
+
+async function acompanhar(tarefa, bolha, porVoz) {
+  let desde = 0; let pendenteId = ""; let atual = bolha; let usada = false;
+  let parcial = ""; let falouParcial = false;
+  const falar = deveFalar(porVoz);
+  const novaBolha = () => { if (usada) { atual = adicionarMensagem("optimus", "", {}); usada = false; } };
   while (true) {
-    const d = await api(`/api/tarefa/${tarefa}?desde=${desde}`);
+    let d;
+    try { d = await api(`/api/tarefa/${tarefa}?desde=${desde}`); }
+    catch (e) { if (e.message === "senha") return; await new Promise((r) => setTimeout(r, 1000)); continue; }
     desde = d.total;
     for (const ev of d.eventos) {
       if (ev.tipo === "conversa") estado.conversa = ev.id;
       else if (ev.tipo === "pensando") definirEstado("pensando", ev.passo > 1 ? `Pensando (passo ${ev.passo})…` : "Pensando…");
-      else if (ev.tipo === "ferramenta") {
+      else if (ev.tipo === "parcial") {
+        novaBolha();
+        parcial += ev.texto;
+        $(".texto", atual).innerHTML = markdown(parcial);
+        legenda("optimus", parcial);
+        if (falar) { Voz.adicionarParcial(ev.texto); falouParcial = true; }
+        else definirEstado("falando", "Respondendo…");
+      } else if (ev.tipo === "limpar_parcial") {
+        // O modelo começou a escrever e decidiu usar uma ferramenta: o texto era rascunho.
+        parcial = ""; $(".texto", atual).innerHTML = '<div class="digitando"><span></span><span></span><span></span></div>';
+        if (falouParcial) { Voz.parar(); falouParcial = false; }
+      } else if (ev.tipo === "ferramenta") {
+        novaBolha();
         definirEstado("executando", "Executando " + ev.nome);
         const passo = document.createElement("details");
         passo.className = "passo";
@@ -270,30 +348,36 @@ async function acompanhar(tarefa, bolha) {
       } else if (ev.tipo === "resultado") {
         const passos = $$(".passo pre", atual);
         if (passos.length) passos[passos.length - 1].textContent = bonito(ev.resultado);
-      } else if (ev.tipo === "negada") {
+        mostrarMidia(ev.resultado, atual);
+      } else if (ev.tipo === "negada" || ev.tipo === "aprovada") {
         const passos = $$(".passo summary", atual);
-        if (passos.length) passos[passos.length - 1].insertAdjacentHTML("beforeend", ' <span class="nivel bloqueado">negada</span>');
+        if (passos.length) passos[passos.length - 1].insertAdjacentHTML("beforeend", ev.tipo === "negada" ? ' <span class="nivel bloqueado">negada</span>' : ' <span class="nivel livre">aprovada</span>');
       } else if (ev.tipo === "aviso") {
         $(".passos", atual).insertAdjacentHTML("beforeend", `<div class="passo">⚠️ ${esc(ev.texto)}</div>`);
+      } else if (ev.tipo === "resposta" && ev.velocidade) {
+        Hud.anel("anel-vel", Math.min(1, ev.velocidade / 40), String(Math.round(ev.velocidade)));
       } else if (ev.tipo === "final") {
-        if (!primeiraFinal) atual = adicionarMensagem("optimus", "", ev);
-        primeiraFinal = false;
+        novaBolha(); usada = true;
         $(".texto", atual).innerHTML = markdown(ev.texto);
+        legenda("optimus", ev.texto);
         $(".quem", atual).firstChild.textContent = ev.nome && ev.persona !== "optimus" ? ev.nome : estado.nome;
         $(".quem", atual).insertAdjacentHTML("beforeend", ` <span class="sutil">${ev.segundos}s</span>`);
         const [ouvir, copiar] = $$(".quem button", atual);
-        ouvir.onclick = () => falar(ev.texto);
+        ouvir.onclick = () => Voz.falar(ev.texto);
         copiar.onclick = () => navigator.clipboard && navigator.clipboard.writeText(ev.texto);
-        if (estado.falar) falar(ev.texto);
+        if (falar) { if (falouParcial) Voz.finalizar(); else Voz.falar(ev.texto); }
+        parcial = ""; falouParcial = false;
       } else if (ev.tipo === "erro") {
         $(".texto", atual).innerHTML = `<p>⚠️ ${esc(ev.texto)}</p>`;
+        legenda("optimus", "⚠️ " + ev.texto);
+        definirEstado("erro", "Erro");
       }
       $("#mensagens").scrollTop = $("#mensagens").scrollHeight;
     }
-    if (d.pendente && !pendenteMostrado) { pendenteMostrado = true; mostrarConfirmacao(tarefa, d.pendente, atual); }
-    if (!d.pendente) pendenteMostrado = false;
+    if (d.pendente && d.pendente.id !== pendenteId) { pendenteId = d.pendente.id; mostrarConfirmacao(tarefa, d.pendente, atual); }
+    if (!d.pendente && pendenteId) { $$(".confirmacao.aberta").forEach((c) => fecharConfirmacao(c, "")); pendenteId = ""; }
     if (d.terminou) break;
-    await new Promise((r) => setTimeout(r, 450));
+    await new Promise((r) => setTimeout(r, d.pendente ? 500 : 250));
   }
 }
 function resumoArgs(a) {
@@ -301,25 +385,52 @@ function resumoArgs(a) {
   return t.length > 90 ? t.slice(0, 90) + "…" : t;
 }
 function bonito(t) { try { return JSON.stringify(JSON.parse(t), null, 2); } catch (e) { return t; } }
+function mostrarMidia(resultado, bolha) {
+  let dados; try { dados = JSON.parse(resultado); } catch (e) { return; }
+  const imagens = [dados.imagem, ...(dados.imagens || [])].filter((x) => typeof x === "string" && x.startsWith("/api/midia/"));
+  for (const src of imagens) {
+    const fig = document.createElement("a"); fig.href = src; fig.target = "_blank"; fig.className = "midia";
+    fig.innerHTML = `<img src="${esc(src)}" alt="Imagem gerada" loading="lazy">`;
+    $(".passos", bolha).appendChild(fig);
+  }
+}
 
+// ---------- Confirmações (Aprovar / Negar) ----------
+let confirmacaoAberta = null;
+function fecharConfirmacao(div, texto) {
+  div.classList.remove("aberta");
+  $$("button", div).forEach((b) => (b.disabled = true));
+  if (texto) div.insertAdjacentHTML("beforeend", `<div class="sutil resultado-confirmacao">${texto}</div>`);
+  if (confirmacaoAberta && confirmacaoAberta.div === div) confirmacaoAberta = null;
+}
 function mostrarConfirmacao(tarefa, p, bolha) {
   definirEstado("executando", "Aguardando sua confirmação");
   const critico = p.nivel >= 2;
   const div = document.createElement("div");
-  div.className = "confirmacao" + (critico ? " critico" : "");
+  div.className = "confirmacao aberta" + (critico ? " critico" : "");
+  div.dataset.id = p.id;
   div.innerHTML = `<h4>${critico ? "⛔ Ação crítica" : "⚠️ Confirmar ação"}</h4>
     <div>O Optimus quer <b>${esc(p.motivo)}</b>.</div><code>${esc(p.nome)}(${esc(JSON.stringify(p.argumentos, null, 1))})</code>
-    <div class="linha"><button class="botao ${critico ? "perigo" : "primario"}" data-sim>Aprovar</button><button class="botao" data-nao>Negar</button></div>`;
+    <div class="linha"><button type="button" class="botao aprovar" data-sim>✔ Aprovar</button><button type="button" class="botao negar" data-nao>✖ Negar</button></div>
+    ${aoVivo.ligado ? `<div class="sutil">Ou diga ${critico ? "“confirmo”" : "“sim”"} ou “não”.</div>` : ""}`;
   $(".passos", bolha).appendChild(div);
-  if (estado.falar) falar(`Atenção. Posso ${p.motivo}?`);
-  const responder = async (sim) => {
+  const responder = async (resposta) => {
     $$("button", div).forEach((b) => (b.disabled = true));
-    div.insertAdjacentHTML("beforeend", `<div class="sutil">${sim ? "✅ Aprovado por você" : "❌ Negado por você"}</div>`);
-    await api("/api/confirmar", { method: "POST", json: { tarefa, aprovar: sim } });
+    try {
+      const r = await api("/api/confirmar", { method: "POST", json: { tarefa, id: p.id, aprovar: resposta } });
+      fecharConfirmacao(div, r.aprovado ? "✅ Aprovado por você" : "❌ Negado por você");
+      definirEstado("pensando", r.aprovado ? "Executando…" : "Cancelado por você");
+    } catch (e) {
+      if (/respondida|pendente/.test(e.message)) fecharConfirmacao(div, "Esta confirmação já tinha sido respondida.");
+      else { $$("button", div).forEach((b) => (b.disabled = false)); div.insertAdjacentHTML("beforeend", `<div class="sutil">⚠️ Não consegui enviar: ${esc(e.message)}. Tente de novo.</div>`); }
+    }
   };
   $("[data-sim]", div).onclick = () => responder(true);
   $("[data-nao]", div).onclick = () => responder(false);
-  $("#mensagens").scrollTop = $("#mensagens").scrollHeight;
+  confirmacaoAberta = { div, responder, critico };
+  if (modoHud) document.body.classList.add("transcricao-aberta");
+  if (deveFalar(false)) Voz.falar(`Atenção. Posso ${p.motivo}? ${critico ? "Diga confirmo para aprovar." : ""}`);
+  div.scrollIntoView({ block: "nearest" });
 }
 
 // ---------- Entrada ----------
@@ -330,7 +441,7 @@ entrada.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKe
 $("#enviar").onclick = () => enviar();
 const botaoFalar = $("#falar-respostas");
 function desenharFalar() { botaoFalar.classList.toggle("ligado", estado.falar); botaoFalar.textContent = estado.falar ? "🔊" : "🔈"; }
-botaoFalar.onclick = () => { estado.falar = !estado.falar; try { localStorage.setItem("optimus_falar", estado.falar ? "1" : "0"); } catch (e) {} desenharFalar(); };
+botaoFalar.onclick = () => { estado.falar = !estado.falar; if (!estado.falar) Voz.parar(); try { localStorage.setItem("optimus_falar", estado.falar ? "1" : "0"); } catch (e) {} desenharFalar(); };
 desenharFalar();
 $("#persona").addEventListener("change", (e) => { estado.persona = e.target.value; if (estado.conversa) api("/api/conversas/" + estado.conversa, { method: "POST", json: { persona: estado.persona } }); });
 $("#alternar-grupo").onclick = () => {
@@ -338,48 +449,111 @@ $("#alternar-grupo").onclick = () => {
   $("#alternar-grupo").classList.toggle("ligado", estado.grupo);
   $("#grupo-barra").classList.toggle("oculto", !estado.grupo);
 };
+// Modos: valem para o próximo pedido
+estado.modo = "";
+function desmarcarModo() { if (estado.modo !== "pensar" && estado.modo !== "programar") { estado.modo = ""; $$(".modos button").forEach((b) => b.classList.remove("ligado")); } }
+$$(".modos button").forEach((b) => (b.onclick = () => {
+  estado.modo = estado.modo === b.dataset.modo ? "" : b.dataset.modo;
+  $$(".modos button").forEach((x) => x.classList.toggle("ligado", x.dataset.modo === estado.modo));
+  entrada.placeholder = { web: "O que devo pesquisar na internet?", imagem: "Descreva a imagem…", pensar: "Pergunte algo difícil…", programar: "O que vamos programar?" }[estado.modo] || "Fale com o Optimus…";
+  entrada.focus();
+}));
 
 // ---------- Voz ----------
-let audioAtual = null;
-async function falar(texto) {
-  try {
-    if (audioAtual) audioAtual.pause();
-    definirEstado("falando", "Falando…");
-    const r = await api("/api/falar", { method: "POST", json: { texto } });
-    const blob = await r.blob();
-    audioAtual = new Audio(URL.createObjectURL(blob));
-    audioAtual.onended = () => definirEstado("pronto", "Pronto");
-    await audioAtual.play();
-  } catch (e) { definirEstado("pronto", "Pronto"); }
+Voz.config.api = api;
+function falar(texto) { Voz.falar(texto); }
+
+const PALAVRA = /\b(optimus|óptimus|optimos|ótimos|otimus|ótimus|optimu|op timus|opitimus|optmus)\b[,.!?]?\s*/i;
+const PARE = /^(pare|para|parar|chega|silêncio|silencio|cala a boca|já chega|stop)\b/i;
+function abrirJanela() { aoVivo.janelaAte = Date.now() + 25000; }
+function avisoVoz(texto) { $("#rodape-voz").textContent = texto; }
+
+Voz.ev.onNivel = (tipo, n) => Hud.nivel(n);
+Voz.ev.onEstado = (s) => { if (s === "falando") definirEstado("falando", "Falando…"); };
+Voz.ev.onFimFala = () => { if (!estado.ocupado) definirEstado("pronto", "Pronto"); if (aoVivo.ligado) abrirJanela(); };
+Voz.ev.onErro = (m) => { avisoVoz("⚠️ " + m); };
+Voz.ev.onPalmas = () => {
+  // Palmas durante uma resposta não interrompem nada (som de fundo, música...).
+  if (!aoVivo.ligado || estado.ocupado || Voz.falando()) return;
+  abrirJanela(); legenda("usuario", "👏👏");
+  Voz.falar(["Às ordens.", "Estou aqui.", "Pode falar."][Math.floor(Math.random() * 3)]);
+};
+Voz.ev.onTexto = (texto, final) => {
+  if (!aoVivo.ligado && !gravandoManual) return;
+  texto = String(texto || "").trim(); if (!texto) return;
+  if (!final) { legenda("usuario", texto + "…"); return; }
+  if (gravandoManual) return; // a gravação manual entrega o texto pela promessa
+  tratarFalaAoVivo(texto);
+};
+
+function tratarFalaAoVivo(texto) {
+  const temPalavra = PALAVRA.test(texto);
+  const resto = texto.replace(PALAVRA, "").trim();
+  // Interromper: "pare", "Optimus" ou "Optimus, pare" enquanto ele fala.
+  if (Voz.falando()) {
+    if (PARE.test(resto) || (temPalavra && !resto)) { Voz.parar(); abrirJanela(); definirEstado("pronto", "Pronto"); return; }
+    if (!temPalavra) return; // provavelmente o eco da própria voz
+    Voz.parar();
+  }
+  // Responder uma confirmação por voz
+  if (confirmacaoAberta) {
+    const t = resto || texto;
+    if (/\b(sim|pode|confirmo|autorizo|aprovo|claro|ok|não|nao|negado|cancela)\b/i.test(t)) {
+      legenda("usuario", t); confirmacaoAberta.responder(t); return;
+    }
+  }
+  const naJanela = Date.now() < aoVivo.janelaAte;
+  if (!temPalavra && !naJanela) { legenda("usuario", ""); return; }
+  legenda("usuario", resto || texto);
+  if (!resto) { abrirJanela(); Voz.falar(["Sim?", "Pois não?", "Estou ouvindo."][Math.floor(Math.random() * 3)]); return; }
+  if (PARE.test(resto) && resto.split(/\s+/).length <= 2) { Voz.parar(); return; }
+  if (estado.ocupado) { avisoVoz("Ainda estou respondendo o pedido anterior. Diga “Optimus, pare” para cancelar."); return; }
+  abrirJanela();
+  enviar(resto);
 }
-let gravador = null; let pedacos = [];
-async function comecarGravar() {
-  if (gravador) return;
-  if (audioAtual) audioAtual.pause();
-  try {
-    const fluxo = await navigator.mediaDevices.getUserMedia({ audio: true });
-    gravador = new MediaRecorder(fluxo); pedacos = [];
-    gravador.ondataavailable = (e) => pedacos.push(e.data);
-    gravador.onstop = async () => {
-      fluxo.getTracks().forEach((t) => t.stop());
-      const blob = new Blob(pedacos, { type: gravador.mimeType }); gravador = null;
-      $("#microfone").classList.remove("gravando");
-      definirEstado("pensando", "Transcrevendo…");
-      try {
-        const d = await api("/api/ouvir", { method: "POST", body: blob });
-        if (d.texto) enviar(d.texto); else definirEstado("pronto", "Não entendi, tente de novo");
-      } catch (e) { definirEstado("erro", "Reconhecimento de voz indisponível"); }
-    };
-    gravador.start();
-    $("#microfone").classList.add("gravando");
-    definirEstado("ouvindo", "Ouvindo… solte para enviar");
-  } catch (e) { definirEstado("erro", "Microfone bloqueado"); }
+
+async function alternarAoVivo(ligar) {
+  if (ligar === aoVivo.ligado) return;
+  const botao = $("#botao-ao-vivo");
+  if (ligar) {
+    const ok = await Voz.iniciarEscuta();
+    if (!ok) { avisoVoz("⚠️ Não consegui abrir o microfone. Libere o microfone para este site (cadeado na barra de endereço)."); return; }
+    aoVivo.ligado = true; abrirJanela();
+    botao.classList.add("ligado"); botao.textContent = "🔴 Ao vivo";
+    avisoVoz(`Ao vivo: fale “Optimus…” ou bata duas palmas. Diga “pare” para interromper. Reconhecimento: ${Voz.modo === "navegador" ? "do navegador" : "Whisper no PC"}.`);
+    definirEstado("pronto", "Pronto");
+    Voz.falar("Modo ao vivo ligado. Pode falar.");
+  } else {
+    aoVivo.ligado = false; Voz.pararEscuta();
+    botao.classList.remove("ligado"); botao.textContent = "🎙️ Ao vivo";
+    avisoVoz("O Optimus executa ações no seu PC. Ações críticas sempre pedem sua confirmação.");
+    definirEstado("pronto", "Pronto");
+  }
+  try { localStorage.setItem("optimus_ao_vivo", aoVivo.ligado ? "1" : "0"); } catch (e) {}
 }
-function pararGravar() { if (gravador && gravador.state === "recording") gravador.stop(); }
+$("#botao-ao-vivo").onclick = () => alternarAoVivo(!aoVivo.ligado);
+$("#hud-orbe").addEventListener("click", () => {
+  if (Voz.falando()) { Voz.parar(); return; }
+  if (aoVivo.ligado) { abrirJanela(); Voz.falar("Pode falar."); } else alternarAoVivo(true);
+});
+
+// Botão do microfone: um pedido falado (clique, fale, ele envia sozinho ao terminar).
+let gravandoManual = false;
 const mic = $("#microfone");
-mic.addEventListener("pointerdown", (e) => { e.preventDefault(); comecarGravar(); });
-mic.addEventListener("pointerup", pararGravar);
-mic.addEventListener("pointerleave", pararGravar);
+mic.addEventListener("click", async () => {
+  if (gravandoManual) { if (Voz._pararGravacao) Voz._pararGravacao(); return; }
+  Voz.parar();
+  gravandoManual = true; mic.classList.add("gravando");
+  definirEstado("ouvindo", "Ouvindo… fale agora");
+  try {
+    const texto = await Voz.gravarUmaVez(15);
+    if (texto) enviar(texto); else definirEstado("pronto", "Não ouvi nada, tente de novo");
+  } catch (e) {
+    definirEstado("erro", "Reconhecimento de voz indisponível");
+    avisoVoz("⚠️ " + (e.message === "not-allowed" ? "Microfone bloqueado: libere o microfone para este site." : e.message));
+  }
+  gravandoManual = false; mic.classList.remove("gravando");
+});
 
 // ---------- Personas ----------
 async function carregarPersonas() {
@@ -456,9 +630,31 @@ async function carregarAcoes() {
 }
 
 // ---------- Casa ----------
+let vigiaCameras = null;
 async function carregarCasa() {
   const d = await api("/api/config");
   $("#casa-url").value = d.config.casa.url || ""; $("#casa-token").value = d.config.casa.token || "";
+  try {
+    const c = await api("/api/cameras");
+    $("#cameras").innerHTML = c.cameras.map((x) => `<figure class="cartao camera"><img data-camera="${esc(x.id)}" alt="${esc(x.nome)}"><figcaption>${esc(x.nome)} <span class="sutil">ao vivo</span></figcaption></figure>`).join("")
+      || '<p class="sutil">Nenhuma câmera encontrada ainda.</p>';
+  } catch (e) { $("#cameras").innerHTML = `<p class="sutil">⚠️ ${esc(e.message)}</p>`; }
+  clearInterval(vigiaCameras);
+  const atualizar = () => {
+    if (!$("#tela-casa").classList.contains("ativa")) { clearInterval(vigiaCameras); return; }
+    $$("#cameras img[data-camera]").forEach(async (img) => {
+      if (img.dataset.carregando) return;
+      img.dataset.carregando = "1";
+      try {
+        const r = await api("/api/camera?id=" + encodeURIComponent(img.dataset.camera) + "&t=" + Date.now());
+        const antigo = img.src; img.src = URL.createObjectURL(await r.blob());
+        if (antigo.startsWith("blob:")) URL.revokeObjectURL(antigo);
+        img.closest("figure").classList.remove("falhou");
+      } catch (e) { img.closest("figure").classList.add("falhou"); }
+      delete img.dataset.carregando;
+    });
+  };
+  atualizar(); vigiaCameras = setInterval(atualizar, 1200);
 }
 async function executarFerramenta(texto) { irPara("chat"); entrada.value = texto; enviar(); }
 $("#casa-salvar").onclick = async () => {
@@ -493,12 +689,33 @@ async function carregarConfig() {
   }).join("");
   $$(".vozes-select").forEach((s) => (s.innerHTML = '<option value="">voz padrão</option>' + v.vozes.map((x) => `<option value="${esc(x.id)}">${esc(x.nome)} (${esc(x.descricao)})</option>`).join("")));
   desenharDestinos();
+  carregarFamilias();
 }
+async function carregarFamilias() {
+  try {
+    const d = await api("/api/modelos/catalogo");
+    $("#familias-memoria").textContent = `Memória útil para o modelo: ${d.memoria_util_gb} GB (${d.gpu ? "placa de vídeo" : "RAM, sem placa de vídeo"}). Modelos de outras empresas também rodam pelo Ollama; para usar nuvem (OpenAI, Gemini, Grok, DeepSeek…), adicione em “Outras IAs e PCs”.`;
+    $("#familias").innerHTML = d.familias.map((f) => `<div class="cartao familia"><h3>${esc(f.familia)}</h3>
+      ${f.recomendado ? `<p><b>${esc(f.recomendado.nome)}</b> · ~${f.recomendado.memoria_gb} GB<br><span class="sutil">${esc(f.recomendado.descricao)}</span></p>
+      <button type="button" class="botao pequeno" data-usar-modelo="${esc(f.recomendado.nome)}">Baixar e usar</button>` : '<p class="sutil">Nenhum modelo desta família cabe neste PC.</p>'}
+      ${f.proximo ? `<p class="sutil">Próximo: ${esc(f.proximo.nome)} (~${f.proximo.memoria_gb} GB) não cabe ainda.</p>` : ""}</div>`).join("");
+  } catch (e) { $("#familias").innerHTML = `<p class="sutil">⚠️ ${esc(e.message)}</p>`; }
+}
+$("#familias").addEventListener("click", async (e) => {
+  const b = e.target.closest("[data-usar-modelo]"); if (!b) return;
+  const modelo = b.dataset.usarModelo;
+  b.disabled = true; b.textContent = "Baixando…";
+  await api("/api/config", { method: "POST", json: { motor: { modelo } } });
+  $("#modelo-baixar").value = modelo; $("#botao-baixar").click();
+  $("[name='motor.modelo']").value = modelo;
+});
 $("#lista-vozes").addEventListener("click", async (e) => {
   const ouvir = e.target.closest("[data-ouvir]"); const usar = e.target.closest("[data-usar]");
   if (ouvir) {
-    const r = await api("/api/falar", { method: "POST", json: { texto: "Olá! Eu sou o Optimus, seu assistente pessoal. Como posso ajudar?", voz: ouvir.dataset.ouvir } });
-    new Audio(URL.createObjectURL(await r.blob())).play();
+    try {
+      const r = await api("/api/falar", { method: "POST", json: { texto: "Olá! Eu sou o Optimus, seu assistente pessoal. Como posso ajudar?", voz: ouvir.dataset.ouvir } });
+      new Audio(URL.createObjectURL(await r.blob())).play();
+    } catch (err) { ouvir.textContent = "⚠️ " + err.message.slice(0, 60); }
   }
   if (usar) { await api("/api/config", { method: "POST", json: { voz: { voz: usar.dataset.usar } } }); carregarConfig(); }
 });
@@ -554,6 +771,9 @@ $("#botao-baixar").onclick = async () => {
 
 // ---------- Início ----------
 async function iniciar() {
+  Hud.iniciar($("#hud-orbe")); Hud.relogio();
+  if (window.innerWidth <= 760) { entrada.placeholder = "Fale com o Optimus…"; $("#botao-ao-vivo").title = "Ao vivo"; } irPara(modoHud ? "hud" : "chat");
+  Hud.boot();
   await Promise.all([atualizarSistema(), carregarPersonas(), carregarConversas()]);
   if ("Notification" in window && Notification.permission === "default") Notification.requestPermission();
 }
