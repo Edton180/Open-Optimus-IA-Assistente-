@@ -1,16 +1,17 @@
-"""Fala (texto para voz) com vozes masculinas e femininas prontas.
+"""Fala (texto para voz) com vozes prontas, masculinas e femininas, com nomes próprios.
 
-Motores, do mais natural ao mais simples:
-- kokoro: vozes neurais OFFLINE em português (pf_dora feminina, pm_alex e pm_santa
-  masculinas). O instalador já baixa os arquivos (cerca de 120 MB), então funciona sem
-  internet desde o primeiro uso.
-- edge: vozes neurais da Microsoft pela internet (Francisca, Thalita, Antonio). Não
-  precisa baixar nada, só estar online.
-- sistema: vozes do próprio sistema (Windows: Maria/Daniel; Linux: espeak-ng). Sempre há
-  uma disponível.
-- termux: no Android, usa o motor de voz do próprio celular (Termux:API).
+Vozes do Optimus (o nome é o que aparece no painel e no comando "mude para a voz Nexus"):
+- Prime: clássica e executiva (masculina), offline.
+- Valkyrie: feminina fluida e natural, offline.
+- Nexus: tom grave e analítico (masculina), offline.
+- Cyber: sintética futurista, com efeito robótico, offline.
+- Stealth: voz baixa e suave para a noite, offline.
+- Elite: ultrarrealista pela API da ElevenLabs (precisa de chave).
+- Aurora, Lyra e Titan: vozes neurais online (Microsoft Edge), sem chave.
+- Sistema: a voz instalada no Windows/Linux/Android, sempre disponível.
 
-A configuração [voz] voz aceita "feminina", "masculina" ou um id da lista VOZES.
+As vozes offline usam o Kokoro (o instalador já baixa, cerca de 120 MB). Se uma voz não
+estiver disponível no PC, o Optimus usa a reserva mais parecida sem travar.
 """
 
 from __future__ import annotations
@@ -22,8 +23,9 @@ import shutil
 import subprocess
 import tempfile
 import threading
+import unicodedata
 import wave
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from optimus.config import pasta_base
@@ -31,6 +33,9 @@ from optimus.tools.base import no_android
 
 URL_KOKORO = "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/"
 ARQUIVOS_KOKORO = ("kokoro-v1.0.int8.onnx", "voices-v1.0.bin")
+URL_ELEVENLABS = "https://api.elevenlabs.io/v1/text-to-speech/"
+# "Daniel": voz masculina madura e elegante da biblioteca padrão da ElevenLabs.
+VOZ_ELEVENLABS_PADRAO = "onwK4e9ZLuTAKqWW03F9"
 
 
 @dataclass(frozen=True)
@@ -38,26 +43,73 @@ class Voz:
     id: str
     nome: str
     genero: str  # feminina | masculina
-    motor: str
+    motor: str  # kokoro | edge | elevenlabs | sistema
     offline: bool
     descricao: str
+    base: str = ""  # voz no motor (pm_alex, pt-BR-AntonioNeural...)
+    efeito: str = ""  # "" | cyber | sussurro
+    velocidade: float = 1.0
+    reservas: tuple[str, ...] = field(default=())
 
 
 VOZES: list[Voz] = [
-    Voz("kokoro:pf_dora", "Dora", "feminina", "kokoro", True, "Feminina natural, offline"),
-    Voz("kokoro:pm_alex", "Alex", "masculina", "kokoro", True, "Masculina natural, offline"),
-    Voz("kokoro:pm_santa", "Santa", "masculina", "kokoro", True, "Masculina grave, offline"),
-    Voz("edge:pt-BR-FranciscaNeural", "Francisca", "feminina", "edge", False,
-        "Feminina neural, online"),
-    Voz("edge:pt-BR-ThalitaMultilingualNeural", "Thalita", "feminina", "edge", False,
-        "Feminina neural multilíngue, online"),
-    Voz("edge:pt-BR-AntonioNeural", "Antonio", "masculina", "edge", False,
-        "Masculina neural, online"),
-    Voz("sistema:feminina", "Sistema (feminina)", "feminina", "sistema", True,
-        "Voz instalada no sistema"),
-    Voz("sistema:masculina", "Sistema (masculina)", "masculina", "sistema", True,
-        "Voz instalada no sistema"),
+    Voz("prime", "Prime", "masculina", "kokoro", True, "Clássica e executiva",
+        "pm_alex", reservas=("titan", "sistema-masculina")),
+    Voz("valkyrie", "Valkyrie", "feminina", "kokoro", True, "Feminina fluida e natural",
+        "pf_dora", reservas=("aurora", "sistema-feminina")),
+    Voz("nexus", "Nexus", "masculina", "kokoro", True, "Tom grave e analítico",
+        "pm_santa", velocidade=0.95, reservas=("titan", "sistema-masculina")),
+    Voz("cyber", "Cyber", "masculina", "kokoro", True, "Sintética futurista (efeito robótico)",
+        "pm_alex", efeito="cyber", velocidade=1.05, reservas=("sistema-masculina",)),
+    Voz("stealth", "Stealth", "feminina", "kokoro", True, "Sussurro: baixa e suave, modo noturno",
+        "pf_dora", efeito="sussurro", velocidade=0.9, reservas=("sistema-feminina",)),
+    Voz("elite", "Elite", "masculina", "elevenlabs", False,
+        "Ultrarrealista pela ElevenLabs (precisa de chave)", VOZ_ELEVENLABS_PADRAO,
+        reservas=("prime", "titan", "sistema-masculina")),
+    Voz("aurora", "Aurora", "feminina", "edge", False, "Feminina neural, online",
+        "pt-BR-FranciscaNeural", reservas=("valkyrie", "sistema-feminina")),
+    Voz("lyra", "Lyra", "feminina", "edge", False, "Feminina neural multilíngue, online",
+        "pt-BR-ThalitaMultilingualNeural", reservas=("valkyrie", "sistema-feminina")),
+    Voz("titan", "Titan", "masculina", "edge", False, "Masculina neural, online",
+        "pt-BR-AntonioNeural", reservas=("prime", "sistema-masculina")),
+    Voz("sistema-feminina", "Sistema (feminina)", "feminina", "sistema", True,
+        "Voz feminina instalada no sistema"),
+    Voz("sistema-masculina", "Sistema (masculina)", "masculina", "sistema", True,
+        "Voz masculina instalada no sistema"),
 ]
+
+# Nomes antigos (v0.1) e atalhos continuam funcionando.
+APELIDOS = {
+    "feminina": "valkyrie", "masculina": "prime",
+    "kokoro:pf_dora": "valkyrie", "kokoro:pm_alex": "prime", "kokoro:pm_santa": "nexus",
+    "edge:pt-BR-FranciscaNeural": "aurora", "edge:pt-BR-ThalitaMultilingualNeural": "lyra",
+    "edge:pt-BR-AntonioNeural": "titan", "sistema:feminina": "sistema-feminina",
+    "sistema:masculina": "sistema-masculina", "valquiria": "valkyrie", "valquíria": "valkyrie",
+    "jarvis_elite": "elite", "eleven": "elite", "elevenlabs": "elite", "sistema": "sistema-feminina",
+}
+
+POR_ID = {v.id: v for v in VOZES}
+
+
+def _normal(texto: str) -> str:
+    texto = unicodedata.normalize("NFKD", (texto or "").lower())
+    return "".join(c for c in texto if not unicodedata.combining(c)).strip()
+
+
+def buscar_voz(nome: str) -> Voz | None:
+    """Acha uma voz pelo id, nome ou apelido ("Nexus", "valquíria", "kokoro:pm_alex")."""
+    chave = (nome or "").strip()
+    if chave in POR_ID:
+        return POR_ID[chave]
+    if chave in APELIDOS:
+        return POR_ID[APELIDOS[chave]]
+    normal = _normal(chave)
+    for voz in VOZES:
+        if normal in (_normal(voz.id), _normal(voz.nome)):
+            return voz
+    if normal in APELIDOS:
+        return POR_ID[APELIDOS[normal]]
+    return None
 
 
 def pasta_vozes() -> Path:
@@ -104,25 +156,25 @@ def baixar_kokoro(progresso=None) -> bool:
     return True
 
 
-def escolher_voz(preferencia: str, online: bool = True) -> Voz:
-    """'feminina'/'masculina'/id → a melhor voz disponível neste PC."""
-    preferencia = (preferencia or "feminina").strip()
-    por_id = {v.id: v for v in VOZES}
-    if preferencia in por_id:
-        voz = por_id[preferencia]
-        if (voz.motor == "kokoro" and kokoro_instalado()) or \
-                (voz.motor == "edge" and edge_instalado() and online) or voz.motor == "sistema":
+def voz_disponivel(voz: Voz, online: bool = True, chave_elevenlabs: str = "") -> bool:
+    if voz.motor == "kokoro":
+        return kokoro_instalado()
+    if voz.motor == "edge":
+        return online and edge_instalado()
+    if voz.motor == "elevenlabs":
+        return online and bool(chave_elevenlabs)
+    return True
+
+
+def escolher_voz(preferencia: str, online: bool = True, chave_elevenlabs: str = "") -> Voz:
+    """Nome, id ou gênero → a melhor voz disponível neste PC (com reservas)."""
+    pedida = buscar_voz(preferencia or "valkyrie") or POR_ID["valkyrie"]
+    fila = [pedida.id, *pedida.reservas]
+    for ident in fila:
+        voz = POR_ID[ident]
+        if voz_disponivel(voz, online, chave_elevenlabs):
             return voz
-        preferencia = voz.genero
-    genero = "masculina" if preferencia.startswith("mascul") else "feminina"
-    candidatas = [v for v in VOZES if v.genero == genero]
-    for voz in candidatas:
-        if voz.motor == "kokoro" and kokoro_instalado():
-            return voz
-    for voz in candidatas:
-        if voz.motor == "edge" and edge_instalado() and online:
-            return voz
-    return por_id[f"sistema:{genero}"]
+    return POR_ID[f"sistema-{pedida.genero}"]
 
 
 def dividir_frases(texto: str) -> list[str]:
@@ -146,28 +198,96 @@ def _wav_bytes(amostras, taxa: int) -> bytes:
     return saida.getvalue()
 
 
-class Falante:
-    """Gera e toca a fala. Pode ser interrompido com parar()."""
+def _ler_wav(dados: bytes):
+    import numpy as np
 
-    def __init__(self, voz: str = "feminina", velocidade: float = 1.0, online: bool = True):
-        self.voz = escolher_voz(voz, online)
+    with wave.open(io.BytesIO(dados), "rb") as wav:
+        taxa, canais = wav.getframerate(), wav.getnchannels()
+        largura = wav.getsampwidth()
+        bruto = wav.readframes(wav.getnframes())
+    if largura != 2:
+        return None, taxa
+    amostras = np.frombuffer(bruto, dtype="<i2").astype("float32") / 32768
+    if canais > 1:
+        amostras = amostras.reshape(-1, canais).mean(axis=1)
+    return amostras, taxa
+
+
+def aplicar_efeito(amostras, taxa: int, efeito: str):
+    """Efeitos das vozes Cyber (robótica) e Stealth (baixa e abafada)."""
+    import numpy as np
+
+    if not efeito or amostras is None or len(amostras) == 0:
+        return amostras
+    x = amostras.astype("float32")
+    if efeito == "cyber":
+        t = np.arange(len(x), dtype="float32") / taxa
+        robo = x * np.sin(2 * np.pi * 70 * t)
+        y = 0.55 * x + 0.45 * robo
+        atraso = int(taxa * 0.012)
+        eco = np.zeros_like(y)
+        eco[atraso:] = y[:-atraso] * 0.35
+        y = y + eco
+        y = np.round(y * 48) / 48  # leve "bitcrush"
+    elif efeito == "sussurro":
+        nucleo = np.ones(7, dtype="float32") / 7  # passa-baixa simples: tira o brilho da voz
+        y = np.convolve(x, nucleo, mode="same") * 0.5
+        return np.clip(y, -1, 1)
+    else:
+        return x
+    pico = float(np.max(np.abs(y))) or 1.0
+    return np.clip(y / pico * 0.9, -1, 1)
+
+
+class Falante:
+    """Gera e toca a fala. Pode ser interrompido com parar().
+
+    `config` (opcional) traz a chave e a voz da ElevenLabs para a voz Elite.
+    """
+
+    def __init__(self, voz: str = "valkyrie", velocidade: float = 1.0, online: bool = True,
+                 config=None):
+        voz_cfg = (config.dados.get("voz", {}) if config is not None else {}) or {}
+        self.chave_elevenlabs = voz_cfg.get("elevenlabs_chave", "") or ""
+        self.voz_elevenlabs = voz_cfg.get("elevenlabs_voz", "") or VOZ_ELEVENLABS_PADRAO
+        self.pedida = voz
+        self.voz = escolher_voz(voz, online, self.chave_elevenlabs)
+        # O efeito (Cyber, Stealth) continua mesmo quando a voz cai para uma reserva.
+        self.efeito = (buscar_voz(voz) or self.voz).efeito
         self.velocidade = float(velocidade or 1.0)
         self._kokoro = None
         self._parar = threading.Event()
+        self.ao_nivel = None  # callback(nível 0..1) para o orbe da interface
 
     # Síntese
     def sintetizar(self, texto: str) -> tuple[bytes, str]:
         """Devolve (áudio, formato) com formato 'wav' ou 'mp3'."""
         motor = self.voz.motor
         if motor == "kokoro":
-            return self._kokoro_wav(texto), "wav"
-        if motor == "edge":
+            return self._com_efeito(self._kokoro_wav(texto)), "wav"
+        if motor in ("edge", "elevenlabs"):
             try:
-                return self._edge_mp3(texto), "mp3"
-            except Exception:  # noqa: BLE001 - sem internet: cai para a voz offline
-                self.voz = escolher_voz(self.voz.genero, online=False)
+                if motor == "edge":
+                    return self._edge_mp3(texto), "mp3"
+                return self._elevenlabs_mp3(texto), "mp3"
+            except Exception:  # noqa: BLE001 - sem internet ou sem crédito: usa a reserva
+                reserva = next((POR_ID[r] for r in self.voz.reservas
+                                if POR_ID[r].motor not in ("edge", "elevenlabs")
+                                and voz_disponivel(POR_ID[r], False)), None)
+                self.voz = reserva or POR_ID[f"sistema-{self.voz.genero}"]
                 return self.sintetizar(texto)
-        return self._sistema_wav(texto), "wav"
+        return self._com_efeito(self._sistema_wav(texto)), "wav"
+
+    def _com_efeito(self, audio: bytes) -> bytes:
+        if not self.efeito or not audio:
+            return audio
+        try:
+            amostras, taxa = _ler_wav(audio)
+            if amostras is None:
+                return audio
+            return _wav_bytes(aplicar_efeito(amostras, taxa, self.efeito), taxa)
+        except Exception:  # noqa: BLE001
+            return audio
 
     def _kokoro_wav(self, texto: str) -> bytes:
         if self._kokoro is None:
@@ -175,17 +295,31 @@ class Falante:
 
             self._kokoro = Kokoro(str(pasta_vozes() / ARQUIVOS_KOKORO[0]),
                                   str(pasta_vozes() / ARQUIVOS_KOKORO[1]))
-        amostras, taxa = self._kokoro.create(texto, voice=self.voz.id.split(":", 1)[1],
-                                             speed=self.velocidade, lang="pt-br")
+        amostras, taxa = self._kokoro.create(texto, voice=self.voz.base,
+                                             speed=self.velocidade * self.voz.velocidade,
+                                             lang="pt-br")
         return _wav_bytes(amostras, taxa)
+
+    def _elevenlabs_mp3(self, texto: str) -> bytes:
+        import httpx
+
+        resposta = httpx.post(
+            URL_ELEVENLABS + self.voz_elevenlabs, params={"output_format": "mp3_44100_128"},
+            headers={"xi-api-key": self.chave_elevenlabs, "Content-Type": "application/json"},
+            json={"text": texto, "model_id": "eleven_multilingual_v2",
+                  "voice_settings": {"stability": 0.5, "similarity_boost": 0.8,
+                                     "speed": max(0.7, min(1.2, self.velocidade))}},
+            timeout=60)
+        resposta.raise_for_status()
+        return resposta.content
 
     def _edge_mp3(self, texto: str) -> bytes:
         import edge_tts
 
-        taxa = f"{int(round((self.velocidade - 1) * 100)):+d}%"
+        taxa = f"{int(round((self.velocidade * self.voz.velocidade - 1) * 100)):+d}%"
 
         async def gerar() -> bytes:
-            comunicador = edge_tts.Communicate(texto, self.voz.id.split(":", 1)[1], rate=taxa)
+            comunicador = edge_tts.Communicate(texto, self.voz.base, rate=taxa)
             pedacos = []
             async for parte in comunicador.stream():
                 if parte["type"] == "audio":
@@ -244,10 +378,11 @@ class Falante:
                 break
             audio, formato = self.sintetizar(frase)
             if audio:
-                tocar(audio, formato, self._parar)
+                tocar(audio, formato, self._parar, self.ao_nivel)
 
 
-def tocar(audio: bytes, formato: str, parar: threading.Event | None = None) -> None:
+def tocar(audio: bytes, formato: str, parar: threading.Event | None = None,
+          ao_nivel=None) -> None:
     try:
         import miniaudio
     except ImportError:
@@ -266,6 +401,10 @@ def tocar(audio: bytes, formato: str, parar: threading.Event | None = None) -> N
                 if parar is not None and parar.is_set():
                     break
                 fim = posicao + pedido * canais
+                if ao_nivel is not None:
+                    trecho = quadros[posicao:fim]
+                    if len(trecho):
+                        ao_nivel(min(1.0, max(abs(min(trecho)), abs(max(trecho))) / 22000))
                 pedido = yield quadros[posicao:fim]
                 posicao = fim
             terminou.set()
@@ -277,6 +416,8 @@ def tocar(audio: bytes, formato: str, parar: threading.Event | None = None) -> N
                                       sample_rate=decodificado.sample_rate) as dispositivo:
             dispositivo.start(fluxo)
             terminou.wait(timeout=len(quadros) / canais / decodificado.sample_rate + 2)
+        if ao_nivel is not None:
+            ao_nivel(0.0)
         return
     for player in (["ffplay", "-nodisp", "-autoexit", "-loglevel", "quiet"], ["mpv"],
                    ["aplay", "-q"], ["paplay"]):

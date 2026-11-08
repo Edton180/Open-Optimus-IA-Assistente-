@@ -42,7 +42,11 @@ class Motor:
         modelo: str,
         ferramentas: list[dict[str, Any]] | None = None,
         opcoes: dict[str, Any] | None = None,
+        ao_pedaco=None,
+        cancelado=None,
     ) -> Resposta:
+        """ao_pedaco(texto): recebe a resposta aos pedaços (streaming), se o motor suportar.
+        cancelado(): devolve True quando o usuário cancelou o pedido."""
         raise NotImplementedError
 
     def transmitir(

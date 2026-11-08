@@ -208,16 +208,17 @@ def cmd_vozes(args) -> int:
                  "92" if ok else "91"))
         return 0 if ok else 1
     config = cfg.carregar()
-    atual = tts.escolher_voz(config.get("voz", "voz"))
+    chave = config.get("voz", "elevenlabs_chave", "")
+    atual = tts.escolher_voz(config.get("voz", "voz"), chave_elevenlabs=chave)
     print(f"Voz em uso: {atual.nome} ({atual.descricao})\n")
     for voz in tts.VOZES:
-        pronta = (tts.kokoro_instalado() if voz.motor == "kokoro" else
-                  tts.edge_instalado() if voz.motor == "edge" else True)
+        pronta = tts.voz_disponivel(voz, True, chave)
         marca = "✓" if pronta else " "
-        print(f" {marca} {voz.id:42} {voz.genero:10} {voz.descricao}")
-    print("\nTrocar: optimus config voz.voz masculina   (ou um id da lista)")
+        print(f" {marca} {voz.nome:20} {voz.genero:10} {voz.descricao}")
+    print('\nTrocar: optimus config voz.voz nexus   ou diga "Optimus, mude para a voz Nexus"')
     if args.testar:
-        tts.Falante(config.get("voz", "voz")).falar("Olá! Eu sou o Optimus. Tudo pronto.")
+        tts.Falante(config.get("voz", "voz"), config=config).falar(
+            "Olá! Eu sou o Optimus. Tudo pronto.")
     return 0
 
 

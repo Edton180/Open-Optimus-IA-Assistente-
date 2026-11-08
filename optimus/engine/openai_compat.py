@@ -34,34 +34,66 @@ class MotorOpenAI(Motor):
             corpo["temperature"] = opcoes["temperatura"]
         return corpo
 
-    def conversar(self, mensagens, modelo, ferramentas=None, opcoes=None) -> Resposta:
+    def conversar(self, mensagens, modelo, ferramentas=None, opcoes=None,
+                  ao_pedaco=None, cancelado=None) -> Resposta:
+        """Streaming (SSE) com ferramentas: junta os pedaços de texto e de tool_calls."""
         corpo = self._corpo(mensagens, modelo, opcoes)
+        corpo["stream"] = True
         if ferramentas:
             corpo["tools"] = ferramentas
-        try:
-            resposta = httpx.post(f"{self.url}/chat/completions", json=corpo,
-                                  headers=self._cabecalhos(), timeout=self.tempo_limite)
-            if resposta.status_code in (400, 422) and ferramentas:
-                corpo.pop("tools", None)
-                resposta = httpx.post(f"{self.url}/chat/completions", json=corpo,
-                                      headers=self._cabecalhos(), timeout=self.tempo_limite)
-            resposta.raise_for_status()
-        except httpx.HTTPStatusError as erro:
-            raise ErroMotor(f"Servidor respondeu {erro.response.status_code}: "
-                            f"{erro.response.text[:300]}") from erro
-        except httpx.HTTPError as erro:
-            raise ErroMotor(f"Não consegui falar com {self.url}: {erro}") from erro
-        escolha = resposta.json()["choices"][0]["message"]
-        chamadas = []
-        for chamada in escolha.get("tool_calls") or []:
-            funcao = chamada.get("function", {})
+        texto: list[str] = []
+        parciais: dict[int, dict[str, str]] = {}
+        for _ in range(2):
             try:
-                argumentos = json.loads(funcao.get("arguments") or "{}")
+                with httpx.stream("POST", f"{self.url}/chat/completions", json=corpo,
+                                  headers=self._cabecalhos(),
+                                  timeout=httpx.Timeout(self.tempo_limite, connect=8)) as r:
+                    if r.status_code in (400, 422) and "tools" in corpo:
+                        r.read()
+                        corpo.pop("tools")  # servidor sem ferramentas: o agente lê do texto
+                        continue
+                    if r.status_code >= 400:
+                        raise ErroMotor(f"Servidor respondeu {r.status_code}: "
+                                        f"{r.read().decode(errors='replace')[:300]}")
+                    for linha in r.iter_lines():
+                        if cancelado is not None and cancelado():
+                            break
+                        if not linha.startswith("data:"):
+                            continue
+                        dado = linha[5:].strip()
+                        if dado == "[DONE]":
+                            break
+                        try:
+                            pacote = json.loads(dado)
+                        except json.JSONDecodeError:
+                            continue
+                        if not pacote.get("choices"):
+                            continue
+                        delta = pacote["choices"][0].get("delta") or {}
+                        if delta.get("content"):
+                            texto.append(delta["content"])
+                            if ao_pedaco is not None:
+                                ao_pedaco(delta["content"])
+                        for parte in delta.get("tool_calls") or []:
+                            atual = parciais.setdefault(int(parte.get("index", 0)),
+                                                        {"id": "", "nome": "", "args": ""})
+                            atual["id"] = parte.get("id") or atual["id"]
+                            funcao = parte.get("function") or {}
+                            atual["nome"] += funcao.get("name") or ""
+                            atual["args"] += funcao.get("arguments") or ""
+                break
+            except httpx.HTTPError as erro:
+                raise ErroMotor(f"Não consegui falar com {self.url}: {erro}") from erro
+        chamadas = []
+        for _, parte in sorted(parciais.items()):
+            try:
+                argumentos = json.loads(parte["args"] or "{}")
             except json.JSONDecodeError:
                 argumentos = {}
-            chamadas.append(ChamadaFerramenta(nome=funcao.get("name", ""), argumentos=argumentos,
-                                              id=chamada.get("id") or "chamada"))
-        return Resposta(texto=limpar_pensamento(escolha.get("content") or ""), chamadas=chamadas,
+            if parte["nome"]:
+                chamadas.append(ChamadaFerramenta(nome=parte["nome"], argumentos=argumentos,
+                                                  id=parte["id"] or "chamada"))
+        return Resposta(texto=limpar_pensamento("".join(texto)), chamadas=chamadas,
                         modelo=modelo)
 
     def transmitir(self, mensagens, modelo, opcoes=None) -> Iterator[str]:
@@ -86,7 +118,7 @@ class MotorOpenAI(Motor):
     def disponivel(self) -> bool:
         try:
             return httpx.get(f"{self.url}/models", headers=self._cabecalhos(),
-                             timeout=3).status_code == 200
+                             timeout=2).status_code == 200
         except httpx.HTTPError:
             return False
 

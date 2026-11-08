@@ -58,9 +58,11 @@ class Destino:
     _ultimo_teste: float = field(default=0.0, repr=False)
     _ligado: bool = field(default=False, repr=False)
 
-    def ligado(self, cache_segundos: float = 20.0) -> bool:
+    def ligado(self, cache_segundos: float = 30.0) -> bool:
         agora = time.monotonic()
-        if agora - self._ultimo_teste > cache_segundos:
+        # Destino desligado só é testado de novo depois de 2 minutos, para não atrasar pedidos.
+        espera = cache_segundos if self._ligado else 120.0
+        if agora - self._ultimo_teste > espera:
             self._ligado = self.motor.disponivel()
             self._ultimo_teste = agora
         return self._ligado
@@ -98,18 +100,29 @@ class MotorRede(Motor):
     def _candidatos(self) -> list[Destino]:
         return [d for d in self.destinos if d.ligado()]
 
-    def conversar(self, mensagens, modelo, ferramentas=None, opcoes=None) -> Resposta:
+    def conversar(self, mensagens, modelo, ferramentas=None, opcoes=None,
+                  ao_pedaco=None, cancelado=None) -> Resposta:
         erros = []
         for destino in self._candidatos():
+            enviados: list[str] = []
+
+            def repassar(pedaco, enviados=enviados):
+                enviados.append(pedaco)
+                if ao_pedaco is not None:
+                    ao_pedaco(pedaco)
+
             try:
                 resposta = destino.motor.conversar(mensagens, destino.modelo or modelo,
-                                                   ferramentas, opcoes)
+                                                   ferramentas, opcoes, ao_pedaco=repassar,
+                                                   cancelado=cancelado)
                 self.ultimo_destino = destino
                 resposta.modelo = f"{resposta.modelo} @ {destino.nome}"
                 return resposta
             except ErroMotor as erro:
                 destino.descartar()
                 erros.append(f"{destino.nome}: {erro}")
+                if enviados:  # já mostrou parte da resposta: não repete em outro destino
+                    break
         raise ErroMotor("Nenhum destino respondeu. " + " | ".join(erros or ["todos desligados"]))
 
     def transmitir(self, mensagens, modelo, opcoes=None):

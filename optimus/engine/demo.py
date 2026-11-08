@@ -50,7 +50,15 @@ class MotorDemo(Motor):
     nome = "demo"
     _original = ""
 
-    def conversar(self, mensagens, modelo, ferramentas=None, opcoes=None) -> Resposta:
+    def conversar(self, mensagens, modelo, ferramentas=None, opcoes=None,
+                  ao_pedaco=None, cancelado=None) -> Resposta:
+        resposta = self._responder(mensagens, ferramentas)
+        if ao_pedaco is not None and resposta.texto:
+            for palavra in re.findall(r"\S+\s*", resposta.texto):
+                ao_pedaco(palavra)
+        return resposta
+
+    def _responder(self, mensagens, ferramentas) -> Resposta:
         ultima = mensagens[-1]
         nomes = {f["function"]["name"] for f in (ferramentas or [])}
         if ultima["role"] == "tool":
