@@ -231,3 +231,12 @@ def test_servidor_confirmacao_segredos_e_cameras():
         assert "segredo" not in json.dumps(mascarado) and "sk-1" not in json.dumps(mascarado)
     finally:
         httpd.shutdown()
+
+
+def test_caminho_do_windows_nao_muda_a_intencao():
+    # "AppData" no caminho fazia o pedido parecer de programação e cortava o "apagar".
+    todas = ferramentas_ativas(Config())
+    pedido = r"apague C:\Users\runneradmin\AppData\Local\Temp\pytest-0\lixo.txt"
+    assert "apagar" in selecionar_ferramentas(pedido, todas, pequeno=True)
+    assert "apagar" in selecionar_ferramentas("apague ~/projeto/app/x.txt", todas, pequeno=True)
+    assert "pesquisar_web" in selecionar_ferramentas("leia https://site.com/x", todas, pequeno=True)

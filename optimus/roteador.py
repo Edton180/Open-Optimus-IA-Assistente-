@@ -77,10 +77,14 @@ def tamanho_modelo(nome: str) -> float:
     return float(achado.group(1)) if achado else 0.0
 
 
+_CAMINHO = re.compile(r"(?<![\w:/])(?:[a-z]:[\\/]|~[\\/]|/(?!/))[^\s\"']*")
+
+
 def selecionar_ferramentas(texto: str, disponiveis: dict[str, Any], pequeno: bool = False,
                            extras: list[str] | None = None) -> dict[str, Any]:
     """Escolhe as ferramentas pela intenção do pedido. Conversa comum: nenhuma."""
-    t = normal(texto)
+    # Caminhos de arquivo não dizem a intenção ("AppData" não é pedido de programar).
+    t = _CAMINHO.sub(" ", normal(texto))
     escolhidas: list[str] = []
     for padrao, nomes in INTENCOES:
         if re.search(padrao, t):
