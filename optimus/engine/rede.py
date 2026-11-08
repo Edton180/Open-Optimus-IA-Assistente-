@@ -55,7 +55,7 @@ class Destino:
     modelo: str = ""
     prioridade: int = 5
     local: bool = True
-    _ultimo_teste: float = field(default=0.0, repr=False)
+    _ultimo_teste: float = field(default=float("-inf"), repr=False)  # nunca testado
     _ligado: bool = field(default=False, repr=False)
 
     def ligado(self, cache_segundos: float = 30.0) -> bool:

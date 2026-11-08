@@ -143,6 +143,19 @@ class MotorOllama(Motor):
         except httpx.HTTPError as erro:
             raise ErroMotor(f"Falha no Ollama: {erro}") from erro
 
+    def aquecer(self, modelo: str, manter: str = "30m") -> bool:
+        """Carrega o modelo na memória antes do primeiro pedido.
+
+        Sem isso, a primeira pergunta do dia espera o modelo sair do disco (vários segundos
+        num HD ou SSD lento). Pedido vazio no /api/generate só carrega e mantém carregado.
+        """
+        try:
+            resposta = httpx.post(f"{self.url}/api/generate", timeout=180,
+                                  json={"model": modelo, "keep_alive": manter, "stream": False})
+            return resposta.status_code == 200
+        except httpx.HTTPError:
+            return False
+
     def disponivel(self) -> bool:
         try:
             return httpx.get(f"{self.url}/api/version", timeout=1.5).status_code == 200

@@ -133,3 +133,18 @@ def test_trocar_voz_pelo_comando(tmp_path):
     resposta = a.responder("Optimus, troque para a voz Valkyrie")
     assert "Valkyrie" in resposta and a.config.get("voz", "voz") == "valkyrie"
     assert json.loads(a.executar_chamada(ChamadaFerramenta("trocar_voz", {"voz": "xyz"})))["erro"]
+
+
+def test_modelo_aquecido_ao_iniciar(ollama, tmp_path):
+    """A 1ª resposta não espera o modelo sair do disco: o servidor carrega antes."""
+    from optimus.app import Optimus
+    from optimus.web.server import aquecer_modelos
+
+    config = Config()
+    config.definir("motor", "url", ollama)
+    config.definir("motor", "modelo", "qwen3.5:2b")
+    config.definir("motor", "modelo_rapido", "qwen3.5:2b")
+    Manipulador.pedidos.clear()
+    assert aquecer_modelos(Optimus(config)) == ["qwen3.5:2b"]
+    assert Manipulador.pedidos[-1] == {"model": "qwen3.5:2b", "keep_alive": "30m",
+                                       "stream": False}

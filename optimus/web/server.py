@@ -536,6 +536,27 @@ class Manipulador(BaseHTTPRequestHandler):
         self._json({"erro": "rota não encontrada"}, 404)
 
 
+def aquecer_modelos(optimus: Optimus) -> list[str]:
+    """Deixa o modelo rápido (voz) e o principal carregados: a 1ª resposta não espera o disco."""
+    motor = optimus.motor
+    alvos = getattr(motor, "destinos", None)
+    motores = [d.motor for d in alvos] if alvos else [motor]
+    manter = optimus.config.get("motor", "manter_carregado", "30m") or "30m"
+    modelos = []
+    for nome in (optimus.config.get("motor", "modelo_rapido") or optimus.perfil.modelo_rapido,
+                 optimus.modelo_atual()):
+        if nome and nome not in modelos:
+            modelos.append(nome)
+    aquecidos = []
+    for m in motores:
+        if not hasattr(m, "aquecer"):
+            continue
+        for nome in modelos:
+            if m.aquecer(nome, manter):
+                aquecidos.append(nome)
+    return aquecidos
+
+
 def iniciar(host: str = "127.0.0.1", porta: int = 8765, abrir_navegador: bool = True,
             optimus: Optimus | None = None) -> None:
     optimus = optimus or Optimus()
@@ -544,6 +565,7 @@ def iniciar(host: str = "127.0.0.1", porta: int = 8765, abrir_navegador: bool = 
         raise SystemExit("Para abrir a interface na rede (celular), defina uma senha: "
                          "optimus config web.senha SUA_SENHA")
     Manipulador.estado = Estado(optimus)
+    threading.Thread(target=aquecer_modelos, args=(optimus,), daemon=True).start()
     Manipulador.senha = senha
     servidor = ThreadingHTTPServer((host, porta), Manipulador)
     servidor.daemon_threads = True
