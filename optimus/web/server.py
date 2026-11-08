@@ -390,7 +390,7 @@ class Manipulador(BaseHTTPRequestHandler):
             return self._json({"texto": estado.ouvinte().transcrever(audio)})
         if recurso == "modelos" and ident == "baixar" and metodo == "POST":
             modelo = self._corpo().get("modelo", "")
-            if modelo and not estado.downloads.get(modelo, {}).get("terminou") is False:
+            if modelo and estado.downloads.get(modelo, {}).get("terminou") is not False:
                 estado.downloads[modelo] = {"pct": 0, "terminou": False}
                 threading.Thread(target=_baixar_modelo, args=(estado, modelo),
                                  daemon=True).start()

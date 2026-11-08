@@ -1,0 +1,27 @@
+Optimus
+Copyright 2026 Edton Braz e colaboradores do Optimus
+
+Este produto é distribuído sob a Licença Apache, versão 2.0 (veja LICENSE).
+
+Inspiração e créditos
+---------------------
+O Optimus foi escrito do zero, mas se inspira no projeto OpenJarvis
+(https://github.com/open-jarvis/OpenJarvis), também sob a Licença Apache 2.0,
+Copyright 2025 The OpenJarvis Authors. Em especial:
+  - a ideia de escolher o modelo local pela memória disponível do computador
+    (tabela de perfis em optimus/hardware.py);
+  - a organização em motores (engines), ferramentas (tools) e agentes;
+  - a gravação de voz com parada automática no silêncio.
+
+Ideias da comunidade de assistentes de voz locais que também influenciaram o projeto:
+  - níveis de permissão com confirmação estrita (huburton/jarvis);
+  - roteador rápido de comandos antes do modelo e fala interrompível
+    (Shaan-alpha/jarvis-py, dmrr35/Open.Jarvis);
+  - palavra de ativação com modo conversa (pedido #901 do OpenJarvis).
+
+Componentes de terceiros usados em tempo de execução (instalados à parte, cada um
+com sua própria licença): Ollama, faster-whisper, Kokoro / kokoro-onnx, edge-tts,
+ddgs, httpx, psutil, miniaudio, sounddevice, pyttsx3, pyautogui, mss, bleak.
+
+"Optimus" é apenas o nome deste projeto livre. Ele não tem relação com nenhuma
+empresa, marca, filme ou personagem.

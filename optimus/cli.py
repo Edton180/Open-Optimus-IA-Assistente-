@@ -257,7 +257,7 @@ def cmd_doutor(args) -> int:
             __import__(modulo)
             print(f"{ok} {nome}")
         except Exception:  # noqa: BLE001
-            print(f"{aviso} {nome}: não instalado (opcional)")
+            print(f"{aviso} {nome}: indisponível neste PC (opcional)")
     print(f"{ok if tts.kokoro_instalado() else aviso} Vozes offline Kokoro"
           f"{'' if tts.kokoro_instalado() else ': rode optimus vozes --baixar'}")
     print(f"{ok if tts.edge_instalado() else aviso} Vozes neurais online (edge-tts)")

@@ -18,13 +18,16 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# Voz offline: reconhecimento (faster-whisper), microfone (sounddevice), vozes do sistema (pyttsx3)
-voz = ["faster-whisper>=1.0", "sounddevice>=0.4", "numpy>=1.24", "pyttsx3>=2.90", "piper-tts>=1.2"]
-# Vozes neurais online (precisa de internet)
-voz-online = ["edge-tts>=6.1"]
+# Voz: reconhecimento offline (faster-whisper), microfone, vozes naturais offline (Kokoro),
+# vozes neurais online (Edge) e vozes do sistema (pyttsx3)
+voz = ["faster-whisper>=1.0", "sounddevice>=0.4", "numpy>=1.24", "kokoro-onnx>=0.4",
+       "edge-tts>=6.1", "miniaudio>=1.59", "pyttsx3>=2.90"]
+# Casa inteligente: Bluetooth direto e leitura de PDF na base de conhecimento
+casa = ["bleak>=0.22"]
+documentos = ["pypdf>=4.0"]
 # Controle de mouse, teclado e capturas de tela
 desktop = ["pyautogui>=0.9", "mss>=9.0", "pyperclip>=1.8"]
-completo = ["optimus-assistente[voz,voz-online,desktop]"]
+completo = ["optimus-assistente[voz,desktop,casa,documentos]"]
 dev = ["pytest>=8", "ruff>=0.4"]
 
 [project.scripts]

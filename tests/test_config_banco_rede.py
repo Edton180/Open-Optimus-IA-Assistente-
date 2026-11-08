@@ -90,3 +90,18 @@ def test_calculadora_segura():
         assert False
     except ValueError:
         pass
+
+
+def test_plugin_vira_ferramenta(tmp_path):
+    from optimus.config import Config
+    from optimus.tools import carregar_plugins, ferramentas_ativas
+
+    pasta = tmp_path / "plugins"
+    pasta.mkdir()
+    (pasta / "eco.py").write_text(
+        "from optimus.tools.base import ferramenta, texto\n"
+        "@ferramenta('eco_teste', 'Repete', {'t': texto('texto')})\n"
+        "def eco(ctx, t):\n    return {'eco': t}\n", encoding="utf-8")
+    assert carregar_plugins(pasta) == ["eco"]
+    ativas = ferramentas_ativas(Config())
+    assert ativas["eco_teste"].executar({"t": "oi"}, None) == '{"eco": "oi"}'
