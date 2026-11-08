@@ -19,6 +19,12 @@ def _normal(texto: str) -> str:
     return "".join(c for c in texto if not unicodedata.combining(c))
 
 
+def _caminho(_texto: str) -> str:
+    """Pega o caminho do texto original (mantém maiúsculas e barras do Windows)."""
+    achados = re.findall(r"(?:[A-Za-z]:)?[\w\-./\\~:]+\.\w+", MotorDemo._original)
+    return achados[-1] if achados else "arquivo.txt"
+
+
 _REGRAS = [
     (r"(hardware|meu pc|computador|cpu|memoria|ram)", "info_sistema", lambda t: {}),
     (r"(processo|programas abertos)", "listar_processos", lambda t: {"limite": 8}),
@@ -29,7 +35,7 @@ _REGRAS = [
      lambda t: {"caminho": "~/Downloads" if "download" in t else
                 "~/Documentos" if "document" in t else "."}),
     (r"(apague|apagar|delete|exclua).*", "apagar",
-     lambda t: {"caminho": (re.findall(r"[\w\-./~]+\.\w+", t) or ["arquivo.txt"])[0]}),
+     lambda t: {"caminho": _caminho(t)}),
     (r"(abra|abrir).*(site|youtube|google|http)", "abrir",
      lambda t: {"alvo": "https://www.youtube.com" if "youtube" in t else "https://www.google.com"}),
     (r"(pesquise|procure|busque|pesquisar)", "pesquisar_web",
@@ -42,6 +48,7 @@ _REGRAS = [
 
 class MotorDemo(Motor):
     nome = "demo"
+    _original = ""
 
     def conversar(self, mensagens, modelo, ferramentas=None, opcoes=None) -> Resposta:
         ultima = mensagens[-1]
@@ -49,6 +56,7 @@ class MotorDemo(Motor):
         if ultima["role"] == "tool":
             return Resposta(texto=self._resumir(ultima.get("content", "")), modelo="demo")
         texto = _normal(ultima.get("content", ""))
+        MotorDemo._original = ultima.get("content", "")
         for padrao, ferramenta, argumentos in _REGRAS:
             if ferramenta in nomes and re.search(padrao, texto):
                 return Resposta(chamadas=[ChamadaFerramenta(ferramenta, argumentos(texto))],
