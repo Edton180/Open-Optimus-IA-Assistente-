@@ -1,0 +1,40 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "optimus-assistente"
+version = "0.1.0"
+description = "Optimus: assistente de IA pessoal, local e autônomo, com voz, internet e controle do PC (Windows e Linux)."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "Apache-2.0" }
+authors = [{ name = "Edton Braz" }]
+dependencies = [
+    "httpx>=0.27",
+    "psutil>=5.9",
+    "ddgs>=9.0",
+    "tomli>=2.0; python_version < '3.11'",
+]
+
+[project.optional-dependencies]
+# Voz offline: reconhecimento (faster-whisper), microfone (sounddevice), vozes do sistema (pyttsx3)
+voz = ["faster-whisper>=1.0", "sounddevice>=0.4", "numpy>=1.24", "pyttsx3>=2.90", "piper-tts>=1.2"]
+# Vozes neurais online (precisa de internet)
+voz-online = ["edge-tts>=6.1"]
+# Controle de mouse, teclado e capturas de tela
+desktop = ["pyautogui>=0.9", "mss>=9.0", "pyperclip>=1.8"]
+completo = ["optimus-assistente[voz,voz-online,desktop]"]
+dev = ["pytest>=8", "ruff>=0.4"]
+
+[project.scripts]
+optimus = "optimus.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["optimus"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
