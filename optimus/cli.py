@@ -141,6 +141,16 @@ def cmd_voz(args) -> int:
     return 0
 
 
+def cmd_startup(args) -> int:
+    from optimus import startup
+
+    acoes = {"install": lambda: startup.instalar(abrir_navegador=not args.sem_navegador),
+             "remove": startup.remover, "status": startup.status,
+             "restart": startup.reiniciar, "logs": startup.logs}
+    print(acoes[args.acao]())
+    return 0
+
+
 def cmd_hardware(args) -> int:
     from optimus import hardware
 
@@ -315,6 +325,11 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("tarefa", help="modo autônomo")
     p.add_argument("objetivo")
     p.set_defaults(func=cmd_tarefa)
+    p = sub.add_parser("startup", help="iniciar junto com o computador")
+    p.add_argument("acao", choices=["install", "remove", "status", "restart", "logs"])
+    p.add_argument("--sem-navegador", action="store_true",
+                   help="não abrir o núcleo (HUD) no navegador ao ligar")
+    p.set_defaults(func=cmd_startup)
     p = sub.add_parser("hardware", help="perfil de hardware")
     p.add_argument("--json", action="store_true")
     p.set_defaults(func=cmd_hardware)

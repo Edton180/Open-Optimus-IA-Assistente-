@@ -18,7 +18,7 @@ from optimus.tools.base import Contexto, Ferramenta, ferramenta, registradas
 
 log = logging.getLogger(__name__)
 _PLUGINS_CARREGADOS = False
-_PRECISAM_HA = {"casa_dispositivos", "casa_controlar", "casa_relatorio", "casa_diagnostico",
+_PRECISAM_HA = {"casa_dispositivos", "casa_controlar", "casa_relatorio",
                 "casa_falar", "casa_varios", "alexa_anunciar"}
 
 

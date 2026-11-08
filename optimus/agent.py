@@ -72,6 +72,7 @@ class Agente:
     ferramentas: dict[str, Ferramenta] = field(default_factory=dict)
     cancelado: Callable[[], bool] | None = None
     profundidade: int = 0
+    pensar: bool | None = None  # None: segue motor.pensar da configuração
 
     def __post_init__(self):
         if not self.ferramentas:
@@ -148,7 +149,8 @@ class Agente:
         return {"contexto": contexto, "threads": threads,
                 "temperatura": self.config.get("motor", "temperatura", 0.6),
                 "manter_carregado": self.config.get("motor", "manter_carregado", "30m"),
-                "pensar": bool(self.config.get("motor", "pensar", False))}
+                "pensar": bool(self.config.get("motor", "pensar", False)
+                               if self.pensar is None else self.pensar)}
 
     def prompt_sistema(self, persona: dict | None = None, consulta: str = "",
                        com_ferramentas: bool = True) -> str:
@@ -272,6 +274,10 @@ class Agente:
             if "erro" not in dados:
                 resposta = (f"São {dados['hora']} de {dados['dia_semana']}, {dados['data']}."
                             if chamada.nome == "data_hora" else dados.get("mensagem", "Feito."))
+                self._emitir("resposta", texto=resposta, modelo="roteador rápido")
+                return resposta
+            if chamada.nome == "gerar_imagem":  # sem gerador: o modelo não resolveria melhor
+                resposta = f"Não consegui criar a imagem: {dados['erro']}"
                 self._emitir("resposta", texto=resposta, modelo="roteador rápido")
                 return resposta
 

@@ -66,6 +66,7 @@ PADRAO: dict[str, Any] = {
         "manter_carregado": "30m",
         # Raciocínio interno (qwen3, deepseek-r1...). Desligado: em CPU deixa tudo muito lento.
         "pensar": False,
+        "hardware_assinatura": "",
     },
     "agente": {
         "max_passos": 8,
@@ -142,6 +143,7 @@ PADRAO: dict[str, Any] = {
         # Home Assistant: http://IP:8123 e um token de longa duração (Perfil > Segurança)
         "url": "",
         "token": "",
+        "alexa": "",  # ex.: media_player.echo_sala (Alexa Media Player no Home Assistant)
     },
     "imagem": {
         # Stable Diffusion local (AUTOMATIC1111/Forge com --api). Sem ele, usa o online.
@@ -152,6 +154,8 @@ PADRAO: dict[str, Any] = {
     "destinos": [],
     # Outros PCs da casa para ligar (Wake-on-LAN) e comandar por SSH (veja docs/controle.md)
     "computadores": [],
+    # Câmeras IP sem Home Assistant: [[cameras]] nome = "Portão" url = "rtsp://..."
+    "cameras": [],
 }
 
 

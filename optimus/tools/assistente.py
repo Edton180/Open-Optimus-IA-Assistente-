@@ -108,7 +108,11 @@ def gerar_imagem(ctx, descricao: str, formato: str = "quadrado"):
                         "desligado em [imagem] online."}
     url = ("https://image.pollinations.ai/prompt/" + urllib.parse.quote(descricao) +
            f"?width={largura}&height={altura}&nologo=true&seed={int(time.time()) % 100000}")
-    resposta = httpx.get(url, timeout=180, follow_redirects=True)
+    try:
+        resposta = httpx.get(url, timeout=180, follow_redirects=True)
+    except httpx.HTTPError as erro:
+        return {"erro": f"Sem acesso ao gerador online ({type(erro).__name__}). Confira a "
+                        "internet ou abra o Stable Diffusion no PC."}
     if resposta.status_code != 200 or not resposta.headers.get("content-type", "").startswith(
             "image"):
         return {"erro": f"O gerador online respondeu {resposta.status_code}. Tente de novo."}

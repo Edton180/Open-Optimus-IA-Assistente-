@@ -25,6 +25,9 @@ class Optimus:
         self.config = config or cfg.carregar()
         self.hardware = hardware.detectar()
         self.perfil = hardware.escolher_perfil(self.hardware)
+        from optimus.modelos import verificar_upgrade
+
+        self.aviso_modelo = verificar_upgrade(self.config, self.hardware, self.perfil)
         base = cfg.pasta_base()
         self.banco = Banco(base / "optimus.db")
         self.auditoria = Auditoria(base / "registros" / "acoes.jsonl")

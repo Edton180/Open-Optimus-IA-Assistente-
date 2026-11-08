@@ -85,7 +85,7 @@ APELIDOS = {
     "edge:pt-BR-FranciscaNeural": "aurora", "edge:pt-BR-ThalitaMultilingualNeural": "lyra",
     "edge:pt-BR-AntonioNeural": "titan", "sistema:feminina": "sistema-feminina",
     "sistema:masculina": "sistema-masculina", "valquiria": "valkyrie", "valquíria": "valkyrie",
-    "jarvis_elite": "elite", "eleven": "elite", "elevenlabs": "elite", "sistema": "sistema-feminina",
+    "eleven": "elite", "elevenlabs": "elite", "sistema": "sistema-feminina",
 }
 
 POR_ID = {v.id: v for v in VOZES}

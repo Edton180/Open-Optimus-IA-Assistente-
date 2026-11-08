@@ -3,22 +3,29 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#070b14">
-<title>Optimus</title>
-<link rel="icon" href="/logo.svg" type="image/svg+xml">
+<meta name="theme-color" content="#02060c">
+<title>Open Optimus</title>
+<link rel="icon" href="/favicon.png" type="image/png">
+<link rel="apple-touch-icon" href="/icone-192.png">
 <link rel="manifest" href="/manifest.json">
 <link rel="stylesheet" href="/style.css">
 </head>
-<body>
+<body class="modo-hud">
+<div id="boot" aria-hidden="true">
+  <img src="/logo.png" alt="Open Optimus" class="boot-logo">
+  <div class="boot-barra"><i></i></div>
+  <ul id="boot-linhas"></ul>
+</div>
 <div id="app">
   <aside id="lateral">
     <div class="marca">
-      <img src="/logo.svg" alt="" class="marca-logo">
+      <img src="/emblema.png" alt="" class="marca-logo">
       <div><strong>OPTIMUS</strong><span id="versao">assistente local</span></div>
       <button class="icone so-celular" id="fechar-lateral" aria-label="Fechar menu">✕</button>
     </div>
     <button class="botao primario largo" id="nova-conversa">＋ Nova conversa</button>
     <nav class="menu">
+      <button data-tela="hud"><span>◉</span>Núcleo (HUD)</button>
       <button data-tela="chat" class="ativo"><span>💬</span>Conversas</button>
       <button data-tela="personas"><span>🎭</span>Personas</button>
       <button data-tela="prompts"><span>📚</span>Biblioteca de prompts</button>
@@ -45,7 +52,9 @@
           <div id="modelo-texto" class="sutil">carregando…</div>
         </div>
       </div>
+      <div class="hud-titulo"><b>OPEN OPTIMUS</b><span id="hud-relogio">--:--</span></div>
       <div class="topo-direita">
+        <button class="botao pequeno" id="botao-ao-vivo" title="Conversa ao vivo: fale 'Optimus' ou bata duas palmas">🎙️ Ao vivo</button>
         <select id="persona" aria-label="Persona"></select>
         <span id="modo" class="selo">equilibrado</span>
         <button class="icone" id="alternar-painel" title="Painel do sistema">📊</button>
@@ -53,15 +62,28 @@
     </header>
 
     <section id="tela-chat" class="tela ativa">
+      <div id="hud-centro">
+        <div id="hud-estado">PRONTO</div>
+        <canvas id="hud-orbe" width="640" height="640" aria-label="Orbe do Optimus"></canvas>
+        <div id="hud-legenda" aria-live="polite"><p id="legenda-usuario"></p><p id="legenda-optimus"></p></div>
+        <nav id="hud-nav">
+          <button data-ir="memoria"><i></i><span>Memória</span></button>
+          <button data-ir="casa"><i></i><span>Casa</span></button>
+          <button data-ir="painel-conversa" class="ativo"><i></i><span>Conversa</span></button>
+          <button data-ir="acoes"><i></i><span>Ações</span></button>
+          <button data-ir="config"><i></i><span>Ajustes</span></button>
+        </nav>
+      </div>
       <div id="mensagens">
         <div id="boas-vindas">
-          <img src="/logo.svg" alt="" class="logo-grande">
+          <img src="/emblema.png" alt="" class="logo-grande">
           <h1>Olá, eu sou o <span id="nome-assistente">Optimus</span>.</h1>
           <p>Seu assistente de IA que roda no seu computador. Converse, mande pesquisar na internet,
             organizar arquivos, abrir programas, controlar a casa ou falar comigo pelo microfone.</p>
           <div class="sugestoes">
+            <button data-sugestao="Pesquise as últimas notícias de inteligência artificial">🔎 Pesquisar na web</button>
+            <button data-sugestao="Gere uma imagem de um hamster ciborgue com óculos de realidade aumentada, estilo neon">🖼️ Gerar imagem</button>
             <button data-sugestao="Como está o meu PC agora?">🖥️ Como está o meu PC agora?</button>
-            <button data-sugestao="Pesquise as principais notícias de tecnologia de hoje">🌐 Notícias de tecnologia de hoje</button>
             <button data-sugestao="Liste os arquivos da minha pasta Downloads">📁 O que tem nos meus Downloads?</button>
             <button data-sugestao="Me lembre de beber água em 30 minutos">⏰ Lembrete em 30 minutos</button>
           </div>
@@ -76,10 +98,17 @@
           <button class="icone" id="alternar-grupo" title="Conversa em grupo (várias personas)">👥</button>
           <textarea id="entrada" rows="1" placeholder="Fale com o Optimus…  (Enter envia, Shift+Enter quebra linha)"></textarea>
           <button class="icone" id="falar-respostas" title="Ler respostas em voz alta">🔈</button>
-          <button class="icone microfone" id="microfone" title="Segure para falar">🎙️</button>
+          <button class="icone microfone" id="microfone" title="Clique para falar (ou segure)">🎙️</button>
+          <button class="botao perigo oculto" id="parar">■ Parar</button>
           <button class="botao primario" id="enviar">Enviar</button>
         </div>
-        <div class="rodape-sutil">O Optimus executa ações no seu PC. Ações críticas sempre pedem sua confirmação.</div>
+        <div class="modos">
+          <button data-modo="web" title="Pesquisa na internet antes de responder">🔎 Pesquisar na web</button>
+          <button data-modo="imagem" title="Cria uma imagem com a descrição">🖼️ Gerar imagem</button>
+          <button data-modo="pensar" title="Raciocínio mais profundo (mais lento)">🧠 Pensar a fundo</button>
+          <button data-modo="programar" title="Modo programador">💻 Programar</button>
+        </div>
+        <div class="rodape-sutil" id="rodape-voz">O Optimus executa ações no seu PC. Ações críticas sempre pedem sua confirmação.</div>
       </div>
     </section>
 
@@ -137,6 +166,9 @@
           <button class="botao" id="casa-bluetooth">Procurar Bluetooth</button>
           <button class="botao" id="casa-rede">Aparelhos no Wi-Fi</button></div>
       </div>
+      <h3 class="subtitulo">📷 Câmeras ao vivo</h3>
+      <p class="sutil" id="cameras-aviso">Câmeras do Home Assistant aparecem aqui sozinhas. Câmeras IP: adicione no config.toml, ex.: <code>[[cameras]]</code> com <code>nome = "Portão"</code> e <code>url = "rtsp://usuario:senha@192.168.0.30/stream"</code>.</p>
+      <div id="cameras" class="grade cameras"></div>
       <div id="casa-aparelhos" class="grade"></div>
     </section>
 
@@ -185,6 +217,9 @@
             <label>Temperatura<input name="motor.temperatura" type="number" step="0.1" min="0" max="2" class="campo"></label></div>
           <div class="linha baixar"><input id="modelo-baixar" class="campo" placeholder="ex.: qwen3.5:9b, llama3.1:8b ou qualquer modelo do Ollama"><button type="button" class="botao" id="botao-baixar">Baixar modelo</button></div>
           <div id="progresso-baixar" class="sutil"></div>
+          <h3 class="subtitulo">Melhor modelo de cada família para este PC</h3>
+          <p class="sutil" id="familias-memoria"></p>
+          <div id="familias" class="grade"></div>
         </div>
         <div data-painel="rede" class="painel">
           <p>Some poder de processamento: use a placa de vídeo de outro PC da casa ou conecte outras IAs (OpenAI, Claude, Gemini, Groq, OpenRouter, DeepSeek…). O Optimus usa o primeiro destino ligado, pela prioridade, e passa para o próximo se um falhar.</p>
@@ -231,11 +266,18 @@
 
   <aside id="painel">
     <h3>Sistema</h3>
+    <div class="aneis">
+      <div class="anel" id="anel-cpu"><svg viewBox="0 0 36 36"><circle cx="18" cy="18" r="15.5"/><circle class="valor" cx="18" cy="18" r="15.5"/></svg><b>0%</b><span>CPU</span></div>
+      <div class="anel" id="anel-ram"><svg viewBox="0 0 36 36"><circle cx="18" cy="18" r="15.5"/><circle class="valor" cx="18" cy="18" r="15.5"/></svg><b>0%</b><span>RAM</span></div>
+      <div class="anel" id="anel-vel"><svg viewBox="0 0 36 36"><circle cx="18" cy="18" r="15.5"/><circle class="valor" cx="18" cy="18" r="15.5"/></svg><b>–</b><span>tok/s</span></div>
+    </div>
     <div class="medidor"><span>CPU</span><div class="barra"><i id="cpu-barra"></i></div><b id="cpu-valor">0%</b></div>
     <div class="medidor"><span>RAM</span><div class="barra"><i id="ram-barra"></i></div><b id="ram-valor">0%</b></div>
+    <canvas id="grafico-cpu" width="260" height="54" aria-label="Histórico de CPU"></canvas>
     <div id="hw-info" class="hw"></div>
     <h3>Motor</h3>
     <div id="motor-info" class="hw"></div>
+    <div id="aviso-modelo" class="oculto"></div>
     <h3>Avisos</h3>
     <ul id="avisos" class="lista pequena"></ul>
   </aside>
@@ -249,6 +291,8 @@
   <h3>🔒 Optimus protegido</h3><p>Digite a senha definida no PC.</p>
   <input type="password" class="campo" name="senha" autofocus><button class="botao primario">Entrar</button></form></div>
 
+<script src="/voz.js"></script>
+<script src="/hud.js"></script>
 <script src="/app.js"></script>
 </body>
 </html>

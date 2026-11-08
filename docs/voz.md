@@ -6,8 +6,23 @@
 pode continuar falando sem repetir o nome (modo conversa). "Pode parar" ou "tchau" encerram o modo
 conversa. Ctrl+C sai.
 
-**Interface:** segure o botão 🎙️, fale e solte. O botão 🔈/🔊 liga a leitura das respostas. Funciona
-também no celular conectado ao PC.
+**Interface, ao vivo (recomendado):** clique em **🎙️ Ao vivo** (ou no orbe) e libere o microfone.
+
+- Diga **"Optimus, ..."** e o pedido. Por 25 segundos depois de cada resposta, não precisa repetir o nome.
+- **Duas palmas** chamam o Optimus ("Às ordens").
+- Ele fala a resposta **frase por frase enquanto ela ainda está sendo escrita**, então começa a falar
+  em poucos segundos e fala a resposta inteira.
+- Para interromper: diga **"pare"** ou **"Optimus"**, clique no orbe ou no botão **■ Parar**.
+- Confirmações podem ser respondidas falando ("sim", "não", "confirmo").
+
+O reconhecimento usa o do navegador (Chrome e Edge, precisa de internet) e, se ele não estiver
+disponível, o **Whisper no próprio PC** (`pip install faster-whisper`), detectando quando você começa e
+termina de falar. A fala usa a voz escolhida; se ela falhar, o navegador fala com a voz dele, para nunca
+ficar mudo. O microfone só funciona em `http://localhost` ou em HTTPS (regra dos navegadores): no
+celular pela rede, use a voz do teclado ou configure HTTPS.
+
+**Interface, um pedido:** clique no 🎙️ da caixa de texto, fale, e ele envia quando você parar.
+O botão 🔈/🔊 liga a leitura das respostas digitadas.
 
 Ações que precisam de confirmação são perguntadas em voz alta. Responda "sim" (ou "pode") nas moderadas
 e **"confirmo"** nas críticas. Qualquer "não", "espera" ou "cancela" nega, mesmo junto de um "sim".
@@ -16,13 +31,17 @@ e **"confirmo"** nas críticas. Qualquer "não", "espera" ou "cancela" nega, mes
 
 | Voz | Gênero | Tipo | Precisa de |
 |---|---|---|---|
-| Dora | feminina | natural, offline | arquivos de voz (o instalador baixa) |
-| Alex | masculina | natural, offline | idem |
-| Santa | masculina, grave | natural, offline | idem |
-| Francisca | feminina | neural, online | internet |
-| Thalita | feminina | neural multilíngue, online | internet |
-| Antonio | masculina | neural, online | internet |
+| **Prime** | masculina | natural, offline (Kokoro) | arquivos de voz (o instalador baixa) |
+| **Valkyrie** | feminina | natural, offline (padrão) | idem |
+| **Nexus** | masculina, grave | natural, offline | idem |
+| **Cyber** | masculina robótica | offline, com efeito de rádio | idem + numpy |
+| **Stealth** | feminina, baixa e abafada | offline, com efeito | idem + numpy |
+| **Elite** | masculina, cinematográfica | ElevenLabs (online) | chave da ElevenLabs em `voz.elevenlabs_chave` |
+| Aurora, Lyra, Titan | fem., fem., masc. | neural, online (Edge) | internet |
 | Sistema (feminina/masculina) | ambos | voz do Windows (Maria, Daniel), espeak-ng no Linux, voz do Android | nada |
+
+Troque falando: *"Optimus, mude para a voz Nexus"*. Se a voz escolhida não estiver disponível, ele usa a
+reserva mais parecida e avisa.
 
 Escolha em **Configurações > Voz** (botão ▶ Ouvir para testar) ou:
 

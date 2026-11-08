@@ -22,7 +22,8 @@ def conversar_por_voz(agente, config, ao_texto=print) -> None:
     from optimus.tools.base import no_android
 
     voz_cfg = config["voz"]
-    falante = Falante(voz_cfg.get("voz") or "feminina", voz_cfg.get("velocidade", 1.0))
+    falante = Falante(voz_cfg.get("voz") or "valkyrie", voz_cfg.get("velocidade", 1.0),
+                      config=config)
     ouvinte = None if no_android() else Ouvinte(
         voz_cfg.get("modelo_stt") or (agente.perfil.modelo_stt if agente.perfil else "small"))
     palavra = voz_cfg.get("palavra_ativacao") or "optimus"
@@ -68,6 +69,10 @@ def conversar_por_voz(agente, config, ao_texto=print) -> None:
             continue
         ao_texto(f"[você] {pedido}")
         resposta = agente.responder(pedido, historico, por_voz=True)
+        if (config.get("voz", "voz") or "") != falante.pedida:
+            # O usuário trocou a voz por comando ("mude para a voz Nexus"): usa a nova já.
+            falante = Falante(config.get("voz", "voz"), voz_cfg.get("velocidade", 1.0),
+                              config=config)
         historico += [{"role": "user", "content": pedido},
                       {"role": "assistant", "content": resposta}]
         historico = historico[-20:]

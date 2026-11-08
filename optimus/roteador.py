@@ -34,11 +34,13 @@ INTENCOES: list[tuple[str, list[str]]] = [
     (r"\b(clima|previsao|vai chover|temperatura (em|de|hoje|amanha|la fora))", ["clima"]),
     (r"\b(volume|som|mudo|silenci|brilho|musica|tocar|toque|pausa|pause|proxima|anterior|"
      r"spotify)", ["volume", "brilho", "midia"]),
+    (r"\bbluetooth", ["bluetooth_procurar", "bluetooth_conectar"]),
+    (r"\b(camera|cameras|cftv)\b", ["cameras_listar", "camera_foto"]),
     (r"\b(luz|luzes|lampada|tomada|ar[- ]condicionado|\bar\b|tv|televis|casa|camera|"
      r"bluetooth|wi-?fi|sensor|persiana|cortina|portao|fechadura|alexa|barulho|frio|calor|"
      r"abafad|umidade|ventilador|aspirador)",
-     ["casa_relatorio", "casa_falar", "casa_controlar", "casa_dispositivos", "casa_diagnostico",
-      "casa_varios", "camera_foto", "cameras_listar", "bluetooth_procurar", "bluetooth_conectar",
+     ["casa_falar", "casa_relatorio", "casa_controlar", "casa_dispositivos", "casa_varios",
+      "camera_foto", "cameras_listar", "bluetooth_procurar", "bluetooth_conectar",
       "rede_local", "alexa_anunciar"]),
     (r"\b(outro pc|outro computador|pc da|computador da|liga(r)? o (pc|computador)|wake|ssh|"
      r"servidor)", ["pc_listar", "pc_ligar", "pc_comando"]),
@@ -132,8 +134,17 @@ _SITES = {"youtube": "https://www.youtube.com", "google": "https://www.google.co
           "x": "https://x.com", "twitter": "https://x.com"}
 
 
+_IMAGEM = re.compile(
+    r"^(?:(?:ei |ok )?optimus[, ]*)?(?:gere|gera|gerar|crie|cria|criar|desenhe|desenha|fa[cç]a|"
+    r"faz|fazer)( pra mim| para mim)?( uma| um)? (?:imagem|desenho|ilustra[cç][aã]o|foto|arte)"
+    r"(?: de| do| da| dos| das| com| sobre)?\s*[:\-]?\s*(?P<d>.{3,})", re.I)
+
+
 def roteador_rapido(texto: str) -> tuple[str, dict[str, Any]] | None:
     """Pedidos óbvios resolvidos sem o modelo. Devolve (ferramenta, argumentos)."""
+    achado = _IMAGEM.match((texto or "").strip())
+    if achado:
+        return "gerar_imagem", {"descricao": achado.group("d").strip(" .!?")}
     t = normal(texto).rstrip("?!. ")
     t = re.sub(r"^(optimus|ei optimus|ok optimus)[, ]*", "", t)
     if re.fullmatch(r"(que horas sao|que hora e|me diz as horas|horas)( agora)?", t):
