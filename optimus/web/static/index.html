@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#070b14">
+<title>Optimus</title>
+<link rel="icon" href="/logo.svg" type="image/svg+xml">
+<link rel="manifest" href="/manifest.json">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div id="app">
+  <aside id="lateral">
+    <div class="marca">
+      <img src="/logo.svg" alt="" class="marca-logo">
+      <div><strong>OPTIMUS</strong><span id="versao">assistente local</span></div>
+      <button class="icone so-celular" id="fechar-lateral" aria-label="Fechar menu">✕</button>
+    </div>
+    <button class="botao primario largo" id="nova-conversa">＋ Nova conversa</button>
+    <nav class="menu">
+      <button data-tela="chat" class="ativo"><span>💬</span>Conversas</button>
+      <button data-tela="personas"><span>🎭</span>Personas</button>
+      <button data-tela="prompts"><span>📚</span>Biblioteca de prompts</button>
+      <button data-tela="memoria"><span>🧠</span>Memória e lembretes</button>
+      <button data-tela="casa"><span>🏠</span>Casa inteligente</button>
+      <button data-tela="acoes"><span>🛡️</span>Ações e segurança</button>
+      <button data-tela="config"><span>⚙️</span>Configurações</button>
+    </nav>
+    <div class="secao-titulo">
+      <span>Histórico</span>
+      <select id="filtro-projeto" aria-label="Projeto"><option value="">Todos os projetos</option></select>
+    </div>
+    <input id="busca" class="campo" placeholder="Buscar conversa…">
+    <ul id="lista-conversas"></ul>
+  </aside>
+
+  <main id="principal">
+    <header id="topo">
+      <button class="icone so-celular" id="abrir-lateral" aria-label="Menu">☰</button>
+      <div class="orbe-area">
+        <div id="orbe" class="orbe pronto"><i></i><i></i><i></i></div>
+        <div>
+          <div id="estado-texto">Pronto</div>
+          <div id="modelo-texto" class="sutil">carregando…</div>
+        </div>
+      </div>
+      <div class="topo-direita">
+        <select id="persona" aria-label="Persona"></select>
+        <span id="modo" class="selo">equilibrado</span>
+        <button class="icone" id="alternar-painel" title="Painel do sistema">📊</button>
+      </div>
+    </header>
+
+    <section id="tela-chat" class="tela ativa">
+      <div id="mensagens">
+        <div id="boas-vindas">
+          <img src="/logo.svg" alt="" class="logo-grande">
+          <h1>Olá, eu sou o <span id="nome-assistente">Optimus</span>.</h1>
+          <p>Seu assistente de IA que roda no seu computador. Converse, mande pesquisar na internet,
+            organizar arquivos, abrir programas, controlar a casa ou falar comigo pelo microfone.</p>
+          <div class="sugestoes">
+            <button data-sugestao="Como está o meu PC agora?">🖥️ Como está o meu PC agora?</button>
+            <button data-sugestao="Pesquise as principais notícias de tecnologia de hoje">🌐 Notícias de tecnologia de hoje</button>
+            <button data-sugestao="Liste os arquivos da minha pasta Downloads">📁 O que tem nos meus Downloads?</button>
+            <button data-sugestao="Me lembre de beber água em 30 minutos">⏰ Lembrete em 30 minutos</button>
+          </div>
+        </div>
+      </div>
+      <div id="compositor">
+        <div id="grupo-barra" class="oculto">
+          <span>Conversa em grupo:</span><div id="grupo-escolha"></div>
+        </div>
+        <div class="caixa">
+          <button class="icone" id="abrir-prompts" title="Biblioteca de prompts">📚</button>
+          <button class="icone" id="alternar-grupo" title="Conversa em grupo (várias personas)">👥</button>
+          <textarea id="entrada" rows="1" placeholder="Fale com o Optimus…  (Enter envia, Shift+Enter quebra linha)"></textarea>
+          <button class="icone" id="falar-respostas" title="Ler respostas em voz alta">🔈</button>
+          <button class="icone microfone" id="microfone" title="Segure para falar">🎙️</button>
+          <button class="botao primario" id="enviar">Enviar</button>
+        </div>
+        <div class="rodape-sutil">O Optimus executa ações no seu PC. Ações críticas sempre pedem sua confirmação.</div>
+      </div>
+    </section>
+
+    <section id="tela-personas" class="tela">
+      <div class="tela-cabecalho"><h2>Personas</h2>
+        <p>Cada persona tem sua própria personalidade (prompt de sistema), modelo e voz. Você decide o que ela é e como responde.</p></div>
+      <div id="lista-personas" class="grade"></div>
+      <form id="form-persona" class="cartao formulario">
+        <h3>Nova persona / editar</h3>
+        <input name="chave" type="hidden">
+        <label>Nome<input name="nome" class="campo" required></label>
+        <label>Descrição<input name="descricao" class="campo"></label>
+        <label>Prompt de sistema<textarea name="prompt" class="campo" rows="6" placeholder="Você é…"></textarea></label>
+        <div class="linha">
+          <label>Modelo (opcional)<input name="modelo" class="campo" list="modelos-lista" placeholder="usa o padrão"></label>
+          <label>Voz (opcional)<select name="voz" class="campo vozes-select"></select></label>
+        </div>
+        <button class="botao primario">Salvar persona</button>
+      </form>
+    </section>
+
+    <section id="tela-prompts" class="tela">
+      <div class="tela-cabecalho"><h2>Biblioteca de prompts</h2><p>Atalhos para pedidos que você faz sempre. Clique para usar.</p></div>
+      <div id="lista-prompts" class="grade"></div>
+      <form id="form-prompt" class="cartao formulario">
+        <h3>Novo prompt</h3>
+        <div class="linha"><label>Título<input name="titulo" class="campo" required></label>
+          <label>Categoria<input name="categoria" class="campo" value="Geral"></label></div>
+        <label>Texto<textarea name="texto" class="campo" rows="4" required></textarea></label>
+        <button class="botao primario">Adicionar</button>
+      </form>
+    </section>
+
+    <section id="tela-memoria" class="tela">
+      <div class="tela-cabecalho"><h2>Memória e lembretes</h2><p>O que o Optimus sabe sobre você e o que ele vai te lembrar.</p></div>
+      <div class="duas-colunas">
+        <div class="cartao"><h3>🧠 Memória de longo prazo</h3><ul id="lista-fatos" class="lista"></ul>
+          <form id="form-fato" class="linha"><input name="texto" class="campo" placeholder="Ex.: Meu time é o Flamengo"><button class="botao">Guardar</button></form></div>
+        <div class="cartao"><h3>⏰ Lembretes</h3><ul id="lista-lembretes" class="lista"></ul>
+          <p class="sutil">Peça no chat: "me lembre de ligar para o João às 15:00".</p></div>
+      </div>
+      <div class="cartao"><h3>📖 Base de conhecimento</h3>
+        <p class="sutil">Conteúdos que o Optimus estudou e consulta sozinho, mesmo offline. Peça no chat: "aprenda este site: https://…" ou "estude o arquivo ~/Documentos/manual.pdf".</p>
+        <ul id="lista-conhecimento" class="lista"></ul></div>
+    </section>
+
+    <section id="tela-casa" class="tela">
+      <div class="tela-cabecalho"><h2>Casa inteligente</h2>
+        <p>Luzes, tomadas, ar-condicionado, TV, câmeras e sensores por Wi-Fi, Bluetooth, Zigbee e infravermelho, pelo Home Assistant. Fale normalmente: "Optimus, apaga a luz da sala".</p></div>
+      <div class="cartao formulario">
+        <div class="linha"><label>Endereço do Home Assistant<input id="casa-url" class="campo" placeholder="http://192.168.0.10:8123"></label>
+          <label>Token de acesso<input id="casa-token" class="campo" type="password" placeholder="token de longa duração"></label></div>
+        <div class="linha"><button class="botao primario" id="casa-salvar">Salvar e conectar</button>
+          <button class="botao" id="casa-atualizar">Atualizar aparelhos</button>
+          <button class="botao" id="casa-bluetooth">Procurar Bluetooth</button>
+          <button class="botao" id="casa-rede">Aparelhos no Wi-Fi</button></div>
+      </div>
+      <div id="casa-aparelhos" class="grade"></div>
+    </section>
+
+    <section id="tela-acoes" class="tela">
+      <div class="tela-cabecalho"><h2>Ações e segurança</h2>
+        <p>Tudo que o Optimus executou no seu PC, com o nível de risco e a sua decisão. Senhas e chaves aparecem mascaradas.</p></div>
+      <div class="cartao"><table class="tabela"><thead><tr><th>Quando</th><th>Ferramenta</th><th>Detalhes</th><th>Risco</th><th>Decisão</th></tr></thead><tbody id="lista-acoes"></tbody></table></div>
+    </section>
+
+    <section id="tela-config" class="tela">
+      <div class="tela-cabecalho"><h2>Configurações</h2><p id="config-caminho" class="sutil"></p></div>
+      <div class="abas">
+        <button data-aba="geral" class="ativo">Geral</button><button data-aba="motor">Motor de IA</button>
+        <button data-aba="rede">Outras IAs e PCs</button><button data-aba="voz">Voz</button>
+        <button data-aba="ferramentas">Ferramentas</button><button data-aba="recursos">Desempenho</button>
+      </div>
+      <form id="form-config" class="cartao formulario">
+        <div data-painel="geral" class="painel ativo">
+          <div class="linha"><label>Nome do assistente<input name="geral.nome" class="campo"></label>
+            <label>Como devo te chamar<input name="geral.usuario" class="campo" placeholder="seu nome"></label></div>
+          <label>Personalidade padrão (prompt de sistema)<textarea name="geral.personalidade" class="campo" rows="7"></textarea></label>
+          <label>Modo do agente
+            <select name="agente.modo" class="campo">
+              <option value="seguro">Seguro: pergunta antes de qualquer mudança</option>
+              <option value="equilibrado">Equilibrado: pergunta antes de ações críticas</option>
+              <option value="autonomo">Autônomo: planeja e executa sozinho (críticas ainda perguntam)</option>
+            </select></label>
+          <div class="linha"><label>Passos máximos por pedido<input name="agente.max_passos" type="number" min="1" max="60" class="campo"></label>
+            <label>Pasta de trabalho<input name="agente.pasta_trabalho" class="campo" placeholder="pasta do usuário"></label></div>
+        </div>
+        <div data-painel="motor" class="painel">
+          <div id="perfil-hardware" class="destaque"></div>
+          <div class="linha"><label>Motor
+            <select name="motor.backend" class="campo">
+              <option value="ollama">Ollama (local, recomendado)</option>
+              <option value="llamacpp">llama.cpp (local)</option>
+              <option value="lmstudio">LM Studio (local)</option>
+              <option value="openai">Servidor compatível com OpenAI</option>
+              <option value="demo">Demonstração (sem IA)</option>
+            </select></label>
+            <label>Endereço do motor<input name="motor.url" class="campo"></label></div>
+          <div class="linha"><label>Modelo principal<input name="motor.modelo" class="campo" list="modelos-lista" placeholder="automático pelo hardware"></label>
+            <label>Modelo rápido (voz)<input name="motor.modelo_rapido" class="campo" list="modelos-lista" placeholder="automático"></label></div>
+          <datalist id="modelos-lista"></datalist>
+          <div class="linha"><label>Chave de API (se for nuvem)<input name="motor.chave_api" type="password" class="campo"></label>
+            <label>Temperatura<input name="motor.temperatura" type="number" step="0.1" min="0" max="2" class="campo"></label></div>
+          <div class="linha baixar"><input id="modelo-baixar" class="campo" placeholder="ex.: qwen3.5:9b, llama3.1:8b ou qualquer modelo do Ollama"><button type="button" class="botao" id="botao-baixar">Baixar modelo</button></div>
+          <div id="progresso-baixar" class="sutil"></div>
+        </div>
+        <div data-painel="rede" class="painel">
+          <p>Some poder de processamento: use a placa de vídeo de outro PC da casa ou conecte outras IAs (OpenAI, Claude, Gemini, Groq, OpenRouter, DeepSeek…). O Optimus usa o primeiro destino ligado, pela prioridade, e passa para o próximo se um falhar.</p>
+          <div id="lista-destinos"></div>
+          <button type="button" class="botao" id="novo-destino">＋ Adicionar destino</button>
+        </div>
+        <div data-painel="voz" class="painel">
+          <div id="lista-vozes" class="grade"></div>
+          <div class="linha"><label>Palavra de ativação<input name="voz.palavra_ativacao" class="campo"></label>
+            <label>Velocidade da fala<input name="voz.velocidade" type="number" step="0.1" min="0.5" max="2" class="campo"></label></div>
+          <div class="linha"><label class="interruptor"><input type="checkbox" name="voz.falar_respostas"> Falar as respostas</label>
+            <label>Modelo de reconhecimento<select name="voz.modelo_stt" class="campo">
+              <option value="">automático pelo hardware</option><option>tiny</option><option>base</option><option>small</option><option>medium</option><option>large-v3-turbo</option></select></label></div>
+        </div>
+        <div data-painel="ferramentas" class="painel">
+          <p>Ligue só o que quiser que o Optimus possa fazer.</p>
+          <div class="grade interruptores">
+            <label class="interruptor"><input type="checkbox" name="ferramentas.internet"> 🌐 Internet (pesquisa, páginas, notícias, clima)</label>
+            <label class="interruptor"><input type="checkbox" name="ferramentas.arquivos"> 📁 Arquivos e pastas</label>
+            <label class="interruptor"><input type="checkbox" name="ferramentas.comandos"> ⌨️ Comandos no terminal</label>
+            <label class="interruptor"><input type="checkbox" name="ferramentas.programas"> 🖥️ Programas, processos e energia</label>
+            <label class="interruptor"><input type="checkbox" name="ferramentas.teclado_mouse"> 🖱️ Teclado, mouse e tela</label>
+            <label class="interruptor"><input type="checkbox" name="ferramentas.lembretes"> ⏰ Lembretes</label>
+            <label class="interruptor"><input type="checkbox" name="ferramentas.memoria"> 🧠 Memória de longo prazo</label>
+            <label class="interruptor"><input type="checkbox" name="ferramentas.casa"> 🏠 Casa inteligente</label>
+            <label class="interruptor"><input type="checkbox" name="ferramentas.plugins"> 🧩 Plugins</label>
+          </div>
+        </div>
+        <div data-painel="recursos" class="painel">
+          <label>Quanto do PC o Optimus pode usar
+            <select name="recursos.uso" class="campo">
+              <option value="economico">Econômico: metade dos núcleos, contexto menor (PC fraco ou jogando)</option>
+              <option value="equilibrado">Equilibrado: deixa folga para o sistema</option>
+              <option value="maximo">Máximo: todo o poder disponível</option>
+            </select></label>
+          <div class="linha"><label>Trocar para o modelo rápido com menos de (GB de RAM livre)<input name="recursos.ram_minima_gb" type="number" step="0.5" class="campo"></label>
+            <label>Contexto (tokens, 0 = automático)<input name="motor.contexto" type="number" class="campo"></label></div>
+          <label class="interruptor"><input type="checkbox" name="recursos.prioridade_baixa"> Rodar com prioridade baixa (o PC continua fluido)</label>
+        </div>
+        <div class="linha fim"><button class="botao primario">Salvar configurações</button><span id="config-salvo" class="sutil"></span></div>
+      </form>
+    </section>
+  </main>
+
+  <aside id="painel">
+    <h3>Sistema</h3>
+    <div class="medidor"><span>CPU</span><div class="barra"><i id="cpu-barra"></i></div><b id="cpu-valor">0%</b></div>
+    <div class="medidor"><span>RAM</span><div class="barra"><i id="ram-barra"></i></div><b id="ram-valor">0%</b></div>
+    <div id="hw-info" class="hw"></div>
+    <h3>Motor</h3>
+    <div id="motor-info" class="hw"></div>
+    <h3>Avisos</h3>
+    <ul id="avisos" class="lista pequena"></ul>
+  </aside>
+</div>
+
+<div id="modal-prompts" class="modal oculto"><div class="cartao">
+  <div class="linha entre"><h3>Biblioteca de prompts</h3><button class="icone" data-fechar>✕</button></div>
+  <div id="modal-lista-prompts" class="lista-prompts"></div></div></div>
+
+<div id="modal-senha" class="modal oculto"><form class="cartao formulario" id="form-senha">
+  <h3>🔒 Optimus protegido</h3><p>Digite a senha definida no PC.</p>
+  <input type="password" class="campo" name="senha" autofocus><button class="botao primario">Entrar</button></form></div>
+
+<script src="/app.js"></script>
+</body>
+</html>
