@@ -32,6 +32,9 @@ class MotorOpenAI(Motor):
         corpo: dict[str, Any] = {"model": modelo, "messages": _para_openai(mensagens)}
         if opcoes.get("temperatura") is not None:
             corpo["temperature"] = opcoes["temperatura"]
+        # Limite de tamanho da resposta (0 = sem limite): bound no tempo e no custo.
+        if opcoes.get("max_resposta"):
+            corpo["max_tokens"] = int(opcoes["max_resposta"])
         return corpo
 
     def conversar(self, mensagens, modelo, ferramentas=None, opcoes=None,

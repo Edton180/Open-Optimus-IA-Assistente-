@@ -19,6 +19,12 @@ Correções do primeiro uso real (i3 de 2 núcleos, `qwen3.5:2b`):
 
 Novidades:
 
+- **Mais rápido e mais leve (velocidade e consumo):** a resposta agora tem um limite de
+  tamanho (`num_predict`/`max_tokens`), então o modelo para de escrever em vez de se estender
+  à toa — o que mais pesava em CPU fraca. Respostas faladas usam um limite curto
+  (`motor.max_resposta_voz`, 320 tokens) e PCs em modo econômico limitam também o texto
+  (`motor.max_resposta_economico`, 768). Em modo econômico, perguntas curtas vão direto para o
+  modelo rápido. Vale para Ollama e para servidores compatíveis com a OpenAI.
 - **Autoatualização pelo GitHub com barreira de privacidade (Zero-Leak):** `optimus/privacy_guard.py`
   varre tudo antes de qualquer commit automático, bloqueando arquivos sensíveis (`.db`, `.env`,
   `config.toml`, memórias, gravações) e mascarando chaves de API, tokens, chaves privadas, IPs, MACs,

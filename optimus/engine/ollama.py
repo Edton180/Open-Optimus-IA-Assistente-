@@ -21,7 +21,8 @@ class MotorOllama(Motor):
         opcoes = dict(opcoes or {})
         opcoes.pop("pensar", None)
         manter = opcoes.pop("manter_carregado", None)
-        traduzir = {"contexto": "num_ctx", "threads": "num_thread", "temperatura": "temperature"}
+        traduzir = {"contexto": "num_ctx", "threads": "num_thread", "temperatura": "temperature",
+                    "max_resposta": "num_predict"}
         saida = {}
         for chave, valor in opcoes.items():
             if valor in (None, 0, ""):

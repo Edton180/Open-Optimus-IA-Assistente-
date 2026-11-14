@@ -129,12 +129,15 @@ class Agente:
             self._emitir("aviso", texto="Pouca RAM livre: usando o modelo rápido para não "
                                         "travar o PC.")
             return self.modelo_rapido()
-        if por_voz and len(texto) < 120 and not re.search(
+        # Pergunta curta e leve: o modelo rápido já resolve. Vale por voz e em PCs fracos
+        # (modo econômico), onde o modelo grande custa caro à toa.
+        economico = self.config.get("recursos", "uso", "equilibrado") == "economico"
+        if (por_voz or economico) and len(texto) < 120 and not re.search(
                 r"(pesquis|crie|escrev|program|analis|organiz|planej|codigo|código)", texto, re.I):
             return self.modelo_rapido()
         return self.modelo_principal()
 
-    def opcoes(self) -> dict[str, Any]:
+    def opcoes(self, por_voz: bool = False) -> dict[str, Any]:
         perfil = self.perfil
         threads = int(self.config.get("motor", "threads") or (perfil.threads if perfil else 0))
         uso = self.config.get("recursos", "uso", "equilibrado")
@@ -149,8 +152,24 @@ class Agente:
         return {"contexto": contexto, "threads": threads,
                 "temperatura": self.config.get("motor", "temperatura", 0.6),
                 "manter_carregado": self.config.get("motor", "manter_carregado", "30m"),
+                "max_resposta": self._limite_resposta(por_voz, uso),
                 "pensar": bool(self.config.get("motor", "pensar", False)
                                if self.pensar is None else self.pensar)}
+
+    def _limite_resposta(self, por_voz: bool, uso: str) -> int:
+        """Tamanho máximo da resposta (num_predict). Limita tempo e CPU em PCs fracos.
+
+        0 = sem limite (padrão do modelo). Respostas faladas são curtas; em modo econômico
+        o texto também é limitado. O menor limite aplicável vence.
+        """
+        base = int(self.config.get("motor", "max_resposta", 0) or 0)
+        limites = [base] if base else []
+        if por_voz:
+            limites.append(int(self.config.get("motor", "max_resposta_voz", 320) or 0))
+        elif uso == "economico":
+            limites.append(int(self.config.get("motor", "max_resposta_economico", 768) or 0))
+        validos = [n for n in limites if n > 0]
+        return min(validos) if validos else 0
 
     def prompt_sistema(self, persona: dict | None = None, consulta: str = "",
                        com_ferramentas: bool = True) -> str:
@@ -316,7 +335,7 @@ class Agente:
         por_passo = 2 if pequeno else 5
         repetidas: dict[str, int] = {}
         tentou_texto = False
-        opcoes = self.opcoes()
+        opcoes = self.opcoes(por_voz)
 
         for passo in range(max_passos):
             self._verificar_cancelado()

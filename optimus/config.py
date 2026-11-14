@@ -64,6 +64,13 @@ PADRAO: dict[str, Any] = {
         "threads": 0,
         "temperatura": 0.6,
         "manter_carregado": "30m",
+        # Tamanho máximo da resposta, em tokens (0 = padrão do modelo). Limita o tempo e o
+        # consumo de CPU: o modelo para de escrever ao chegar no limite.
+        "max_resposta": 0,
+        # Limite menor para respostas faladas (voz), que devem ser curtas e rápidas.
+        "max_resposta_voz": 320,
+        # Em PCs fracos (recursos.uso = economico) a resposta por texto é limitada a isto.
+        "max_resposta_economico": 768,
         # Raciocínio interno (qwen3, deepseek-r1...). Desligado: em CPU deixa tudo muito lento.
         "pensar": False,
         "hardware_assinatura": "",
