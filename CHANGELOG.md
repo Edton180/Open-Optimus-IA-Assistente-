@@ -2,6 +2,9 @@
 
 ## 0.2 (em andamento)
 
+- **Licença:** o Optimus passou para a PolyForm Noncommercial 1.0.0 — livre para uso não
+  comercial e com licença comercial à parte com o proprietário (LICENSE-COMMERCIAL.md).
+
 Correções do primeiro uso real (i3 de 2 núcleos, `qwen3.5:2b`):
 
 - **Respostas lentas (114 s, 318 s):** o modo "pensamento" do qwen3.5 estava ligado e o Optimus mandava

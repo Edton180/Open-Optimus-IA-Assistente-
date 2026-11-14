@@ -13,7 +13,7 @@ Conversa por voz, pesquisa na internet, controla o PC e a casa, aprende e lembra
 ![Linux](https://img.shields.io/badge/Linux-Ubuntu%20%7C%20Fedora%20%7C%20Arch-FCC624?logo=linux&logoColor=black)
 ![Android](https://img.shields.io/badge/Android-Termux-3DDC84?logo=android&logoColor=white)
 ![IA local](https://img.shields.io/badge/IA-100%25%20local%20ou%20nuvem-7a5cff)
-![Licença](https://img.shields.io/badge/licen%C3%A7a-Apache%202.0-39e15a)
+![Licença](https://img.shields.io/badge/licen%C3%A7a-fonte%20aberta%20(n%C3%A3o%20comercial)-39e15a)
 
 Desenvolvido por **Edton Braz** ([@Edton180](https://github.com/Edton180))
 
@@ -25,7 +25,7 @@ Desenvolvido por **Edton Braz** ([@Edton180](https://github.com/Edton180))
 > escolher, sem filtros de conteúdo adicionados pelo aplicativo. **Todo o uso, as respostas geradas e as
 > consequências das ações são de inteira responsabilidade de quem instala e opera o sistema.** Use de acordo
 > com a lei do seu país e os termos dos serviços que você conectar. O software é fornecido "como está", sem
-> garantias, conforme a [Licença Apache 2.0](LICENSE).
+> garantias, conforme a [licença](LICENSE).
 
 ## O que é
 
@@ -186,6 +186,8 @@ tests/                 testes automáticos (python -m pytest)
 
 ## Contribua
 
-O Optimus é livre e aberto, sob a [Licença Apache 2.0](LICENSE). Correções, novas ferramentas, vozes e
-documentação são bem-vindas: abra uma issue ou envie um pull request. Antes, rode `python -m pytest`.
-Créditos e inspirações em [NOTICE](NOTICE).
+O Optimus tem o código aberto sob a [PolyForm Noncommercial License 1.0.0](LICENSE): **livre para uso
+não comercial** (pessoal, estudo, pesquisa, hobby). **Uso comercial exige uma licença comercial com o
+proprietário, Edton Braz** — veja [LICENSE-COMMERCIAL.md](LICENSE-COMMERCIAL.md). Correções, novas
+ferramentas, vozes e documentação são bem-vindas: abra uma issue ou envie um pull request. Antes, rode
+`python -m pytest`. Créditos e inspirações em [NOTICE](NOTICE).
