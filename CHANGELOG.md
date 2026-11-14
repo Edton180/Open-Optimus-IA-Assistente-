@@ -19,6 +19,13 @@ Correções do primeiro uso real (i3 de 2 núcleos, `qwen3.5:2b`):
 
 Novidades:
 
+- **Autoatualização pelo GitHub com barreira de privacidade (Zero-Leak):** `optimus/privacy_guard.py`
+  varre tudo antes de qualquer commit automático, bloqueando arquivos sensíveis (`.db`, `.env`,
+  `config.toml`, memórias, gravações) e mascarando chaves de API, tokens, chaves privadas, IPs, MACs,
+  senhas de Wi-Fi e caminhos com o nome do usuário. `optimus/updater.py` baixa atualizações com `git pull`
+  seguro (preservando os dados locais, que ficam fora do Git) e só commita/envia depois de uma revisão de
+  privacidade limpa. Ferramentas `atualizacao_verificar`, `atualizacao_baixar` e `privacidade_revisar`.
+  Veja [docs/atualizacao.md](docs/atualizacao.md).
 - Núcleo (HUD) com orbe animado, conversa **ao vivo** por voz (palavra "Optimus", duas palmas,
   interrupção com "pare"), abertura com o logo, relógio e anéis de CPU/RAM/tokens por segundo.
 - Modos Pesquisar na web, Gerar imagem, Pensar a fundo e Programar; botão Parar que cancela o pedido.
