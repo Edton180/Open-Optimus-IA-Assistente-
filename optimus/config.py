@@ -150,6 +150,14 @@ PADRAO: dict[str, Any] = {
         "url": "http://127.0.0.1:7860",
         "online": True,
     },
+    "atualizacao": {
+        # Autoatualização pelo GitHub (veja docs/atualizacao.md).
+        # Pasta do repositório (vazio = a pasta onde o Optimus está instalado, se for um
+        # clone do Git).
+        "repo": "",
+        # Verificar atualizações automaticamente ao iniciar.
+        "ao_iniciar": False,
+    },
     # Outros computadores e outras IAs (veja docs/rede.md)
     "destinos": [],
     # Outros PCs da casa para ligar (Wake-on-LAN) e comandar por SSH (veja docs/controle.md)
