@@ -317,7 +317,8 @@ function deveFalar(porVoz) { return estado.falar || aoVivo.ligado || porVoz; }
 async function acompanhar(tarefa, bolha, porVoz) {
   let desde = 0; let pendenteId = ""; let atual = bolha; let usada = false;
   let parcial = ""; let falouParcial = false;
-  const falar = deveFalar(porVoz);
+  // Reavaliado a cada evento: se o usuário desligar o ao vivo ou o 🔈 no meio da
+  // resposta, o Optimus para de falar em vez de continuar até o fim.
   const novaBolha = () => { if (usada) { atual = adicionarMensagem("optimus", "", {}); usada = false; } };
   while (true) {
     let d;
@@ -332,7 +333,7 @@ async function acompanhar(tarefa, bolha, porVoz) {
         parcial += ev.texto;
         $(".texto", atual).innerHTML = markdown(parcial);
         legenda("optimus", parcial);
-        if (falar) { Voz.adicionarParcial(ev.texto); falouParcial = true; }
+        if (deveFalar(porVoz)) { Voz.adicionarParcial(ev.texto); falouParcial = true; }
         else definirEstado("falando", "Respondendo…");
       } else if (ev.tipo === "limpar_parcial") {
         // O modelo começou a escrever e decidiu usar uma ferramenta: o texto era rascunho.
@@ -365,7 +366,8 @@ async function acompanhar(tarefa, bolha, porVoz) {
         const [ouvir, copiar] = $$(".quem button", atual);
         ouvir.onclick = () => Voz.falar(ev.texto);
         copiar.onclick = () => navigator.clipboard && navigator.clipboard.writeText(ev.texto);
-        if (falar) { if (falouParcial) Voz.finalizar(); else Voz.falar(ev.texto); }
+        if (deveFalar(porVoz)) { if (falouParcial) Voz.finalizar(); else Voz.falar(ev.texto); }
+        else if (falouParcial) Voz.parar();
         parcial = ""; falouParcial = false;
       } else if (ev.tipo === "erro") {
         $(".texto", atual).innerHTML = `<p>⚠️ ${esc(ev.texto)}</p>`;
@@ -524,7 +526,7 @@ async function alternarAoVivo(ligar) {
     definirEstado("pronto", "Pronto");
     Voz.falar("Modo ao vivo ligado. Pode falar.");
   } else {
-    aoVivo.ligado = false; Voz.pararEscuta();
+    aoVivo.ligado = false; Voz.pararEscuta(); Voz.parar();
     botao.classList.remove("ligado"); botao.textContent = "🎙️ Ao vivo";
     avisoVoz("O Optimus executa ações no seu PC. Ações críticas sempre pedem sua confirmação.");
     definirEstado("pronto", "Pronto");
