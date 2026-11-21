@@ -19,6 +19,11 @@ Correções do primeiro uso real (i3 de 2 núcleos, `qwen3.5:2b`):
 
 Novidades:
 
+- **Reconhece upgrade de peça e recomenda/baixa o modelo:** além da detecção de hardware e do
+  aviso quando a máquina melhora (que já existiam), agora há ferramentas e o comando
+  `optimus modelos` para ver o melhor modelo que cabe no PC por família, o que já está instalado
+  e o que falta. Ferramentas `modelos_recomendados`, `modelo_baixar` (baixa pelo Ollama; vazio =
+  o recomendado) e `modelo_usar`. Do PC fraco ao supercomputador, sempre o maior que couber.
 - **Base de conhecimento própria embutida:** o Optimus já vem com conhecimento geral e benigno
   (sobre ele mesmo, primeiros socorros, conversões e medidas, redes e PC, referência de
   programação) em `optimus/knowledge/*.md`. Esses textos são indexados no banco local (FTS5) ao

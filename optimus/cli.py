@@ -203,6 +203,40 @@ def cmd_instalar_modelo(args) -> int:
     return 1
 
 
+def cmd_modelos(args) -> int:
+    """Mostra, por família, o melhor modelo que cabe neste PC e se já está instalado."""
+    from optimus import hardware, modelos
+
+    config = cfg.carregar()
+    hw = hardware.detectar()
+    perfil = hardware.escolher_perfil(hw)
+    memoria, usou_ram = hardware.memoria_util_gb(hw)
+    try:
+        from optimus.engine.ollama import MotorOllama
+
+        instalados = MotorOllama(config.get("motor", "url", "http://127.0.0.1:11434")).modelos()
+    except Exception:
+        instalados = []
+    por_familia = modelos.melhores_por_familia(hw)
+    if args.json:
+        for item in por_familia:
+            if item.get("recomendado"):
+                item["recomendado"]["instalado"] = item["recomendado"]["nome"] in instalados
+        print(json.dumps({"recomendado": perfil.modelo, "memoria_util_gb": round(memoria, 1),
+                          "por_familia": por_familia}, ensure_ascii=False, indent=2))
+        return 0
+    fonte = "RAM (sem placa)" if usou_ram else "placa de vídeo"
+    print(f"Memória útil: {memoria:.1f} GB ({fonte}). Recomendado: {perfil.modelo}\n")
+    for item in por_familia:
+        rec = item.get("recomendado")
+        if not rec:
+            continue
+        marca = "✓ instalado" if rec["nome"] in instalados else "baixar: optimus instalar-modelo "
+        marca += "" if rec["nome"] in instalados else rec["nome"]
+        print(f"  {item['familia']:20} {rec['nome']:20} {marca}")
+    return 0
+
+
 def cmd_vozes(args) -> int:
     from optimus.voice import tts
 
@@ -336,6 +370,9 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("instalar-modelo", help="baixa o modelo ideal (Ollama)")
     p.add_argument("modelo", nargs="?")
     p.set_defaults(func=cmd_instalar_modelo)
+    p = sub.add_parser("modelos", help="melhor modelo para este PC, por família")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=cmd_modelos)
     p = sub.add_parser("vozes", help="vozes disponíveis")
     p.add_argument("--baixar", action="store_true", help="instala as vozes offline")
     p.add_argument("--testar", action="store_true", help="fala uma frase de teste")
