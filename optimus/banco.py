@@ -57,6 +57,26 @@ CREATE TABLE IF NOT EXISTS prompts (
     texto TEXT NOT NULL,
     categoria TEXT NOT NULL DEFAULT 'Geral'
 );
+CREATE TABLE IF NOT EXISTS habitos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nome TEXT NOT NULL,
+    criado REAL NOT NULL
+);
+CREATE TABLE IF NOT EXISTS habito_marcacoes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    habito INTEGER NOT NULL REFERENCES habitos(id) ON DELETE CASCADE,
+    dia TEXT NOT NULL,
+    quando REAL NOT NULL,
+    UNIQUE (habito, dia)
+);
+CREATE TABLE IF NOT EXISTS timers (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nome TEXT NOT NULL DEFAULT 'Timer',
+    criado REAL NOT NULL,
+    termina REAL NOT NULL,
+    duracao_seg INTEGER NOT NULL,
+    tocado INTEGER NOT NULL DEFAULT 0
+);
 """
 
 PERSONAS_INICIAIS = [
@@ -278,6 +298,94 @@ class Banco:
 
     def apagar_lembrete(self, lembrete_id: int) -> None:
         self._exec("DELETE FROM lembretes WHERE id=?", (lembrete_id,))
+
+    # Hábitos (acompanhamento diário com sequência/streak)
+    @staticmethod
+    def _hoje() -> str:
+        return time.strftime("%Y-%m-%d", time.localtime())
+
+    def criar_habito(self, nome: str) -> int:
+        nome = nome.strip()
+        existe = self._todos("SELECT id FROM habitos WHERE lower(nome)=?", (nome.lower(),))
+        if existe:
+            return existe[0]["id"]
+        return self._exec("INSERT INTO habitos (nome, criado) VALUES (?,?)",
+                          (nome, time.time())).lastrowid
+
+    def marcar_habito(self, habito_id: int, dia: str | None = None) -> bool:
+        """Marca o hábito como feito num dia (padrão: hoje). Idempotente por dia."""
+        dia = dia or self._hoje()
+        with self._trava:
+            cur = self._con.execute(
+                "INSERT OR IGNORE INTO habito_marcacoes (habito, dia, quando) VALUES (?,?,?)",
+                (habito_id, dia, time.time()))
+            self._con.commit()
+            return cur.rowcount > 0
+
+    def desmarcar_habito(self, habito_id: int, dia: str | None = None) -> None:
+        self._exec("DELETE FROM habito_marcacoes WHERE habito=? AND dia=?",
+                   (habito_id, dia or self._hoje()))
+
+    def _sequencia(self, habito_id: int) -> int:
+        """Dias seguidos até hoje (ou até ontem, se hoje ainda não foi marcado)."""
+        dias = {d["dia"] for d in self._todos(
+            "SELECT dia FROM habito_marcacoes WHERE habito=?", (habito_id,))}
+        if not dias:
+            return 0
+        import datetime as _dt
+        hoje = _dt.date.fromisoformat(self._hoje())
+        inicio = hoje if hoje.isoformat() in dias else hoje - _dt.timedelta(days=1)
+        seq = 0
+        atual = inicio
+        while atual.isoformat() in dias:
+            seq += 1
+            atual -= _dt.timedelta(days=1)
+        return seq
+
+    def listar_habitos(self) -> list[dict[str, Any]]:
+        hoje = self._hoje()
+        saida = []
+        for h in self._todos("SELECT * FROM habitos ORDER BY criado"):
+            total = self._todos("SELECT COUNT(*) AS n FROM habito_marcacoes WHERE habito=?",
+                                (h["id"],))[0]["n"]
+            feito_hoje = bool(self._todos(
+                "SELECT 1 FROM habito_marcacoes WHERE habito=? AND dia=?", (h["id"], hoje)))
+            saida.append({"id": h["id"], "nome": h["nome"], "sequencia": self._sequencia(h["id"]),
+                          "feito_hoje": feito_hoje, "total": total})
+        return saida
+
+    def apagar_habito(self, habito_id: int) -> None:
+        self._exec("DELETE FROM habitos WHERE id=?", (habito_id,))
+
+    # Timers (contagem regressiva com nome)
+    def criar_timer(self, nome: str, segundos: int) -> int:
+        agora = time.time()
+        return self._exec(
+            "INSERT INTO timers (nome, criado, termina, duracao_seg) VALUES (?,?,?,?)",
+            (nome.strip() or "Timer", agora, agora + segundos, int(segundos))).lastrowid
+
+    def listar_timers(self, apenas_ativos: bool = True) -> list[dict[str, Any]]:
+        agora = time.time()
+        sql = "SELECT * FROM timers"
+        if apenas_ativos:
+            sql += " WHERE tocado=0"
+        saida = []
+        for t in self._todos(sql + " ORDER BY termina"):
+            restante = t["termina"] - agora
+            saida.append({**t, "restante_seg": max(0, round(restante)),
+                          "vencido": restante <= 0})
+        return saida
+
+    def timers_vencidos(self) -> list[dict[str, Any]]:
+        """Timers ativos que já chegaram ao fim (para a interface/voz tocar o alarme)."""
+        return self._todos("SELECT * FROM timers WHERE tocado=0 AND termina<=? ORDER BY termina",
+                           (time.time(),))
+
+    def marcar_timer_tocado(self, timer_id: int) -> None:
+        self._exec("UPDATE timers SET tocado=1 WHERE id=?", (timer_id,))
+
+    def cancelar_timer(self, timer_id: int) -> None:
+        self._exec("DELETE FROM timers WHERE id=?", (timer_id,))
 
     # Personas e prompts
     def personas(self) -> list[dict[str, Any]]:
