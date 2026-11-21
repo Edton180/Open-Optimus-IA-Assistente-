@@ -94,6 +94,7 @@ class Estado:
         self._ouvinte = None
         optimus.iniciar_lembretes(lambda l: self.avisos.append(
             {"tipo": l.get("tipo", "lembrete"), "texto": l["texto"], "quando": time.time()}))
+        optimus.iniciar_copiados()
 
     def falante(self, voz: str) -> tts.Falante:
         if voz not in self._falantes:

@@ -77,6 +77,11 @@ CREATE TABLE IF NOT EXISTS timers (
     duracao_seg INTEGER NOT NULL,
     tocado INTEGER NOT NULL DEFAULT 0
 );
+CREATE TABLE IF NOT EXISTS copiados (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    texto TEXT NOT NULL,
+    quando REAL NOT NULL
+);
 """
 
 PERSONAS_INICIAIS = [
@@ -386,6 +391,36 @@ class Banco:
 
     def cancelar_timer(self, timer_id: int) -> None:
         self._exec("DELETE FROM timers WHERE id=?", (timer_id,))
+
+    # Copiados (histórico da área de transferência)
+    def guardar_copiado(self, texto: str, limite: int = 100) -> int | None:
+        """Guarda um texto copiado. Ignora vazio e repetição do mais recente; uma cópia
+        igual mais antiga sobe para o topo; mantém só os 'limite' últimos."""
+        texto = (texto or "").strip()
+        if not texto:
+            return None
+        ultimo = self._todos("SELECT texto FROM copiados ORDER BY id DESC LIMIT 1")
+        if ultimo and ultimo[0]["texto"] == texto:
+            return None
+        self._exec("DELETE FROM copiados WHERE texto=?", (texto,))
+        novo = self._exec("INSERT INTO copiados (texto, quando) VALUES (?,?)",
+                          (texto, time.time())).lastrowid
+        self._exec("DELETE FROM copiados WHERE id NOT IN "
+                   "(SELECT id FROM copiados ORDER BY id DESC LIMIT ?)", (max(1, int(limite)),))
+        return novo
+
+    def listar_copiados(self, limite: int = 50) -> list[dict[str, Any]]:
+        return self._todos("SELECT * FROM copiados ORDER BY id DESC LIMIT ?", (max(1, int(limite)),))
+
+    def copiado(self, copiado_id: int) -> dict[str, Any] | None:
+        linhas = self._todos("SELECT * FROM copiados WHERE id=?", (int(copiado_id),))
+        return linhas[0] if linhas else None
+
+    def apagar_copiado(self, copiado_id: int) -> None:
+        self._exec("DELETE FROM copiados WHERE id=?", (int(copiado_id),))
+
+    def limpar_copiados(self) -> None:
+        self._exec("DELETE FROM copiados")
 
     # Personas e prompts
     def personas(self) -> list[dict[str, Any]]:

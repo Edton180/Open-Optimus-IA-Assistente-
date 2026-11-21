@@ -36,7 +36,13 @@ Novidades:
   seguidos (streak) — `habito_criar`, `habito_marcar`, `habitos_listar`, `habito_apagar` — e
   timers de contagem regressiva com nome — `timer_criar`, `timers_listar`, `timer_cancelar`.
   Tudo guardado no banco local (novas tabelas `habitos`, `habito_marcacoes`, `timers`). Os
-  timers registram quanto falta e quais venceram, para a interface/voz avisarem.
+  timers venceram no mesmo laço dos lembretes e tocam o alarme (interface/voz).
+- **Histórico de copiados (aba Copiados):** o Optimus guarda o que você copia (Ctrl+C) num
+  histórico local, no seu PC, para você achar e reusar depois. Ferramentas `copiados_listar`,
+  `copiado_usar` (coloca de volta na área de transferência), `copiado_apagar` e
+  `copiados_limpar` (nova tabela `copiados`, dedup e só os últimos N). A captura é **opt-in**
+  e vem desligada (`[copiados] ativo = true` liga), porque ler a área de transferência é
+  sensível; nada sai do PC.
 - **Biblioteca de documentos (converse com os seus arquivos, offline):** `optimus biblioteca
   <pasta>` e as ferramentas `biblioteca_indexar`/`biblioteca_listar`/`biblioteca_esquecer`
   apontam o Optimus para uma pasta inteira (txt, md, csv, html, PDF...) e indexam tudo no
