@@ -22,8 +22,12 @@ def normal(texto: str) -> str:
 
 # (regex sobre o texto normalizado, ferramentas). A ordem define a prioridade.
 INTENCOES: list[tuple[str, list[str]]] = [
-    (r"\b(lembre(-| )?me|me lembr|lembrete|alarme|despert|timer|cronometro|avise[- ]me|"
-     r"me avis|agend)", ["criar_lembrete", "listar_lembretes", "cancelar_lembretes"]),
+    (r"\b(lembre(-| )?me|me lembr|lembrete|alarme|despert|timer|cronometro|contagem regressiva|"
+     r"avise[- ]me|me avis|agend)",
+     ["criar_lembrete", "listar_lembretes", "cancelar_lembretes",
+      "timer_criar", "timers_listar", "timer_cancelar"]),
+    (r"\b(habito|habitos|meta diaria|rotina diaria|sequencia de dias|dias seguidos|streak)",
+     ["habito_criar", "habito_marcar", "habitos_listar", "habito_apagar"]),
     (r"\b(lembre que|guarde|memoriz|anote que|meu nome e|eu (gosto|moro|trabalho|sou|tenho)|"
      r"o que (voce )?sabe (sobre|de) mim|recorda|esqueca)", ["lembrar", "recordar"]),
     (r"\b(aprend|estud|base de conhecimento)", ["aprender", "consultar_conhecimento"]),

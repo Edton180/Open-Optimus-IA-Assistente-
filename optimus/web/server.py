@@ -93,7 +93,7 @@ class Estado:
         self._falantes: dict[str, tts.Falante] = {}
         self._ouvinte = None
         optimus.iniciar_lembretes(lambda l: self.avisos.append(
-            {"tipo": "lembrete", "texto": l["texto"], "quando": time.time()}))
+            {"tipo": l.get("tipo", "lembrete"), "texto": l["texto"], "quando": time.time()}))
 
     def falante(self, voz: str) -> tts.Falante:
         if voz not in self._falantes:

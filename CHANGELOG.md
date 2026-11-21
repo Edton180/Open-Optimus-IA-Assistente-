@@ -32,6 +32,11 @@ Correções do primeiro uso real (i3 de 2 núcleos, `qwen3.5:2b`):
 
 Novidades:
 
+- **Hábitos e timers (recursos do painel):** acompanhamento de hábitos com sequência de dias
+  seguidos (streak) — `habito_criar`, `habito_marcar`, `habitos_listar`, `habito_apagar` — e
+  timers de contagem regressiva com nome — `timer_criar`, `timers_listar`, `timer_cancelar`.
+  Tudo guardado no banco local (novas tabelas `habitos`, `habito_marcacoes`, `timers`). Os
+  timers registram quanto falta e quais venceram, para a interface/voz avisarem.
 - **Biblioteca de documentos (converse com os seus arquivos, offline):** `optimus biblioteca
   <pasta>` e as ferramentas `biblioteca_indexar`/`biblioteca_listar`/`biblioteca_esquecer`
   apontam o Optimus para uma pasta inteira (txt, md, csv, html, PDF...) e indexam tudo no
