@@ -64,6 +64,13 @@ PADRAO: dict[str, Any] = {
         "threads": 0,
         "temperatura": 0.6,
         "manter_carregado": "30m",
+        # Tamanho máximo da resposta, em tokens (0 = padrão do modelo). Limita o tempo e o
+        # consumo de CPU: o modelo para de escrever ao chegar no limite.
+        "max_resposta": 0,
+        # Limite menor para respostas faladas (voz), que devem ser curtas e rápidas.
+        "max_resposta_voz": 320,
+        # Em PCs fracos (recursos.uso = economico) a resposta por texto é limitada a isto.
+        "max_resposta_economico": 768,
         # Raciocínio interno (qwen3, deepseek-r1...). Desligado: em CPU deixa tudo muito lento.
         "pensar": False,
         # Segundos SEM receber nada do modelo até desistir (evita a tela travada). O relógio
@@ -154,6 +161,14 @@ PADRAO: dict[str, Any] = {
         # Stable Diffusion local (AUTOMATIC1111/Forge com --api). Sem ele, usa o online.
         "url": "http://127.0.0.1:7860",
         "online": True,
+    },
+    "atualizacao": {
+        # Autoatualização pelo GitHub (veja docs/atualizacao.md).
+        # Pasta do repositório (vazio = a pasta onde o Optimus está instalado, se for um
+        # clone do Git).
+        "repo": "",
+        # Verificar atualizações automaticamente ao iniciar.
+        "ao_iniciar": False,
     },
     # Outros computadores e outras IAs (veja docs/rede.md)
     "destinos": [],
