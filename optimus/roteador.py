@@ -39,13 +39,13 @@ INTENCOES: list[tuple[str, list[str]]] = [
     (r"\b(volume|som|mudo|silenci|brilho|musica|tocar|toque|pausa|pause|proxima|anterior|"
      r"spotify)", ["volume", "brilho", "midia"]),
     (r"\bbluetooth", ["bluetooth_procurar", "bluetooth_conectar"]),
-    (r"\b(camera|cameras|cftv)\b", ["cameras_listar", "camera_foto"]),
+    (r"\b(camera|cameras|cftv|webcam|webcams)\b", ["cameras_listar", "camera_foto"]),
     (r"\b(luz|luzes|lampada|tomada|ar[- ]condicionado|\bar\b|tv|televis|casa|camera|"
      r"bluetooth|wi-?fi|sensor|persiana|cortina|portao|fechadura|alexa|barulho|frio|calor|"
-     r"abafad|umidade|ventilador|aspirador)",
-     ["casa_falar", "casa_relatorio", "casa_controlar", "casa_dispositivos", "casa_varios",
-      "camera_foto", "cameras_listar", "bluetooth_procurar", "bluetooth_conectar",
-      "rede_local", "alexa_anunciar"]),
+     r"abafad|umidade|ventilador|aspirador|kasa|interruptor)",
+     ["kasa_controlar", "kasa_procurar", "casa_falar", "casa_relatorio", "casa_controlar",
+      "casa_dispositivos", "casa_varios", "camera_foto", "cameras_listar",
+      "bluetooth_procurar", "bluetooth_conectar", "rede_local", "alexa_anunciar"]),
     (r"\b(outro pc|outro computador|pc da|computador da|liga(r)? o (pc|computador)|wake|ssh|"
      r"servidor)", ["pc_listar", "pc_ligar", "pc_comando"]),
     (r"\b(codigo|programa(r|cao)?|script|bug|teste|git|commit|branch|docker|container|"

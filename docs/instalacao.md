@@ -4,7 +4,7 @@
 
 | | Mínimo | Recomendado |
 |---|---|---|
-| Sistema | Windows 10, Linux 64 bits, Android 9 (Termux) | Windows 11, Ubuntu 22.04+ |
+| Sistema | Windows 10, Linux 64 bits, macOS 12, Android 9 (Termux) | Windows 11, Ubuntu 22.04+, macOS 14+ (Apple Silicon) |
 | Python | 3.10 | 3.12 |
 | RAM | 4 GB | 16 GB ou mais |
 | Placa de vídeo | não precisa | NVIDIA ou AMD com 8 GB+ de VRAM |
@@ -45,6 +45,31 @@ bash scripts/instalar.sh
 O instalador usa `apt`, `dnf` ou `pacman` para instalar Python, PortAudio (microfone), espeak-ng e ffmpeg,
 cria o ambiente em `~/.local/share/optimus`, o comando `~/.local/bin/optimus`, baixa as vozes, instala o
 Ollama e o modelo, e cria o atalho no menu de aplicativos. Use `--sem-ia` para pular o Ollama.
+
+## macOS
+
+Precisa do [Homebrew](https://brew.sh) (o instalador avisa se faltar). No Terminal:
+
+```bash
+git clone https://github.com/Edton180/Open-Optimus-IA-Assistente-.git optimus
+cd optimus
+bash scripts/instalar.sh
+```
+
+O instalador usa o Homebrew para o Python 3.12 (o `python3` do macOS costuma ser antigo), PortAudio
+(microfone), ffmpeg (webcams), `blueutil` (parear Bluetooth) e `brightness` (brilho da tela); instala o
+**Ollama** (`brew install ollama`, ou baixe o app em [ollama.com](https://ollama.com/download)), baixa o
+modelo, cria o atalho **Optimus** em `~/Applications` e liga o início automático (launchd).
+
+Nos Macs com chip Apple (M1 a M4) o Ollama usa a GPU integrada, então modelos maiores rodam bem.
+
+No Mac o Optimus controla: volume e mídia (Spotify e Música), brilho, abrir apps pelo nome, desligar,
+reiniciar, suspender e bloquear, Bluetooth, webcams e quem está na rede. Na primeira vez o macOS pede
+permissões (microfone, câmera, Automação para o Spotify/Música); aceite em Ajustes do Sistema >
+Privacidade e Segurança.
+
+> O suporte ao Mac foi testado com o sistema simulado, não num Mac de verdade. Se algo falhar, abra um
+> issue com a saída de `optimus doutor`.
 
 ## Android (Termux)
 
@@ -97,10 +122,13 @@ Extras disponíveis: `voz`, `desktop` (teclado, mouse, prints), `casa` (Bluetoot
 
 ## Atualizar
 
+Pela interface: botão **🔄 Verificar/Baixar Atualizações**, ou diga *"Optimus, veja se tem atualização"*
+(detalhes em [atualizacao.md](atualizacao.md)). Pelo terminal:
+
 ```bash
 cd optimus
 git pull
-# Linux:   ~/.local/share/optimus/venv/bin/pip install ".[completo]"
+# Linux e Mac: ~/.local/share/optimus/venv/bin/pip install ".[completo]"
 # Windows: %LOCALAPPDATA%\Optimus\venv\Scripts\pip install ".[completo]"
 ```
 

@@ -139,6 +139,12 @@ _APELIDOS = {
               "calculadora": "gnome-calculator", "explorador": "xdg-open ~",
               "terminal": "x-terminal-emulator", "configuracoes": "gnome-control-center",
               "gerenciador de tarefas": "gnome-system-monitor"},
+    "macos": {"navegador": "open -a Safari", "bloco de notas": "open -a TextEdit",
+              "calculadora": "open -a Calculator", "explorador": "open ~",
+              "terminal": "open -a Terminal", "configuracoes": "open -a 'System Settings'",
+              "gerenciador de tarefas": "open -a 'Activity Monitor'",
+              "spotify": "open -a Spotify", "whatsapp": "open -a WhatsApp",
+              "word": "open -a 'Microsoft Word'", "excel": "open -a 'Microsoft Excel'"},
 }
 
 
@@ -190,6 +196,11 @@ def abrir(ctx, alvo: str):
         return {"mensagem": f"Pedi ao Windows para abrir {alvo}"}
     if so == "android":
         return {"erro": f"Não achei '{alvo}'. No Android abro links e arquivos."}
+    if so == "macos":
+        # Apps do Mac (.app) não ficam no PATH: o `open -a` acha pelo nome.
+        r = subprocess.run(["open", "-a", alvo], capture_output=True, text=True, check=False)
+        if r.returncode == 0:
+            return {"mensagem": f"Abri {alvo}"}
     return {"erro": f"Não achei o programa '{alvo}' neste PC."}
 
 
@@ -200,6 +211,11 @@ _ENERGIA = {
     "linux": {"desligar": "systemctl poweroff", "reiniciar": "systemctl reboot",
               "suspender": "systemctl suspend", "bloquear": "loginctl lock-session",
               "cancelar": "shutdown -c"},
+    # macOS: pelo Finder (System Events) não precisa de senha de administrador.
+    "macos": {"desligar": "osascript -e 'tell application \"System Events\" to shut down'",
+              "reiniciar": "osascript -e 'tell application \"System Events\" to restart'",
+              "suspender": "pmset sleepnow",
+              "bloquear": "pmset displaysleepnow"},
 }
 
 
