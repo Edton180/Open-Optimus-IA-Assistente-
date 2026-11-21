@@ -147,6 +147,13 @@ async function atualizarSistema() {
       aviso.classList.remove("oculto");
     }
     else if (!d.aviso_modelo) aviso.classList.add("oculto");
+    const avisoAt = $("#aviso-atualizacao"), at = d.aviso_atualizacao;
+    if (at && at.mensagem && !avisoAt.dataset.mostrado) {
+      avisoAt.dataset.mostrado = "1";
+      avisoAt.innerHTML = "🔄 " + esc(at.mensagem) + `<div class="linha"><button class="botao pequeno">Entendi</button></div>`;
+      avisoAt.querySelector("button").onclick = () => avisoAt.classList.add("oculto");
+      avisoAt.classList.remove("oculto");
+    }
     const hw = d.hardware;
     $("#hw-info").innerHTML = [
       ["Sistema", `${hw.sistema} ${hw.versao_sistema}`], ["CPU", hw.cpu], ["Núcleos", `${hw.nucleos_fisicos} / ${hw.nucleos_logicos} threads`],

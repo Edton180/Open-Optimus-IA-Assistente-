@@ -1,0 +1,41 @@
+name: Release
+
+# Publica uma release quando uma tag de versão é enviada (ex.: git tag v0.3.0 && git push --tags).
+# O Optimus instalado sem Git baixa o optimus-<versão>.zip e confere o SHA256SUMS antes de
+# instalar (veja docs/atualizacao.md).
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  publicar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Conferir versão da tag
+        run: |
+          VERSAO=$(python -c "import re;print(re.search(r'__version__ = \"(.+?)\"', open('optimus/__init__.py').read())[1])")
+          test "v$VERSAO" = "$GITHUB_REF_NAME" || { echo "Tag $GITHUB_REF_NAME diferente de __version__ $VERSAO"; exit 1; }
+      - name: Testes
+        run: |
+          pip install -e ".[dev,documentos]"
+          python -m pytest -q
+      - name: Montar pacotes
+        run: |
+          mkdir dist
+          git archive --format=zip --prefix=optimus-${GITHUB_REF_NAME}/ -o dist/optimus-${GITHUB_REF_NAME}.zip HEAD
+          pip install build
+          python -m build --wheel --outdir dist
+          cd dist && sha256sum * > SHA256SUMS && cat SHA256SUMS
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true
+          prerelease: ${{ contains(github.ref_name, '-') }}

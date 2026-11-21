@@ -34,6 +34,10 @@ class Optimus:
         self.auditoria = Auditoria(base / "registros" / "acoes.jsonl")
         self.motor = criar_motor(self.config)
         self._lembretes: threading.Thread | None = None
+        self.aviso_atualizacao: dict | None = None
+        if self.config.get("atualizacao", "ao_iniciar", False):
+            threading.Thread(target=self._verificar_atualizacao, daemon=True,
+                             name="atualizacao").start()
         if self.config.get("recursos", "prioridade_baixa", True):
             _baixar_prioridade()
 
@@ -48,6 +52,11 @@ class Optimus:
             conhecimento.indexar_embutido(self.banco, estado_arq=base / "conhecimento.json")
         except Exception:
             pass
+
+    def _verificar_atualizacao(self) -> None:
+        from optimus import autoatualizar
+
+        self.aviso_atualizacao = autoatualizar.automatico(self.config)
 
     def recarregar(self) -> None:
         self.config = cfg.carregar(self.config.caminho)

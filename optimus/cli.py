@@ -354,6 +354,36 @@ def cmd_aprender(args) -> int:
     return 0
 
 
+def cmd_atualizar(args) -> int:
+    from optimus import autoatualizar
+
+    config = cfg.carregar()
+    if args.canal:
+        config.definir("atualizacao", "canal", args.canal)
+    if args.voltar:
+        r = autoatualizar.voltar(config)
+    elif args.verificar:
+        r = autoatualizar.verificar(config)
+        if r.get("notas"):
+            print("O que mudou:\n" + r["notas"] + "\n")
+    else:
+        info = autoatualizar.verificar(config)
+        if info.get("erro"):
+            print(info["erro"])
+            return 1
+        print(info.get("mensagem", ""))
+        if info.get("atualizado") or (info.get("modo") == "release" and not info.get("disponivel")):
+            return 0
+        if info.get("notas"):
+            print("\nO que mudou:\n" + info["notas"] + "\n")
+        if not args.sim and input("Atualizar agora? [s/N] ").strip().lower() not in ("s", "sim"):
+            print("Nada foi alterado.")
+            return 0
+        r = autoatualizar.baixar(config)
+    print(r.get("mensagem") or r.get("erro") or r)
+    return 0 if r.get("ok", "erro" not in r) else 1
+
+
 def main(argv: list[str] | None = None) -> int:
     if sys.platform == "win32":
         try:
@@ -407,6 +437,12 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--sem-subpastas", action="store_true", help="não entrar nas subpastas")
     p.add_argument("--esquecer", action="store_true", help="remover do índice os docs da pasta")
     p.set_defaults(func=cmd_biblioteca)
+    p = sub.add_parser("atualizar", help="baixar a versão mais nova do GitHub (ou voltar)")
+    p.add_argument("--verificar", action="store_true", help="só olhar, sem mudar nada")
+    p.add_argument("--voltar", action="store_true", help="desfazer a última atualização")
+    p.add_argument("--sim", action="store_true", help="não perguntar antes de atualizar")
+    p.add_argument("--canal", choices=["estavel", "beta"], help="canal só nesta execução")
+    p.set_defaults(func=cmd_atualizar)
     args = parser.parse_args(argv)
     if not getattr(args, "func", None):
         args.func = cmd_chat

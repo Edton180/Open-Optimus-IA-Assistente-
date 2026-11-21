@@ -169,6 +169,16 @@ PADRAO: dict[str, Any] = {
         "repo": "",
         # Verificar atualizações automaticamente ao iniciar.
         "ao_iniciar": False,
+        # Repositório no GitHub de onde vêm as releases (instalação sem Git).
+        "github": "Edton180/Open-Optimus-IA-Assistente-",
+        # Canal: "estavel" ou "beta" (recebe pré-lançamentos).
+        "canal": "estavel",
+        # Instalar sozinho versões menores e de correção (versão maior sempre pergunta).
+        "automatico": False,
+        # Esperar este tempo depois de publicada antes de instalar sozinho.
+        "espera_horas": 48,
+        # Horário em que pode instalar sozinho, ex.: "02:00-05:00" (vazio = qualquer hora).
+        "janela": "",
     },
     # Outros computadores e outras IAs (veja docs/rede.md)
     "destinos": [],

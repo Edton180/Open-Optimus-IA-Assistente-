@@ -323,6 +323,7 @@ class Manipulador(BaseHTTPRequestHandler):
                 "modo": optimus.config.get("agente", "modo"),
                 "avisos": estado.avisos[-10:],
                 "aviso_modelo": optimus.aviso_modelo,
+                "aviso_atualizacao": getattr(optimus, "aviso_atualizacao", None),
             })
         if recurso == "conversas":
             if metodo == "GET" and not ident:

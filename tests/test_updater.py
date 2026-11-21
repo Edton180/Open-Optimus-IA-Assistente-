@@ -128,6 +128,11 @@ def test_atualizar_ff_only_entre_clones(tmp_path):
     assert r["ok"] is True and r["mudou"] is True
     assert (clone / "extra.py").exists()
 
+    v = at.voltar()  # desfaz a atualização
+    assert v["ok"] is True
+    assert not (clone / "extra.py").exists()
+    assert at.voltar()["ok"] is False  # nada mais para desfazer
+
 
 def test_atualizar_recusa_com_mudancas_locais(tmp_path):
     origem = _repo(tmp_path, "origem")
