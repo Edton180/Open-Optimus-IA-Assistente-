@@ -19,6 +19,12 @@ Correções do primeiro uso real (i3 de 2 núcleos, `qwen3.5:2b`):
 
 Novidades:
 
+- **Base de conhecimento própria embutida:** o Optimus já vem com conhecimento geral e benigno
+  (sobre ele mesmo, primeiros socorros, conversões e medidas, redes e PC, referência de
+  programação) em `optimus/knowledge/*.md`. Esses textos são indexados no banco local (FTS5) ao
+  iniciar, então viram respostas prontas sem precisar da web nem gastar o modelo grande — ajuda a
+  velocidade, principalmente em PC fraco. A indexação é idempotente (`optimus/conhecimento.py`):
+  só reindexa o que mudou e remove fontes de arquivos que sumiram, sem duplicar.
 - **Mais rápido e mais leve (velocidade e consumo):** a resposta agora tem um limite de
   tamanho (`num_predict`/`max_tokens`), então o modelo para de escrever em vez de se estender
   à toa — o que mais pesava em CPU fraca. Respostas faladas usam um limite curto
