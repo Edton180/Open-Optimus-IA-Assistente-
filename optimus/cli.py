@@ -203,6 +203,22 @@ def cmd_instalar_modelo(args) -> int:
     return 1
 
 
+def cmd_biblioteca(args) -> int:
+    """Indexa uma pasta de documentos no conhecimento local (offline)."""
+    from optimus import biblioteca
+
+    optimus = _criar()
+    if args.esquecer:
+        n = biblioteca.esquecer_pasta(optimus.banco, args.pasta)
+        print(f"Esqueci {n} documento(s) de {args.pasta}.")
+        return 0
+    resumo = biblioteca.indexar_pasta(optimus.banco, args.pasta, recursivo=not args.sem_subpastas)
+    print(f"Indexei {resumo['indexados']} de {resumo['total']} documento(s) em {resumo['pasta']} "
+          f"({resumo['trechos']} trechos). {resumo['removidos']} removido(s), "
+          f"{resumo['ignorados']} ignorado(s).")
+    return 0
+
+
 def cmd_modelos(args) -> int:
     """Mostra, por família, o melhor modelo que cabe neste PC e se já está instalado."""
     from optimus import hardware, modelos
@@ -386,6 +402,11 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("fonte")
     p.add_argument("--titulo")
     p.set_defaults(func=cmd_aprender)
+    p = sub.add_parser("biblioteca", help="indexar uma pasta de documentos (offline)")
+    p.add_argument("pasta")
+    p.add_argument("--sem-subpastas", action="store_true", help="não entrar nas subpastas")
+    p.add_argument("--esquecer", action="store_true", help="remover do índice os docs da pasta")
+    p.set_defaults(func=cmd_biblioteca)
     args = parser.parse_args(argv)
     if not getattr(args, "func", None):
         args.func = cmd_chat

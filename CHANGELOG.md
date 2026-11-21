@@ -19,6 +19,12 @@ Correções do primeiro uso real (i3 de 2 núcleos, `qwen3.5:2b`):
 
 Novidades:
 
+- **Biblioteca de documentos (converse com os seus arquivos, offline):** `optimus biblioteca
+  <pasta>` e as ferramentas `biblioteca_indexar`/`biblioteca_listar`/`biblioteca_esquecer`
+  apontam o Optimus para uma pasta inteira (txt, md, csv, html, PDF...) e indexam tudo no
+  conhecimento local (FTS5), sem mandar nada para fora. Idempotente: só reprocessa o que mudou e
+  remove do índice o que sumiu. Depois, perguntas sobre os documentos são respondidas na hora, do
+  próprio banco. Veja `optimus/biblioteca.py`.
 - **Reconhece upgrade de peça e recomenda/baixa o modelo:** além da detecção de hardware e do
   aviso quando a máquina melhora (que já existiam), agora há ferramentas e o comando
   `optimus modelos` para ver o melhor modelo que cabe no PC por família, o que já está instalado
