@@ -61,6 +61,18 @@ def _estado_padrao() -> Path:
     return pasta_base() / "biblioteca.json"
 
 
+def _sob_pasta(caminho: str, pasta: Path) -> bool:
+    """Se `caminho` (chave de estado/fonte) está dentro de `pasta`, independente do SO.
+
+    Usa semântica de Path em vez de comparar texto com '/', porque no Windows os caminhos
+    usam '\\' e um prefixo com '/' nunca casaria (deixava índice velho para trás).
+    """
+    try:
+        return Path(caminho).resolve() == pasta or Path(caminho).resolve().is_relative_to(pasta)
+    except (OSError, ValueError):
+        return False
+
+
 def _carregar_estado(arq: Path) -> dict[str, str]:
     if arq and arq.exists():
         try:
@@ -82,7 +94,7 @@ def indexar_pasta(banco: Banco, pasta: Path, recursivo: bool = True,
     estado = _carregar_estado(estado_arq)
 
     arquivos = _arquivos(pasta, recursivo)
-    desta_pasta = {k for k in estado if k.startswith(f"{pasta}/") or k == str(pasta)}
+    desta_pasta = {k for k in estado if _sob_pasta(k, pasta)}
     vistos: set[str] = set()
 
     indexados = trechos = ignorados = 0
@@ -92,6 +104,9 @@ def indexar_pasta(banco: Banco, pasta: Path, recursivo: bool = True,
         conteudo = _ler(caminho)
         if not conteudo.strip():
             ignorados += 1  # vazio ou PDF sem pypdf/sem texto extraível
+            if chave in estado:  # já foi indexado e agora está vazio: tira o lixo velho
+                banco.esquecer_fonte(f"{PREFIXO}{caminho}")
+                estado.pop(chave, None)
             continue
         assinatura = hashlib.sha256(conteudo.encode("utf-8")).hexdigest()
         if estado.get(chave) == assinatura:
@@ -126,13 +141,13 @@ def esquecer_pasta(banco: Banco, pasta: Path, estado_arq: Path | None = None) ->
     pasta = Path(pasta).expanduser().resolve()
     estado_arq = estado_arq or _estado_padrao()
     estado = _carregar_estado(estado_arq)
-    alvo = f"{PREFIXO}{pasta}/"
     removidos = 0
     for f in fontes(banco):
         nome = str(f["fonte"])
-        if nome.startswith(alvo) or nome == f"{PREFIXO}{pasta}":
+        caminho = nome[len(PREFIXO):]
+        if _sob_pasta(caminho, pasta):
             banco.esquecer_fonte(nome)
-            estado.pop(nome[len(PREFIXO):], None)
+            estado.pop(caminho, None)
             removidos += 1
     try:
         estado_arq.write_text(json.dumps(estado, ensure_ascii=False, indent=2), encoding="utf-8")

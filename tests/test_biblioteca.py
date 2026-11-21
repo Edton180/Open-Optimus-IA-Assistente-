@@ -84,6 +84,22 @@ def test_remove_arquivo_que_sumiu(tmp_path):
     assert not any(nome.endswith("b.md") for nome in fontes)
 
 
+def test_arquivo_esvaziado_sai_do_indice(tmp_path):
+    docs = tmp_path / "docs"
+    _doc(docs, "a.md", "conteúdo que será apagado depois")
+    banco = _banco(tmp_path)
+    estado = tmp_path / "estado.json"
+
+    biblioteca.indexar_pasta(banco, docs, estado_arq=estado)
+    assert banco.consultar("conteúdo apagado depois")
+    (docs / "a.md").write_text("", encoding="utf-8")  # esvazia o arquivo
+    resumo = biblioteca.indexar_pasta(banco, docs, estado_arq=estado)
+
+    assert resumo["ignorados"] == 1
+    assert biblioteca.fontes(banco) == []  # não ficou lixo velho pesquisável
+    assert not banco.consultar("conteúdo apagado depois")
+
+
 # --------------------------------------------------------------- listar / esquecer
 def test_fontes_e_esquecer(tmp_path):
     docs = tmp_path / "docs"
