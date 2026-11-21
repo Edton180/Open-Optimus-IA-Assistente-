@@ -65,6 +65,17 @@ class Optimus:
             return "modo demonstração (sem modelo)"
         return self.config.get("motor", "modelo") or self.perfil.modelo
 
+    def _verificar_avisos(self, avisar: Callable[[dict[str, Any]], None]) -> None:
+        """Uma passada: lembretes vencidos e timers que chegaram ao fim."""
+        for lembrete in self.banco.lembretes_vencidos():
+            avisar(lembrete)
+            self.banco.concluir_lembrete(lembrete)
+        for timer in self.banco.timers_vencidos():
+            nome = (timer.get("nome") or "Timer").strip() or "Timer"
+            avisar({"tipo": "timer", "id": timer["id"], "nome": nome,
+                    "texto": f"Timer '{nome}' terminou."})
+            self.banco.marcar_timer_tocado(timer["id"])
+
     def iniciar_lembretes(self, avisar: Callable[[dict[str, Any]], None]) -> None:
         if self._lembretes and self._lembretes.is_alive():
             return
@@ -72,11 +83,9 @@ class Optimus:
         def ciclo():
             while True:
                 try:
-                    for lembrete in self.banco.lembretes_vencidos():
-                        avisar(lembrete)
-                        self.banco.concluir_lembrete(lembrete)
+                    self._verificar_avisos(avisar)
                 except Exception as erro:  # noqa: BLE001
-                    log.warning("Falha nos lembretes: %s", erro)
+                    log.warning("Falha nos avisos: %s", erro)
                 time.sleep(15)
 
         self._lembretes = threading.Thread(target=ciclo, daemon=True, name="lembretes")

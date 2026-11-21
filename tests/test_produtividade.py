@@ -119,3 +119,34 @@ def test_ferramenta_timer_criar_e_listar(tmp_path):
 def test_ferramenta_timer_duracao_invalida(tmp_path):
     ctx = _ctx(tmp_path)
     assert "erro" in prod.timer_criar(ctx, minutos=0, segundos=0)
+
+
+# --------------------------------------------------------------- roteamento (intenção)
+def test_roteamento_expoe_ferramentas_de_timer_e_habito():
+    from optimus.roteador import selecionar_ferramentas
+
+    disp = {n: object() for n in (
+        "timer_criar", "timers_listar", "timer_cancelar",
+        "habito_criar", "habito_marcar", "habitos_listar", "habito_apagar",
+        "criar_lembrete", "listar_lembretes", "cancelar_lembretes")}
+    timer = selecionar_ferramentas("cria um timer de 10 minutos pro macarrão", disp)
+    assert "timer_criar" in timer
+    habito = selecionar_ferramentas("quero acompanhar o hábito de beber água", disp)
+    assert "habito_criar" in habito
+
+
+# --------------------------------------------------------------- avisos (timer vencido)
+def test_verificar_avisos_toca_timer_vencido(tmp_path):
+    from optimus.app import Optimus
+
+    b = _banco(tmp_path)
+    b.criar_timer("Chá", 1)
+    time.sleep(1.1)
+    avisos: list[dict] = []
+
+    class _So:  # self mínimo: _verificar_avisos só usa self.banco
+        banco = b
+
+    Optimus._verificar_avisos(_So(), avisos.append)
+    assert any(a.get("tipo") == "timer" and "Chá" in a["texto"] for a in avisos)
+    assert b.timers_vencidos() == []  # marcado como tocado, não avisa de novo
