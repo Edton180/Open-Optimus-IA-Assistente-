@@ -799,3 +799,50 @@ async function iniciar() {
 }
 iniciar();
 setInterval(atualizarSistema, 4000);
+
+// ---------- Gestos pela câmera (veja gestos.js) ----------
+function executarGesto(gesto, rotulo) {
+  avisoVoz(`Gesto: ${rotulo}`);
+  if (gesto === "Open_Palm") { Voz.parar(); if (estado.ocupado) $("#parar").click(); }
+  else if (gesto === "Thumb_Up" && confirmacaoAberta) {
+    // Ação crítica nunca é aprovada só com um gesto: precisa do botão ou de “confirmo”.
+    if (confirmacaoAberta.critico) avisoVoz("⛔ Ação crítica: aprove no botão ou diga “confirmo”.");
+    else confirmacaoAberta.responder(true);
+  } else if (gesto === "Thumb_Down" && confirmacaoAberta) confirmacaoAberta.responder(false);
+  else if (gesto === "Victory") alternarAoVivo(!aoVivo.ligado);
+  else if (gesto === "Pointing_Up" && !estado.ocupado && !gravandoManual) mic.click();
+}
+async function alternarGestos(ligar, idCamera) {
+  const botao = $("#botao-gestos"), video = $("#gestos-video");
+  if (!ligar) {
+    Gestos.desligar(); video.classList.add("oculto");
+    botao.classList.remove("ligado"); botao.textContent = "✋ Gestos";
+    return;
+  }
+  botao.disabled = true; botao.textContent = "✋ Carregando…";
+  let id = idCamera;
+  if (id === undefined) { try { id = localStorage.getItem("optimus_camera_gestos") || ""; } catch (e) { id = ""; } }
+  try {
+    try { await Gestos.ligar(executarGesto, video, id); }
+    catch (e) { if (!id || e.name === "NotAllowedError") throw e; await Gestos.ligar(executarGesto, video, ""); } // câmera salva foi desligada
+    video.classList.remove("oculto"); botao.classList.add("ligado"); botao.textContent = "✋ Gestos ligados";
+    avisoVoz("Gestos: ✋ parar · 👍 aprovar · 👎 negar · ✌️ ao vivo · ☝️ falar. Clique no vídeo para trocar de câmera.");
+  } catch (e) {
+    botao.textContent = "✋ Gestos";
+    avisoVoz("⚠️ Gestos: " + (e.name === "NotAllowedError" ? "libere a câmera para este site (cadeado na barra de endereço)."
+      : e.name === "NotFoundError" ? "não achei nenhuma câmera ligada." : e.message));
+  }
+  botao.disabled = false;
+}
+$("#botao-gestos").onclick = () => alternarGestos(!Gestos.ligado);
+// Webcam por cabo + a do notebook: clique na prévia para passar para a próxima câmera.
+$("#gestos-video").onclick = async () => {
+  const lista = await Gestos.cameras();
+  if (lista.length < 2) { avisoVoz("Só achei uma câmera."); return; }
+  let atual = ""; try { atual = localStorage.getItem("optimus_camera_gestos") || ""; } catch (e) {}
+  const proxima = lista[(lista.findIndex((c) => c.deviceId === atual) + 1) % lista.length];
+  try { localStorage.setItem("optimus_camera_gestos", proxima.deviceId); } catch (e) {}
+  Gestos.desligar();
+  await alternarGestos(true, proxima.deviceId);
+  avisoVoz(`Câmera dos gestos: ${proxima.label || "câmera " + (lista.indexOf(proxima) + 1)}`);
+};
