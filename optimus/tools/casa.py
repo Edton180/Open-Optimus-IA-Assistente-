@@ -215,8 +215,9 @@ def cameras_listar(ctx):
 def _risco_foto(args, ctx) -> Avaliacao:
     camera = str(args.get("camera", "")).strip().lower()
     if camera.startswith("usb:") or camera in ("webcam", "usb"):
-        # A webcam pode estar apontada para a pessoa: pergunta antes de fotografar.
-        return Avaliacao(MODERADO, "tirar uma foto com a webcam")
+        # A webcam pode estar apontada para a pessoa: SEMPRE pergunta antes de fotografar,
+        # em qualquer modo (CRITICO), para um pedido escondido numa página não tirar fotos.
+        return Avaliacao(CRITICO, "tirar uma foto com a webcam (ela pode estar apontada para você)")
     return Avaliacao(LIVRE, "foto da câmera")
 
 

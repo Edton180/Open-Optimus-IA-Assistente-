@@ -7,7 +7,7 @@ import pytest
 from optimus import webcam
 from optimus.config import Config
 from optimus.roteador import selecionar_ferramentas
-from optimus.safety import LIVRE, MODERADO
+from optimus.safety import CRITICO, LIVRE, precisa_confirmar
 from optimus.tools import casa, ferramentas_ativas
 from optimus.tools.base import Contexto
 
@@ -84,10 +84,12 @@ def test_webcams_aparecem_na_casa(monkeypatch):
     assert "usb:0" not in [c["id"] for c in casa.cameras_configuradas(desligada)]
 
 
-def test_foto_da_webcam_pede_confirmacao():
+def test_foto_da_webcam_pede_confirmacao_em_todos_os_modos():
     ctx = Contexto(config=Config())
-    assert casa._risco_foto({"camera": "usb:0"}, ctx).nivel == MODERADO
-    assert casa._risco_foto({"camera": "webcam"}, ctx).nivel == MODERADO
+    for camera in ("usb:0", "webcam", "USB:1"):
+        nivel = casa._risco_foto({"camera": camera}, ctx).nivel
+        assert nivel == CRITICO
+        assert all(precisa_confirmar(nivel, modo) for modo in ("seguro", "equilibrado", "autonomo"))
     assert casa._risco_foto({"camera": "http://cam/snap.jpg"}, ctx).nivel == LIVRE
 
 

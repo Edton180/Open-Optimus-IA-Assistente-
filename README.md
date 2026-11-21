@@ -78,8 +78,8 @@ frases de resposta vêm de regras simples, sem modelo de IA. Com o Ollama, as re
 | Agente autônomo | Ciclo de ferramentas (ReAct), **modo autônomo** que planeja e executa até concluir (`optimus tarefa "..."`), roteador rápido para comandos óbvios, proteção contra laços |
 | Internet | Pesquisa com buscadores de reserva (DuckDuckGo, Bing, Wikipédia), notícias do Google Notícias, leitura de páginas, clima (sem chave de API), **gerar imagens** (Stable Diffusion do PC ou gerador online gratuito) |
 | Controle do PC | Arquivos e pastas (listar, ler, criar, copiar, mover, apagar, buscar), comandos (PowerShell/bash), abrir programas e sites, processos, energia (desligar, reiniciar, suspender, bloquear), teclado, mouse, prints e área de transferência |
-| Casa inteligente | Home Assistant (Wi-Fi, Bluetooth, Zigbee, Matter, **infravermelho**), **comandos encadeados** ("apague a sala e ligue o ventilador"), relatório com **sugestões** (calor, umidade, portas abertas), **Alexa** falando avisos, **câmeras ao vivo** (Home Assistant, http ou rtsp), procurar e **conectar** aparelhos Bluetooth, ver quem está no Wi-Fi |
-| Voz | **Conversa ao vivo** no navegador: escuta contínua, palavra "Optimus", **duas palmas**, interrupção com "pare", resposta falada frase por frase enquanto chega. Reconhecimento do navegador ou offline (Whisper). Vozes **Prime, Valkyrie, Nexus, Cyber, Stealth**, Aurora, Lyra, Titan e **Elite** (ElevenLabs); troque falando "mude para a voz Nexus". Confirmação por voz |
+| Casa inteligente | Home Assistant (Wi-Fi, Bluetooth, Zigbee, Matter, **infravermelho**), **comandos encadeados** ("apague a sala e ligue o ventilador"), relatório com **sugestões** (calor, umidade, portas abertas), **Alexa** falando avisos, **câmeras ao vivo** (Home Assistant, http, rtsp e **webcams por cabo**), **tomadas e lâmpadas TP-Link Kasa sem Home Assistant**, procurar e **conectar** aparelhos Bluetooth, ver quem está no Wi-Fi |
+| Voz | **Conversa ao vivo** no navegador: escuta contínua, palavra "Optimus", **duas palmas**, interrupção com "pare", resposta falada frase por frase enquanto chega. Reconhecimento do navegador ou offline (Whisper). **Gestos pela câmera** (✋ parar, 👍 aprovar, 👎 negar, ✌️ ao vivo, ☝️ falar). Vozes **Prime, Valkyrie, Nexus, Cyber, Stealth**, Aurora, Lyra, Titan e **Elite** (ElevenLabs); troque falando "mude para a voz Nexus". Confirmação por voz |
 | Memória | Fatos de longo prazo, **base de conhecimento** que aprende com sites, arquivos e PDFs e é consultada sozinha, lembretes e alarmes (com repetição) |
 | Interface | Painel web local com histórico, **projetos**, **personas**, **biblioteca de prompts**, **conversa em grupo** (várias personas respondem), uso de CPU/RAM ao vivo, registro de ações, tema escuro, funciona no celular e pode virar app (PWA) |
 | Segurança | 4 níveis de risco, 3 modos (seguro, equilibrado, autônomo), confirmação estrita (negação sempre vence), comandos que destroem o sistema bloqueados, registro de tudo com senhas mascaradas, senha para acesso pela rede |
@@ -96,6 +96,14 @@ powershell -ExecutionPolicy Bypass -File scripts\instalar.ps1
 ```
 
 **Linux** (Ubuntu, Debian, Mint, Fedora, Arch):
+
+```bash
+git clone https://github.com/Edton180/Open-Optimus-IA-Assistente-.git optimus
+cd optimus
+bash scripts/instalar.sh
+```
+
+**macOS** (com [Homebrew](https://brew.sh)):
 
 ```bash
 git clone https://github.com/Edton180/Open-Optimus-IA-Assistente-.git optimus
@@ -154,13 +162,13 @@ modelo** (`optimus config motor.modelo nome-do-modelo`). Detalhes em [docs/motor
 
 | Documento | Assunto |
 |---|---|
-| [docs/instalacao.md](docs/instalacao.md) | Windows, Linux, Android, instalação manual e requisitos |
+| [docs/instalacao.md](docs/instalacao.md) | Windows, Linux, macOS, Android, instalação manual e requisitos |
 | [docs/telas.md](docs/telas.md) | Todas as telas da interface |
 | [docs/como-funciona.md](docs/como-funciona.md) | Agente, ferramentas, memória, personas e modo autônomo |
 | [docs/motor.md](docs/motor.md) | Modelos, perfis de hardware, desempenho e modelos sem filtro |
 | [docs/rede.md](docs/rede.md) | Usar outros PCs e outras IAs |
 | [docs/voz.md](docs/voz.md) | Palavra de ativação, vozes e microfone |
-| [docs/casa.md](docs/casa.md) | Home Assistant, Bluetooth, infravermelho e câmeras |
+| [docs/casa.md](docs/casa.md) | Home Assistant, TP-Link Kasa, Bluetooth, infravermelho, câmeras, webcams e gestos |
 | [docs/seguranca.md](docs/seguranca.md) | Níveis de risco, modos e registro de ações |
 | [docs/plugins.md](docs/plugins.md) | Criar novas habilidades |
 | [docs/configuracao.md](docs/configuracao.md) | Todas as opções do `config.toml` |
