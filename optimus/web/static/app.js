@@ -21,7 +21,12 @@ async function api(caminho, opcoes = {}) {
   const cab = Object.assign({}, opcoes.headers || {});
   if (senha) cab["X-Optimus-Senha"] = senha;
   if (opcoes.json !== undefined) { cab["Content-Type"] = "application/json"; opcoes.body = JSON.stringify(opcoes.json); }
-  const r = await fetch(caminho, Object.assign({}, opcoes, { headers: cab }));
+  // `tempo` (ms): desiste do pedido em vez de esperar para sempre um servidor travado.
+  let controle = null, relogio = null;
+  if (opcoes.tempo) { controle = new AbortController(); relogio = setTimeout(() => controle.abort(), opcoes.tempo); }
+  let r;
+  try { r = await fetch(caminho, Object.assign({}, opcoes, { headers: cab }, controle ? { signal: controle.signal } : {})); }
+  finally { if (relogio) clearTimeout(relogio); }
   if (r.status === 401) { pedirSenha(); throw new Error("senha"); }
   const tipo = r.headers.get("Content-Type") || "";
   if (tipo.includes("json")) {
@@ -317,12 +322,26 @@ function deveFalar(porVoz) { return estado.falar || aoVivo.ligado || porVoz; }
 async function acompanhar(tarefa, bolha, porVoz) {
   let desde = 0; let pendenteId = ""; let atual = bolha; let usada = false;
   let parcial = ""; let falouParcial = false;
-  const falar = deveFalar(porVoz);
+  // Reavaliado a cada evento: se o usuário desligar o ao vivo ou o 🔈 no meio da
+  // resposta, o Optimus para de falar em vez de continuar até o fim.
   const novaBolha = () => { if (usada) { atual = adicionarMensagem("optimus", "", {}); usada = false; } };
+  let falhas = 0;
   while (true) {
     let d;
-    try { d = await api(`/api/tarefa/${tarefa}?desde=${desde}`); }
-    catch (e) { if (e.message === "senha") return; await new Promise((r) => setTimeout(r, 1000)); continue; }
+    try { d = await api(`/api/tarefa/${tarefa}?desde=${desde}`, { tempo: 15000 }); falhas = 0; }
+    catch (e) {
+      if (e.message === "senha") return;
+      // Tarefa sumiu (o Optimus reiniciou) ou o servidor não responde há ~30 s: avisa e
+      // libera a tela, em vez de ficar "Pensando…" para sempre.
+      falhas += 1;
+      if (/não encontrada/i.test(e.message) || falhas >= 30) {
+        if (falouParcial) Voz.parar();
+        $(".texto", atual).innerHTML = "<p>⚠️ Perdi a conexão com o Optimus durante a resposta. Se ele foi reiniciado, envie o pedido de novo.</p>";
+        definirEstado("erro", "Sem conexão");
+        return;
+      }
+      await new Promise((r) => setTimeout(r, 1000)); continue;
+    }
     desde = d.total;
     for (const ev of d.eventos) {
       if (ev.tipo === "conversa") estado.conversa = ev.id;
@@ -332,7 +351,7 @@ async function acompanhar(tarefa, bolha, porVoz) {
         parcial += ev.texto;
         $(".texto", atual).innerHTML = markdown(parcial);
         legenda("optimus", parcial);
-        if (falar) { Voz.adicionarParcial(ev.texto); falouParcial = true; }
+        if (deveFalar(porVoz)) { Voz.adicionarParcial(ev.texto); falouParcial = true; }
         else definirEstado("falando", "Respondendo…");
       } else if (ev.tipo === "limpar_parcial") {
         // O modelo começou a escrever e decidiu usar uma ferramenta: o texto era rascunho.
@@ -365,7 +384,8 @@ async function acompanhar(tarefa, bolha, porVoz) {
         const [ouvir, copiar] = $$(".quem button", atual);
         ouvir.onclick = () => Voz.falar(ev.texto);
         copiar.onclick = () => navigator.clipboard && navigator.clipboard.writeText(ev.texto);
-        if (falar) { if (falouParcial) Voz.finalizar(); else Voz.falar(ev.texto); }
+        if (deveFalar(porVoz)) { if (falouParcial) Voz.finalizar(); else Voz.falar(ev.texto); }
+        else if (falouParcial) Voz.parar();
         parcial = ""; falouParcial = false;
       } else if (ev.tipo === "erro") {
         $(".texto", atual).innerHTML = `<p>⚠️ ${esc(ev.texto)}</p>`;
@@ -524,7 +544,7 @@ async function alternarAoVivo(ligar) {
     definirEstado("pronto", "Pronto");
     Voz.falar("Modo ao vivo ligado. Pode falar.");
   } else {
-    aoVivo.ligado = false; Voz.pararEscuta();
+    aoVivo.ligado = false; Voz.pararEscuta(); Voz.parar();
     botao.classList.remove("ligado"); botao.textContent = "🎙️ Ao vivo";
     avisoVoz("O Optimus executa ações no seu PC. Ações críticas sempre pedem sua confirmação.");
     definirEstado("pronto", "Pronto");
@@ -779,3 +799,50 @@ async function iniciar() {
 }
 iniciar();
 setInterval(atualizarSistema, 4000);
+
+// ---------- Gestos pela câmera (veja gestos.js) ----------
+function executarGesto(gesto, rotulo) {
+  avisoVoz(`Gesto: ${rotulo}`);
+  if (gesto === "Open_Palm") { Voz.parar(); if (estado.ocupado) $("#parar").click(); }
+  else if (gesto === "Thumb_Up" && confirmacaoAberta) {
+    // Ação crítica nunca é aprovada só com um gesto: precisa do botão ou de “confirmo”.
+    if (confirmacaoAberta.critico) avisoVoz("⛔ Ação crítica: aprove no botão ou diga “confirmo”.");
+    else confirmacaoAberta.responder(true);
+  } else if (gesto === "Thumb_Down" && confirmacaoAberta) confirmacaoAberta.responder(false);
+  else if (gesto === "Victory") alternarAoVivo(!aoVivo.ligado);
+  else if (gesto === "Pointing_Up" && !estado.ocupado && !gravandoManual) mic.click();
+}
+async function alternarGestos(ligar, idCamera) {
+  const botao = $("#botao-gestos"), video = $("#gestos-video");
+  if (!ligar) {
+    Gestos.desligar(); video.classList.add("oculto");
+    botao.classList.remove("ligado"); botao.textContent = "✋ Gestos";
+    return;
+  }
+  botao.disabled = true; botao.textContent = "✋ Carregando…";
+  let id = idCamera;
+  if (id === undefined) { try { id = localStorage.getItem("optimus_camera_gestos") || ""; } catch (e) { id = ""; } }
+  try {
+    try { await Gestos.ligar(executarGesto, video, id); }
+    catch (e) { if (!id || e.name === "NotAllowedError") throw e; await Gestos.ligar(executarGesto, video, ""); } // câmera salva foi desligada
+    video.classList.remove("oculto"); botao.classList.add("ligado"); botao.textContent = "✋ Gestos ligados";
+    avisoVoz("Gestos: ✋ parar · 👍 aprovar · 👎 negar · ✌️ ao vivo · ☝️ falar. Clique no vídeo para trocar de câmera.");
+  } catch (e) {
+    botao.textContent = "✋ Gestos";
+    avisoVoz("⚠️ Gestos: " + (e.name === "NotAllowedError" ? "libere a câmera para este site (cadeado na barra de endereço)."
+      : e.name === "NotFoundError" ? "não achei nenhuma câmera ligada." : e.message));
+  }
+  botao.disabled = false;
+}
+$("#botao-gestos").onclick = () => alternarGestos(!Gestos.ligado);
+// Webcam por cabo + a do notebook: clique na prévia para passar para a próxima câmera.
+$("#gestos-video").onclick = async () => {
+  const lista = await Gestos.cameras();
+  if (lista.length < 2) { avisoVoz("Só achei uma câmera."); return; }
+  let atual = ""; try { atual = localStorage.getItem("optimus_camera_gestos") || ""; } catch (e) {}
+  const proxima = lista[(lista.findIndex((c) => c.deviceId === atual) + 1) % lista.length];
+  try { localStorage.setItem("optimus_camera_gestos", proxima.deviceId); } catch (e) {}
+  Gestos.desligar();
+  await alternarGestos(true, proxima.deviceId);
+  avisoVoz(`Câmera dos gestos: ${proxima.label || "câmera " + (lista.indexOf(proxima) + 1)}`);
+};

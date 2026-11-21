@@ -70,6 +70,27 @@ _BLOCO = re.compile(r"```(?:json|tool)?\s*(\{.*?\})\s*```", re.DOTALL)
 _PENSAMENTO = re.compile(r"<think>.*?</think>", re.DOTALL)
 
 
+SEM_RESPOSTA_PADRAO = 120.0
+
+
+def prazos(total: float, sem_resposta: float, conectar: float = 5.0):
+    """Prazos de rede de um pedido em streaming.
+
+    `sem_resposta` é o tempo máximo SEM receber nada: o relógio zera a cada pedaço, então um
+    modelo lento mas escrevendo não é cortado; só um modelo que travou de verdade.
+    """
+    import httpx
+
+    return httpx.Timeout(total, connect=conectar, read=max(1.0, float(sem_resposta or 0) or
+                                                            SEM_RESPOSTA_PADRAO))
+
+
+def erro_parou(segundos: float) -> ErroMotor:
+    return ErroMotor(f"O modelo ficou {int(segundos)} s sem responder e eu parei para não "
+                     "travar. Tente de novo, use um modelo menor ou aumente "
+                     "motor.tempo_sem_resposta nas configurações.")
+
+
 def limpar_pensamento(texto: str) -> str:
     """Remove o raciocínio interno (<think>) que alguns modelos escrevem."""
     texto = _PENSAMENTO.sub("", texto)

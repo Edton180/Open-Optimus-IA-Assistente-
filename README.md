@@ -13,7 +13,7 @@ Conversa por voz, pesquisa na internet, controla o PC e a casa, aprende e lembra
 ![Linux](https://img.shields.io/badge/Linux-Ubuntu%20%7C%20Fedora%20%7C%20Arch-FCC624?logo=linux&logoColor=black)
 ![Android](https://img.shields.io/badge/Android-Termux-3DDC84?logo=android&logoColor=white)
 ![IA local](https://img.shields.io/badge/IA-100%25%20local%20ou%20nuvem-7a5cff)
-![Licença](https://img.shields.io/badge/licen%C3%A7a-Apache%202.0-39e15a)
+![Licença](https://img.shields.io/badge/licen%C3%A7a-fonte%20aberta%20(n%C3%A3o%20comercial)-39e15a)
 
 Desenvolvido por **Edton Braz** ([@Edton180](https://github.com/Edton180))
 
@@ -25,7 +25,7 @@ Desenvolvido por **Edton Braz** ([@Edton180](https://github.com/Edton180))
 > escolher, sem filtros de conteúdo adicionados pelo aplicativo. **Todo o uso, as respostas geradas e as
 > consequências das ações são de inteira responsabilidade de quem instala e opera o sistema.** Use de acordo
 > com a lei do seu país e os termos dos serviços que você conectar. O software é fornecido "como está", sem
-> garantias, conforme a [Licença Apache 2.0](LICENSE).
+> garantias, conforme a [licença](LICENSE).
 
 ## O que é
 
@@ -78,8 +78,8 @@ frases de resposta vêm de regras simples, sem modelo de IA. Com o Ollama, as re
 | Agente autônomo | Ciclo de ferramentas (ReAct), **modo autônomo** que planeja e executa até concluir (`optimus tarefa "..."`), roteador rápido para comandos óbvios, proteção contra laços |
 | Internet | Pesquisa com buscadores de reserva (DuckDuckGo, Bing, Wikipédia), notícias do Google Notícias, leitura de páginas, clima (sem chave de API), **gerar imagens** (Stable Diffusion do PC ou gerador online gratuito) |
 | Controle do PC | Arquivos e pastas (listar, ler, criar, copiar, mover, apagar, buscar), comandos (PowerShell/bash), abrir programas e sites, processos, energia (desligar, reiniciar, suspender, bloquear), teclado, mouse, prints e área de transferência |
-| Casa inteligente | Home Assistant (Wi-Fi, Bluetooth, Zigbee, Matter, **infravermelho**), **comandos encadeados** ("apague a sala e ligue o ventilador"), relatório com **sugestões** (calor, umidade, portas abertas), **Alexa** falando avisos, **câmeras ao vivo** (Home Assistant, http ou rtsp), procurar e **conectar** aparelhos Bluetooth, ver quem está no Wi-Fi |
-| Voz | **Conversa ao vivo** no navegador: escuta contínua, palavra "Optimus", **duas palmas**, interrupção com "pare", resposta falada frase por frase enquanto chega. Reconhecimento do navegador ou offline (Whisper). Vozes **Prime, Valkyrie, Nexus, Cyber, Stealth**, Aurora, Lyra, Titan e **Elite** (ElevenLabs); troque falando "mude para a voz Nexus". Confirmação por voz |
+| Casa inteligente | Home Assistant (Wi-Fi, Bluetooth, Zigbee, Matter, **infravermelho**), **comandos encadeados** ("apague a sala e ligue o ventilador"), relatório com **sugestões** (calor, umidade, portas abertas), **Alexa** falando avisos, **câmeras ao vivo** (Home Assistant, http, rtsp e **webcams por cabo**), **tomadas e lâmpadas TP-Link Kasa sem Home Assistant**, procurar e **conectar** aparelhos Bluetooth, ver quem está no Wi-Fi |
+| Voz | **Conversa ao vivo** no navegador: escuta contínua, palavra "Optimus", **duas palmas**, interrupção com "pare", resposta falada frase por frase enquanto chega. Reconhecimento do navegador ou offline (Whisper). **Gestos pela câmera** (✋ parar, 👍 aprovar, 👎 negar, ✌️ ao vivo, ☝️ falar). Vozes **Prime, Valkyrie, Nexus, Cyber, Stealth**, Aurora, Lyra, Titan e **Elite** (ElevenLabs); troque falando "mude para a voz Nexus". Confirmação por voz |
 | Memória | Fatos de longo prazo, **base de conhecimento** que aprende com sites, arquivos e PDFs e é consultada sozinha, lembretes e alarmes (com repetição) |
 | Interface | Painel web local com histórico, **projetos**, **personas**, **biblioteca de prompts**, **conversa em grupo** (várias personas respondem), uso de CPU/RAM ao vivo, registro de ações, tema escuro, funciona no celular e pode virar app (PWA) |
 | Segurança | 4 níveis de risco, 3 modos (seguro, equilibrado, autônomo), confirmação estrita (negação sempre vence), comandos que destroem o sistema bloqueados, registro de tudo com senhas mascaradas, senha para acesso pela rede |
@@ -96,6 +96,14 @@ powershell -ExecutionPolicy Bypass -File scripts\instalar.ps1
 ```
 
 **Linux** (Ubuntu, Debian, Mint, Fedora, Arch):
+
+```bash
+git clone https://github.com/Edton180/Open-Optimus-IA-Assistente-.git optimus
+cd optimus
+bash scripts/instalar.sh
+```
+
+**macOS** (com [Homebrew](https://brew.sh)):
 
 ```bash
 git clone https://github.com/Edton180/Open-Optimus-IA-Assistente-.git optimus
@@ -154,13 +162,13 @@ modelo** (`optimus config motor.modelo nome-do-modelo`). Detalhes em [docs/motor
 
 | Documento | Assunto |
 |---|---|
-| [docs/instalacao.md](docs/instalacao.md) | Windows, Linux, Android, instalação manual e requisitos |
+| [docs/instalacao.md](docs/instalacao.md) | Windows, Linux, macOS, Android, instalação manual e requisitos |
 | [docs/telas.md](docs/telas.md) | Todas as telas da interface |
 | [docs/como-funciona.md](docs/como-funciona.md) | Agente, ferramentas, memória, personas e modo autônomo |
 | [docs/motor.md](docs/motor.md) | Modelos, perfis de hardware, desempenho e modelos sem filtro |
 | [docs/rede.md](docs/rede.md) | Usar outros PCs e outras IAs |
 | [docs/voz.md](docs/voz.md) | Palavra de ativação, vozes e microfone |
-| [docs/casa.md](docs/casa.md) | Home Assistant, Bluetooth, infravermelho e câmeras |
+| [docs/casa.md](docs/casa.md) | Home Assistant, TP-Link Kasa, Bluetooth, infravermelho, câmeras, webcams e gestos |
 | [docs/seguranca.md](docs/seguranca.md) | Níveis de risco, modos e registro de ações |
 | [docs/plugins.md](docs/plugins.md) | Criar novas habilidades |
 | [docs/configuracao.md](docs/configuracao.md) | Todas as opções do `config.toml` |
@@ -186,6 +194,8 @@ tests/                 testes automáticos (python -m pytest)
 
 ## Contribua
 
-O Optimus é livre e aberto, sob a [Licença Apache 2.0](LICENSE). Correções, novas ferramentas, vozes e
-documentação são bem-vindas: abra uma issue ou envie um pull request. Antes, rode `python -m pytest`.
-Créditos e inspirações em [NOTICE](NOTICE).
+O Optimus tem o código aberto sob a [PolyForm Noncommercial License 1.0.0](LICENSE): **livre para uso
+não comercial** (pessoal, estudo, pesquisa, hobby). **Uso comercial exige uma licença comercial com o
+proprietário, Edton Braz** — veja [LICENSE-COMMERCIAL.md](LICENSE-COMMERCIAL.md). Correções, novas
+ferramentas, vozes e documentação são bem-vindas: abra uma issue ou envie um pull request. Antes, rode
+`python -m pytest`. Créditos e inspirações em [NOTICE](NOTICE).

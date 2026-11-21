@@ -55,6 +55,7 @@
       <div class="hud-titulo"><b>OPEN OPTIMUS</b><span id="hud-relogio">--:--</span></div>
       <div class="topo-direita">
         <button class="botao pequeno" id="botao-ao-vivo" title="Conversa ao vivo: fale 'Optimus' ou bata duas palmas">🎙️ Ao vivo</button>
+        <button class="botao pequeno" id="botao-gestos" title="Comandos por gestos na câmera (o vídeo não sai do seu PC)">✋ Gestos</button>
         <select id="persona" aria-label="Persona"></select>
         <span id="modo" class="selo">equilibrado</span>
         <button class="icone" id="alternar-painel" title="Painel do sistema">📊</button>
@@ -291,7 +292,9 @@
   <h3>🔒 Optimus protegido</h3><p>Digite a senha definida no PC.</p>
   <input type="password" class="campo" name="senha" autofocus><button class="botao primario">Entrar</button></form></div>
 
+<video id="gestos-video" class="oculto" muted playsinline title="Câmera dos gestos (clique para trocar de câmera)"></video>
 <script src="/voz.js"></script>
+<script src="/gestos.js"></script>
 <script src="/hud.js"></script>
 <script src="/app.js"></script>
 </body>
