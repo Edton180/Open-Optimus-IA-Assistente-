@@ -24,11 +24,12 @@ def test_plataforma_reconhece_o_mac(monkeypatch):
 
 def test_launchd_plist_valido():
     comando = ["/usr/bin/python3", "-m", "optimus", "gui", "--sem-navegador"]
-    dados = plistlib.loads(startup.texto_plist_mac(comando, Path("/tmp/a & b.log")).encode())
+    log = Path("/tmp/a & b.log")
+    dados = plistlib.loads(startup.texto_plist_mac(comando, log).encode())
     assert dados["Label"] == startup.ROTULO_MAC
     assert dados["ProgramArguments"] == comando
     assert dados["RunAtLoad"] is True
-    assert dados["StandardOutPath"] == "/tmp/a & b.log"  # caractere especial escapado
+    assert dados["StandardOutPath"] == str(log)  # "&" escapado (str: o CI também roda no Windows)
 
 
 def test_script_de_volume_mac():
