@@ -392,3 +392,10 @@ body.modo-hud #lateral { background: rgba(4,11,20,.96); border-right-color: rgba
 .cameras img { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 10px; background: #000; display: block; }
 .cameras figcaption { font-size: 13px; margin-top: 6px; }
 .cameras .falhou figcaption::after { content: " · sem imagem"; color: var(--vermelho); }
+
+/* Gestos: prévia pequena e espelhada, para você sempre saber que a câmera está ligada. */
+#gestos-video { position: fixed; right: 16px; bottom: 16px; width: 160px; max-width: 30vw; aspect-ratio: 4 / 3;
+  object-fit: cover; transform: scaleX(-1); border: 1px solid var(--vermelho); border-radius: 10px;
+  z-index: 40; cursor: pointer; background: #000; box-shadow: 0 4px 18px rgba(0,0,0,.45); }
+#gestos-video.oculto { display: none; }
+#botao-gestos.ligado { background: rgba(63,183,255,.16); border-color: #3fd8ff; color: #d6f6ff; }

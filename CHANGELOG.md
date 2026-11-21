@@ -2,6 +2,19 @@
 
 ## 0.2 (em andamento)
 
+- **Licença:** o Optimus passou para a PolyForm Noncommercial 1.0.0 — livre para uso não
+  comercial e com licença comercial à parte com o proprietário (LICENSE-COMMERCIAL.md).
+- **Travamentos:** um modelo que para de responder é interrompido com mensagem clara depois de
+  `motor.tempo_sem_resposta` (120 s) sem nada, em vez de prender a tela por até 10 minutos; a tela
+  não fica mais presa em "Pensando…" se o Optimus for reiniciado no meio da resposta.
+- **Voz fora do ao vivo:** desligar o ao vivo (ou o 🔈) no meio da resposta corta a fala na hora.
+- **Controle de verdade sem Home Assistant:** tomadas, interruptores e lâmpadas TP-Link Kasa pela
+  Wi-Fi (procurar, ligar, desligar, alternar, brilho).
+- **Webcams por cabo** (e a do notebook) como câmeras `usb:N`, ao vivo na tela Casa e em fotos.
+- **Gestos pela câmera** no navegador (MediaPipe): parar, aprovar, negar, ao vivo e falar.
+- **macOS:** instalador (Homebrew), volume, mídia, brilho, apps, energia, Bluetooth, rede local e
+  início automático (launchd).
+
 Correções do primeiro uso real (i3 de 2 núcleos, `qwen3.5:2b`):
 
 - **Respostas lentas (114 s, 318 s):** o modo "pensamento" do qwen3.5 estava ligado e o Optimus mandava

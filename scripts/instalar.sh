@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Instalador do Optimus para Linux (Ubuntu, Debian, Mint, Fedora, Arch...) e Android (Termux).
+# Instalador do Optimus para Linux (Ubuntu, Debian, Mint, Fedora, Arch...), macOS e Android (Termux).
 #   bash scripts/instalar.sh            instala tudo
 #   bash scripts/instalar.sh --sem-ia   não instala o Ollama nem baixa o modelo
 set -euo pipefail
@@ -17,21 +17,39 @@ if [[ -n "${PREFIX:-}" && "$PREFIX" == *com.termux* ]]; then
   exec bash "$PASTA/scripts/instalar-android.sh" "$@"
 fi
 
+MAC=0
+[[ "$(uname -s)" == "Darwin" ]] && MAC=1
+if [[ $MAC -eq 1 ]] && ! command -v brew >/dev/null; then
+  aviso "No Mac o instalador usa o Homebrew (https://brew.sh). Sem ele, instale o Python 3.10+ e o Ollama à mão."
+fi
+
 echo "== Instalando o Optimus =="
 
 # 1. Python
 if ! command -v python3 >/dev/null; then
   aviso "Python 3 não encontrado. Instalando..."
-  if command -v apt-get >/dev/null; then sudo apt-get update && sudo apt-get install -y python3 python3-venv python3-pip
+  if [[ $MAC -eq 1 ]] && command -v brew >/dev/null; then brew install python@3.12
+  elif command -v apt-get >/dev/null; then sudo apt-get update && sudo apt-get install -y python3 python3-venv python3-pip
   elif command -v dnf >/dev/null; then sudo dnf install -y python3 python3-pip
   elif command -v pacman >/dev/null; then sudo pacman -S --noconfirm python python-pip
   else erro "Instale o Python 3.10 ou mais novo e rode de novo."; fi
 fi
-python3 -c 'import sys; sys.exit(0 if sys.version_info >= (3, 10) else 1)' || erro "Precisa do Python 3.10 ou mais novo."
+if ! python3 -c 'import sys; sys.exit(0 if sys.version_info >= (3, 10) else 1)'; then
+  # O python3 que vem com o macOS costuma ser o 3.9: usa o do Homebrew.
+  if [[ $MAC -eq 1 ]] && command -v brew >/dev/null; then
+    brew install python@3.12 && export PATH="$(brew --prefix)/opt/python@3.12/libexec/bin:$PATH"
+  fi
+  python3 -c 'import sys; sys.exit(0 if sys.version_info >= (3, 10) else 1)' || erro "Precisa do Python 3.10 ou mais novo."
+fi
 ok "Python $(python3 --version | cut -d' ' -f2)"
 
-# 2. Pacotes do sistema para áudio (microfone e alto-falante)
-if command -v apt-get >/dev/null; then
+# 2. Pacotes do sistema para áudio (microfone e alto-falante) e câmeras
+if [[ $MAC -eq 1 ]]; then
+  # portaudio/ffmpeg: microfone e webcams; blueutil: parear Bluetooth; brightness: brilho da tela.
+  if command -v brew >/dev/null; then
+    brew install portaudio ffmpeg blueutil brightness >/dev/null 2>&1 && ok "Áudio, câmeras, Bluetooth e brilho (Homebrew)" || aviso "Pacotes do Homebrew não instalados (opcional)."
+  fi
+elif command -v apt-get >/dev/null; then
   sudo apt-get install -y python3-venv libportaudio2 espeak-ng ffmpeg >/dev/null 2>&1 && ok "Áudio do sistema (PortAudio, espeak-ng, ffmpeg)" || aviso "Não consegui instalar os pacotes de áudio (opcional)."
 elif command -v dnf >/dev/null; then
   sudo dnf install -y portaudio espeak-ng ffmpeg-free >/dev/null 2>&1 && ok "Áudio do sistema" || aviso "Pacotes de áudio não instalados (opcional)."
@@ -55,7 +73,12 @@ ok "Optimus instalado (comando: optimus)"
 if [[ $SEM_IA -eq 0 ]]; then
   if ! command -v ollama >/dev/null; then
     echo "Instalando o Ollama (motor de IA local, https://ollama.com)..."
-    curl -fsSL https://ollama.com/install.sh | sh || aviso "Não consegui instalar o Ollama. Instale em https://ollama.com/download"
+    if [[ $MAC -eq 1 ]]; then
+      # O script install.sh do Ollama é só para Linux; no Mac é pelo Homebrew ou pelo app.
+      { command -v brew >/dev/null && brew install ollama; } || aviso "Instale o app do Ollama em https://ollama.com/download e rode de novo."
+    else
+      curl -fsSL https://ollama.com/install.sh | sh || aviso "Não consegui instalar o Ollama. Instale em https://ollama.com/download"
+    fi
   fi
   if command -v ollama >/dev/null; then
     (ollama serve >/dev/null 2>&1 &) ; sleep 3
@@ -64,7 +87,13 @@ if [[ $SEM_IA -eq 0 ]]; then
   fi
 fi
 
-# 6. Atalho no menu de aplicativos
+# 6. Atalho (Mac: na pasta Aplicativos do usuário; Linux: no menu de aplicativos)
+if [[ $MAC -eq 1 ]]; then
+  mkdir -p "$HOME/Applications"
+  printf '#!/bin/bash\n"%s/venv/bin/optimus" gui\n' "$DADOS" > "$HOME/Applications/Optimus.command"
+  chmod +x "$HOME/Applications/Optimus.command"
+  ok "Atalho \"Optimus\" criado em ~/Applications (abra pelo Finder ou Spotlight)"
+else
 mkdir -p "$HOME/.local/share/applications" "$DADOS/icone"
 cp "$PASTA/optimus/web/static/icone-512.png" "$DADOS/icone/optimus.png"
 cat > "$HOME/.local/share/applications/optimus.desktop" <<DESK
@@ -78,6 +107,7 @@ Terminal=false
 Categories=Utility;
 DESK
 ok "Atalho \"Optimus\" criado no menu de aplicativos"
+fi
 
 # 7. Iniciar junto com o computador (remova com: optimus startup remove)
 "$DADOS/venv/bin/optimus" startup install || aviso "Rode depois: optimus startup install"

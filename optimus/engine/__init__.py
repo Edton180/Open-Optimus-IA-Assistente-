@@ -12,15 +12,18 @@ from optimus.engine.rede import PROVEDORES, Destino, MotorRede, criar_destino
 def criar_motor_principal(config) -> Motor:
     backend = (config.get("motor", "backend") or "ollama").lower()
     url = config.get("motor", "url")
+    espera = float(config.get("motor", "tempo_sem_resposta", 120) or 120)
     if backend == "demo":
         return MotorDemo()
     if backend in PROVEDORES and backend != "ollama":
         if not url or "11434" in url:
             url = PROVEDORES[backend]["url"]
-        return MotorOpenAI(url=url, chave_api=config.get("motor", "chave_api") or "")
+        return MotorOpenAI(url=url, chave_api=config.get("motor", "chave_api") or "",
+                           tempo_sem_resposta=espera)
     if backend in ("openai", "vllm", "nuvem"):
-        return MotorOpenAI(url=url, chave_api=config.get("motor", "chave_api") or "")
-    return MotorOllama(url=url)
+        return MotorOpenAI(url=url, chave_api=config.get("motor", "chave_api") or "",
+                           tempo_sem_resposta=espera)
+    return MotorOllama(url=url, tempo_sem_resposta=espera)
 
 
 def criar_motor(config) -> Motor:

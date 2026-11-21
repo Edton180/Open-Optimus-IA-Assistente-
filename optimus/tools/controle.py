@@ -40,6 +40,29 @@ def _rodar(comando: list[str]) -> subprocess.CompletedProcess:
     return subprocess.run(comando, capture_output=True, text=True, timeout=15, check=False)
 
 
+def _osa(script: str) -> subprocess.CompletedProcess:
+    """AppleScript no macOS (volume, mídia). Vem com o sistema, nada a instalar."""
+    return _rodar(["osascript", "-e", script])
+
+
+def comando_volume_mac(acao: str, valor: int) -> str:
+    """Script AppleScript do volume (separado para dar para testar fora do Mac)."""
+    ajuste = max(0, min(100, int(valor)))
+    if acao == "ver":
+        return "output volume of (get volume settings)"
+    if acao == "mudo":
+        return "set volume output muted (not (output muted of (get volume settings)))"
+    if acao == "definir":
+        return f"set volume output volume {ajuste} without output muted"
+    sinal = "+" if acao == "aumentar" else "-"
+    return ("set volume output volume ((output volume of (get volume settings)) "
+            f"{sinal} {ajuste}) without output muted")
+
+
+_MIDIA_MAC = {"tocar": "playpause", "pausar": "pause", "proxima": "next track",
+              "anterior": "previous track", "parar": "pause"}
+
+
 # ---------------------------------------------------------------- volume
 @ferramenta(
     "volume",
@@ -70,6 +93,13 @@ def volume(ctx, acao: str, valor: int = 0):
         nivel = round(max(0, min(100, valor)) * 15 / 100)
         _rodar(["termux-volume", "music", str(0 if acao == "mudo" else nivel)])
         return {"mensagem": f"Volume ajustado ({acao})."}
+    if so == "macos":
+        r = _osa(comando_volume_mac(acao, valor))
+        if r.returncode != 0:
+            return {"erro": f"O macOS recusou o ajuste de volume: {r.stderr.strip()}"}
+        if acao == "ver":
+            return {"volume": int(r.stdout.strip() or 0)}
+        return {"mensagem": f"Volume: {acao} {valor if acao != 'mudo' else ''}".strip()}
     if shutil.which("pactl"):
         alvo = "@DEFAULT_SINK@"
         if acao == "ver":
@@ -117,6 +147,11 @@ def brilho(ctx, valor: int):
             _rodar(["termux-brightness", str(round(valor * 255 / 100))])
             return {"mensagem": f"Brilho em {valor}%."}
         return {"erro": "Instale o Termux:API (pkg install termux-api)."}
+    if so == "macos":
+        if shutil.which("brightness"):
+            _rodar(["brightness", str(round(valor / 100, 2))])
+            return {"mensagem": f"Brilho em {valor}%."}
+        return {"erro": "No Mac, instale o utilitário de brilho: brew install brightness"}
     if shutil.which("brightnessctl"):
         _rodar(["brightnessctl", "set", f"{valor}%"])
         return {"mensagem": f"Brilho em {valor}%."}
@@ -146,6 +181,13 @@ def midia(ctx, acao: str):
         return {"mensagem": f"Mídia: {acao}."}
     if so == "android":
         return {"erro": "No Android, controle a mídia pelo próprio celular."}
+    if so == "macos":
+        # Spotify e Música (Apple Music) aceitam comandos pelo AppleScript.
+        for app in ("Spotify", "Music"):
+            if _osa(f'application "{app}" is running').stdout.strip() == "true":
+                _osa(f'tell application "{app}" to {_MIDIA_MAC.get(acao, "playpause")}')
+                return {"mensagem": f"Mídia ({app}): {acao}."}
+        return {"erro": "Nenhum player aberto (abra o Spotify ou o Música)."}
     if shutil.which("playerctl"):
         comando = {"tocar": "play-pause", "pausar": "pause", "proxima": "next",
                    "anterior": "previous", "parar": "stop"}[acao]

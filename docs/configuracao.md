@@ -20,6 +20,7 @@ optimus config agente.modo seguro    # altera um valor
 | motor | contexto / threads | 0 (automático) | |
 | motor | temperatura | 0.6 | Criatividade |
 | motor | manter_carregado | `30m` | Tempo do modelo na memória |
+| motor | tempo_sem_resposta | 120 | Segundos **sem receber nada** do modelo até desistir (evita a tela travada). Zera a cada pedaço: modelo lento mas escrevendo não é cortado. Aumente em PCs muito fracos com modelos grandes |
 | agente | modo | `equilibrado` | `seguro`, `equilibrado`, `autonomo` |
 | agente | max_passos | 12 | Ferramentas por pedido |
 | agente | pasta_trabalho | pasta do usuário | Base dos caminhos relativos |
@@ -36,6 +37,8 @@ optimus config agente.modo seguro    # altera um valor
 | recursos | prioridade_baixa | true | |
 | ferramentas | internet, arquivos, comandos, programas, teclado_mouse, lembretes, memoria, casa, plugins | tudo ligado menos teclado_mouse | Liga/desliga grupos |
 | casa | url / token | | Home Assistant |
+| casa | webcams | true | Webcams por cabo (USB) e a do notebook aparecem como câmeras `usb:0`, `usb:1`... |
+| cameras | (lista) | vazia | Câmeras IP sem Home Assistant: `nome` e `url` (http, rtsp ou `usb:N`), veja [casa.md](casa.md) |
 | destinos | (lista) | vazia | Outros PCs e IAs, veja [rede.md](rede.md) |
 
 ## Pastas
