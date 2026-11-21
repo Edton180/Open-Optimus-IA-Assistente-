@@ -66,6 +66,9 @@ PADRAO: dict[str, Any] = {
         "manter_carregado": "30m",
         # Raciocínio interno (qwen3, deepseek-r1...). Desligado: em CPU deixa tudo muito lento.
         "pensar": False,
+        # Segundos SEM receber nada do modelo até desistir (evita a tela travada). O relógio
+        # zera a cada pedaço: um modelo lento mas escrevendo não é cortado.
+        "tempo_sem_resposta": 120,
         "hardware_assinatura": "",
     },
     "agente": {
@@ -144,6 +147,8 @@ PADRAO: dict[str, Any] = {
         "url": "",
         "token": "",
         "alexa": "",  # ex.: media_player.echo_sala (Alexa Media Player no Home Assistant)
+        # Webcams ligadas por cabo (USB) e a do notebook aparecem como câmeras (usb:0...)
+        "webcams": True,
     },
     "imagem": {
         # Stable Diffusion local (AUTOMATIC1111/Forge com --api). Sem ele, usa o online.

@@ -35,7 +35,7 @@ INTENCOES: list[tuple[str, list[str]]] = [
     (r"\b(volume|som|mudo|silenci|brilho|musica|tocar|toque|pausa|pause|proxima|anterior|"
      r"spotify)", ["volume", "brilho", "midia"]),
     (r"\bbluetooth", ["bluetooth_procurar", "bluetooth_conectar"]),
-    (r"\b(camera|cameras|cftv)\b", ["cameras_listar", "camera_foto"]),
+    (r"\b(camera|cameras|cftv|webcam|webcams)\b", ["cameras_listar", "camera_foto"]),
     (r"\b(luz|luzes|lampada|tomada|ar[- ]condicionado|\bar\b|tv|televis|casa|camera|"
      r"bluetooth|wi-?fi|sensor|persiana|cortina|portao|fechadura|alexa|barulho|frio|calor|"
      r"abafad|umidade|ventilador|aspirador|kasa|interruptor)",

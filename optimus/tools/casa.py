@@ -22,6 +22,7 @@ from pathlib import Path
 
 import httpx
 
+from optimus import webcam
 from optimus.config import pasta_base
 from optimus.safety import CRITICO, LIVRE, MODERADO, Avaliacao
 from optimus.tools.base import ferramenta, numero, sistema, texto
@@ -140,6 +141,8 @@ def imagem_da_camera(config, camera: str) -> bytes:
         if not 0 <= indice < len(lista) or not isinstance(lista[indice], dict):
             raise RuntimeError("câmera desconhecida")
         camera = str(lista[indice].get("url", ""))
+    if camera.startswith("usb:"):
+        return webcam.foto(_indice_usb(camera))
     if camera.startswith("camera."):
         url = (config.get("casa", "url") or "").rstrip("/")
         token = config.get("casa", "token") or ""
@@ -165,12 +168,22 @@ def imagem_da_camera(config, camera: str) -> bytes:
     raise RuntimeError("câmera desconhecida")
 
 
+def _indice_usb(camera: str) -> int:
+    numero = camera.split(":", 1)[1].strip()
+    if not numero.isdigit():
+        raise RuntimeError("Webcam inválida: use usb:0, usb:1...")
+    return int(numero)
+
+
 def cameras_configuradas(config) -> list[dict]:
-    """Câmeras do Home Assistant + câmeras IP de [[cameras]] (nome, url) no config.toml."""
+    """Webcams por cabo + câmeras do Home Assistant + câmeras IP de [[cameras]] no config.toml."""
     # Câmeras IP viram "ip:N": o link (que pode ter usuário e senha) nunca vai para a tela.
     itens = [{"nome": c.get("nome") or f"Câmera {i + 1}", "id": f"ip:{i}"}
              for i, c in enumerate(config.dados.get("cameras") or [])
              if isinstance(c, dict) and c.get("url")]
+    if config.get("casa", "webcams", True):
+        itens += [{"nome": c["nome"], "id": f"usb:{c['indice']}", "tipo": "webcam"}
+                  for c in webcam.listar()]
     url = (config.get("casa", "url") or "").rstrip("/")
     token = config.get("casa", "token") or ""
     if url and token:
@@ -187,26 +200,46 @@ def cameras_configuradas(config) -> list[dict]:
 
 @ferramenta(
     "cameras_listar",
-    "Lista as câmeras da casa (Home Assistant e câmeras IP configuradas). A tela Casa mostra "
-    "a imagem ao vivo de cada uma.",
+    "Lista as câmeras: webcams ligadas por cabo USB (id usb:0, usb:1...), Home Assistant e "
+    "câmeras IP configuradas. A tela Casa mostra a imagem ao vivo de cada uma.",
     grupo="casa",
 )
 def cameras_listar(ctx):
     itens = cameras_configuradas(ctx.config)
     if not itens:
-        return {"erro": "Nenhuma câmera configurada. Ligue o Home Assistant ou adicione câmeras "
-                        "IP em [[cameras]] no config.toml."}
+        return {"erro": "Nenhuma câmera encontrada. Ligue uma webcam no cabo USB, ligue o Home "
+                        "Assistant ou adicione câmeras IP em [[cameras]] no config.toml."}
     return {"total": len(itens), "itens": itens}
+
+
+def _risco_foto(args, ctx) -> Avaliacao:
+    camera = str(args.get("camera", "")).strip().lower()
+    if camera.startswith("usb:") or camera in ("webcam", "usb"):
+        # A webcam pode estar apontada para a pessoa: pergunta antes de fotografar.
+        return Avaliacao(MODERADO, "tirar uma foto com a webcam")
+    return Avaliacao(LIVRE, "foto da câmera")
 
 
 @ferramenta(
     "camera_foto",
-    "Tira uma foto de uma câmera: id do Home Assistant (camera.portao) ou link da câmera IP "
-    "(http://.../snapshot.jpg ou rtsp://...). Salva a imagem e diz onde ficou.",
-    {"camera": texto("Id camera.xxx ou link http/rtsp")},
-    grupo="casa", risco=LIVRE,
+    "Tira uma foto de uma câmera: webcam por cabo (usb:0, usb:1... ou 'webcam'), id do Home "
+    "Assistant (camera.portao) ou link da câmera IP (http://.../snapshot.jpg ou rtsp://...). "
+    "Salva a imagem e diz onde ficou.",
+    {"camera": texto("usb:0 / webcam, id camera.xxx ou link http/rtsp")},
+    grupo="casa", risco=_risco_foto,
 )
 def camera_foto(ctx, camera: str):
+    camera = camera.strip()
+    if camera.lower() in ("webcam", "usb"):
+        achadas = webcam.listar()
+        if not achadas:
+            return {"erro": "Não achei nenhuma webcam ligada neste computador."}
+        camera = f"usb:{achadas[0]['indice']}"
+    if camera.lower().startswith("usb:"):
+        try:
+            return _foto(webcam.foto(_indice_usb(camera)), "webcam")
+        except RuntimeError as erro:
+            return {"erro": str(erro)}
     if camera.startswith("camera."):
         url, cabecalho = _ha(ctx)
         resposta = httpx.get(f"{url}/api/camera_proxy/{camera}", headers=cabecalho, timeout=20)
@@ -258,12 +291,27 @@ def rede_local(ctx):
     if sistema() == "windows":
         saida = subprocess.run(["arp", "-a"], capture_output=True, text=True, check=False).stdout
         padrao = r"(\d+\.\d+\.\d+\.\d+)\s+([0-9a-f-]{17})"
-    else:
-        comando = ["ip", "neigh"] if shutil.which("ip") else ["arp", "-an"]
-        saida = subprocess.run(comando, capture_output=True, text=True, check=False).stdout
-        padrao = r"(\d+\.\d+\.\d+\.\d+).*?([0-9a-f:]{17})"
-    itens = [{"nome": ip, "mac": mac} for ip, mac in re.findall(padrao, saida.lower())]
+        itens = [{"nome": ip, "mac": mac} for ip, mac in re.findall(padrao, saida.lower())]
+        return {"total": len(itens), "itens": itens}
+    comando = ["ip", "neigh"] if shutil.which("ip") else ["arp", "-an"]
+    saida = subprocess.run(comando, capture_output=True, text=True, check=False).stdout
+    itens = vizinhos_da_rede(saida)
     return {"total": len(itens), "itens": itens}
+
+
+def vizinhos_da_rede(saida: str) -> list[dict]:
+    """Lê `ip neigh` (Linux) e `arp -an` (macOS/BSD).
+
+    O macOS escreve o MAC sem os zeros à esquerda (0:1a:2b:3:4:5); aqui ele é normalizado.
+    """
+    itens, vistos = [], set()
+    padrao = r"(\d+\.\d+\.\d+\.\d+)\)?\s.*?\b([0-9a-f]{1,2}(?::[0-9a-f]{1,2}){5})\b"
+    for ip, mac in re.findall(padrao, saida.lower()):
+        mac = ":".join(p.zfill(2) for p in mac.split(":"))
+        if ip not in vistos and mac != "ff:ff:ff:ff:ff:ff":
+            vistos.add(ip)
+            itens.append({"nome": ip, "mac": mac})
+    return itens
 
 
 def _risco_varios(args, ctx) -> Avaliacao:
@@ -435,6 +483,19 @@ def bluetooth_conectar(ctx, endereco: str):
         return {"mensagem": "O Windows só pareia aparelhos novos pela tela de Bluetooth. Abri "
                             f"essa tela: escolha o aparelho {endereco}. Depois de pareado, eu "
                             "consigo usar o áudio dele normalmente."}
+    if sistema() == "macos":
+        if not shutil.which("blueutil"):
+            subprocess.Popen(["open", "x-apple.systempreferences:com.apple.BluetoothSettings"])
+            return {"mensagem": f"Abri os Ajustes de Bluetooth: escolha {endereco}. Para eu "
+                                "parear sozinho no Mac, instale: brew install blueutil"}
+        passos = []
+        for opcao in ("--pair", "--connect"):
+            r = subprocess.run(["blueutil", opcao, endereco], capture_output=True, text=True,
+                               timeout=30, check=False)
+            passos.append(f"{opcao[2:]}: {'ok' if r.returncode == 0 else r.stderr.strip()}")
+        conectado = passos[-1].endswith("ok")
+        return {"mensagem": ("Conectado a " if conectado else "Tentei conectar a ") + endereco,
+                "passos": passos}
     if not shutil.which("bluetoothctl"):
         return {"erro": "Não achei o bluetoothctl (pacote bluez) neste sistema."}
     passos = []

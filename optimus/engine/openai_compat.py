@@ -11,15 +11,25 @@ from typing import Any, Iterator
 
 import httpx
 
-from optimus.engine.base import ChamadaFerramenta, ErroMotor, Motor, Resposta, limpar_pensamento
+from optimus.engine.base import (
+    SEM_RESPOSTA_PADRAO,
+    ChamadaFerramenta,
+    ErroMotor,
+    Motor,
+    Resposta,
+    erro_parou,
+    limpar_pensamento,
+    prazos,
+)
 
 
 class MotorOpenAI(Motor):
     nome = "openai"
 
     def __init__(self, url: str = "http://127.0.0.1:8080/v1", chave_api: str = "",
-                 tempo_limite: float = 600.0):
-        url = url.rstrip("/")
+                 tempo_limite: float = 600.0, tempo_sem_resposta: float = SEM_RESPOSTA_PADRAO):
+        url = (url or "http://127.0.0.1:8080/v1").rstrip("/")
+        self.tempo_sem_resposta = tempo_sem_resposta
         self.url = url if url.endswith("/v1") else url + "/v1"
         self.chave_api = chave_api
         self.tempo_limite = tempo_limite
@@ -47,7 +57,8 @@ class MotorOpenAI(Motor):
             try:
                 with httpx.stream("POST", f"{self.url}/chat/completions", json=corpo,
                                   headers=self._cabecalhos(),
-                                  timeout=httpx.Timeout(self.tempo_limite, connect=8)) as r:
+                                  timeout=prazos(self.tempo_limite, self.tempo_sem_resposta,
+                                                 conectar=8)) as r:
                     if r.status_code in (400, 422) and "tools" in corpo:
                         r.read()
                         corpo.pop("tools")  # servidor sem ferramentas: o agente lê do texto
@@ -82,6 +93,10 @@ class MotorOpenAI(Motor):
                             atual["nome"] += funcao.get("name") or ""
                             atual["args"] += funcao.get("arguments") or ""
                 break
+            except httpx.ReadTimeout as erro:
+                if cancelado is not None and cancelado():
+                    break
+                raise erro_parou(self.tempo_sem_resposta) from erro
             except httpx.HTTPError as erro:
                 raise ErroMotor(f"Não consegui falar com {self.url}: {erro}") from erro
         chamadas = []
@@ -101,7 +116,9 @@ class MotorOpenAI(Motor):
         corpo["stream"] = True
         try:
             with httpx.stream("POST", f"{self.url}/chat/completions", json=corpo,
-                              headers=self._cabecalhos(), timeout=self.tempo_limite) as resposta:
+                              headers=self._cabecalhos(),
+                              timeout=prazos(self.tempo_limite, self.tempo_sem_resposta,
+                                             conectar=8)) as resposta:
                 resposta.raise_for_status()
                 for linha in resposta.iter_lines():
                     if not linha.startswith("data:"):
@@ -112,6 +129,8 @@ class MotorOpenAI(Motor):
                     delta = json.loads(dado)["choices"][0].get("delta", {})
                     if delta.get("content"):
                         yield delta["content"]
+        except httpx.ReadTimeout as erro:
+            raise erro_parou(self.tempo_sem_resposta) from erro
         except httpx.HTTPError as erro:
             raise ErroMotor(f"Falha no servidor: {erro}") from erro
 

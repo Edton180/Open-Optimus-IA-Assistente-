@@ -21,7 +21,12 @@ async function api(caminho, opcoes = {}) {
   const cab = Object.assign({}, opcoes.headers || {});
   if (senha) cab["X-Optimus-Senha"] = senha;
   if (opcoes.json !== undefined) { cab["Content-Type"] = "application/json"; opcoes.body = JSON.stringify(opcoes.json); }
-  const r = await fetch(caminho, Object.assign({}, opcoes, { headers: cab }));
+  // `tempo` (ms): desiste do pedido em vez de esperar para sempre um servidor travado.
+  let controle = null, relogio = null;
+  if (opcoes.tempo) { controle = new AbortController(); relogio = setTimeout(() => controle.abort(), opcoes.tempo); }
+  let r;
+  try { r = await fetch(caminho, Object.assign({}, opcoes, { headers: cab }, controle ? { signal: controle.signal } : {})); }
+  finally { if (relogio) clearTimeout(relogio); }
   if (r.status === 401) { pedirSenha(); throw new Error("senha"); }
   const tipo = r.headers.get("Content-Type") || "";
   if (tipo.includes("json")) {
@@ -320,10 +325,23 @@ async function acompanhar(tarefa, bolha, porVoz) {
   // Reavaliado a cada evento: se o usuário desligar o ao vivo ou o 🔈 no meio da
   // resposta, o Optimus para de falar em vez de continuar até o fim.
   const novaBolha = () => { if (usada) { atual = adicionarMensagem("optimus", "", {}); usada = false; } };
+  let falhas = 0;
   while (true) {
     let d;
-    try { d = await api(`/api/tarefa/${tarefa}?desde=${desde}`); }
-    catch (e) { if (e.message === "senha") return; await new Promise((r) => setTimeout(r, 1000)); continue; }
+    try { d = await api(`/api/tarefa/${tarefa}?desde=${desde}`, { tempo: 15000 }); falhas = 0; }
+    catch (e) {
+      if (e.message === "senha") return;
+      // Tarefa sumiu (o Optimus reiniciou) ou o servidor não responde há ~30 s: avisa e
+      // libera a tela, em vez de ficar "Pensando…" para sempre.
+      falhas += 1;
+      if (/não encontrada/i.test(e.message) || falhas >= 30) {
+        if (falouParcial) Voz.parar();
+        $(".texto", atual).innerHTML = "<p>⚠️ Perdi a conexão com o Optimus durante a resposta. Se ele foi reiniciado, envie o pedido de novo.</p>";
+        definirEstado("erro", "Sem conexão");
+        return;
+      }
+      await new Promise((r) => setTimeout(r, 1000)); continue;
+    }
     desde = d.total;
     for (const ev of d.eventos) {
       if (ev.tipo === "conversa") estado.conversa = ev.id;

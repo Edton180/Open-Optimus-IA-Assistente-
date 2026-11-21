@@ -7,15 +7,26 @@ from typing import Any, Iterator
 
 import httpx
 
-from optimus.engine.base import ChamadaFerramenta, ErroMotor, Motor, Resposta, limpar_pensamento
+from optimus.engine.base import (
+    SEM_RESPOSTA_PADRAO,
+    ChamadaFerramenta,
+    ErroMotor,
+    Motor,
+    Resposta,
+    erro_parou,
+    limpar_pensamento,
+    prazos,
+)
 
 
 class MotorOllama(Motor):
     nome = "ollama"
 
-    def __init__(self, url: str = "http://127.0.0.1:11434", tempo_limite: float = 600.0):
-        self.url = url.rstrip("/")
+    def __init__(self, url: str = "http://127.0.0.1:11434", tempo_limite: float = 600.0,
+                 tempo_sem_resposta: float = SEM_RESPOSTA_PADRAO):
+        self.url = (url or "http://127.0.0.1:11434").rstrip("/")
         self.tempo_limite = tempo_limite
+        self.tempo_sem_resposta = tempo_sem_resposta
 
     def _opcoes(self, opcoes: dict[str, Any] | None) -> tuple[dict[str, Any], Any]:
         opcoes = dict(opcoes or {})
@@ -57,7 +68,8 @@ class MotorOllama(Motor):
         for tentativa in range(3):
             try:
                 with httpx.stream("POST", f"{self.url}/api/chat", json=corpo,
-                                  timeout=httpx.Timeout(self.tempo_limite, connect=5)) as r:
+                                  timeout=prazos(self.tempo_limite,
+                                                 self.tempo_sem_resposta)) as r:
                     if r.status_code == 400:
                         erro = r.read().decode(errors="replace")
                         # Modelo sem suporte a "think" ou a ferramentas: tenta sem.
@@ -102,6 +114,10 @@ class MotorOllama(Motor):
                         if dados.get("done"):
                             final = dados
                 break
+            except httpx.ReadTimeout as erro:
+                if cancelado is not None and cancelado():
+                    break
+                raise erro_parou(self.tempo_sem_resposta) from erro
             except httpx.HTTPError as erro:
                 raise ErroMotor(f"Não consegui falar com o Ollama em {self.url}. Ele está "
                                 f"aberto? ({erro})") from erro
@@ -124,7 +140,8 @@ class MotorOllama(Motor):
         dentro_pensamento = False
         try:
             with httpx.stream("POST", f"{self.url}/api/chat", json=corpo,
-                              timeout=self.tempo_limite) as resposta:
+                              timeout=prazos(self.tempo_limite,
+                                             self.tempo_sem_resposta)) as resposta:
                 resposta.raise_for_status()
                 for linha in resposta.iter_lines():
                     if not linha:
@@ -140,6 +157,8 @@ class MotorOllama(Motor):
                             continue
                     if pedaco:
                         yield pedaco
+        except httpx.ReadTimeout as erro:
+            raise erro_parou(self.tempo_sem_resposta) from erro
         except httpx.HTTPError as erro:
             raise ErroMotor(f"Falha no Ollama: {erro}") from erro
 

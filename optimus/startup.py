@@ -27,7 +27,7 @@ def plataforma() -> str:
     if "com.termux" in os.environ.get("PREFIX", "") or os.environ.get("TERMUX_VERSION"):
         return "termux"
     sistema = platform.system().lower()
-    return "windows" if sistema == "windows" else "linux" if sistema == "linux" else sistema
+    return {"windows": "windows", "linux": "linux", "darwin": "macos"}.get(sistema, sistema)
 
 
 def comando_optimus(abrir_navegador: bool) -> list[str]:
@@ -69,6 +69,40 @@ def texto_unidade_systemd(comando: list[str]) -> str:
 def _systemctl(*args: str) -> subprocess.CompletedProcess:
     return subprocess.run(["systemctl", "--user", *args], capture_output=True, text=True,
                           check=False)
+
+
+# ------------------------------------------------------------------ macOS (launchd)
+ROTULO_MAC = "com.openoptimus.assistente"
+
+
+def _plist_mac() -> Path:
+    return Path.home() / "Library" / "LaunchAgents" / f"{ROTULO_MAC}.plist"
+
+
+def texto_plist_mac(comando: list[str], log: Path) -> str:
+    from xml.sax.saxutils import escape
+
+    argumentos = "".join(f"\n        <string>{escape(p)}</string>" for p in comando)
+    return (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" '
+        '"http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n'
+        '<plist version="1.0">\n<dict>\n'
+        f"    <key>Label</key>\n    <string>{ROTULO_MAC}</string>\n"
+        f"    <key>ProgramArguments</key>\n    <array>{argumentos}\n    </array>\n"
+        "    <key>RunAtLoad</key>\n    <true/>\n"
+        "    <key>KeepAlive</key>\n    <dict>\n        <key>SuccessfulExit</key>\n"
+        "        <false/>\n    </dict>\n"
+        f"    <key>StandardOutPath</key>\n    <string>{escape(str(log))}</string>\n"
+        f"    <key>StandardErrorPath</key>\n    <string>{escape(str(log))}</string>\n"
+        "    <key>EnvironmentVariables</key>\n    <dict>\n"
+        "        <key>PYTHONUNBUFFERED</key>\n        <string>1</string>\n    </dict>\n"
+        "</dict>\n</plist>\n"
+    )
+
+
+def _launchctl(*args: str) -> subprocess.CompletedProcess:
+    return subprocess.run(["launchctl", *args], capture_output=True, text=True, check=False)
 
 
 # ------------------------------------------------------------------ Termux:Boot
@@ -126,6 +160,15 @@ def instalar(abrir_navegador: bool = True) -> str:
         script.chmod(0o755)
         return (f"Pronto: criei {script}. Instale e abra uma vez o app Termux:Boot (F-Droid) "
                 "para ele rodar quando o celular ligar.")
+    if alvo == "macos":
+        plist = _plist_mac()
+        plist.parent.mkdir(parents=True, exist_ok=True)
+        plist.write_text(texto_plist_mac(comando, arquivo_log()), encoding="utf-8")
+        _launchctl("unload", "-w", str(plist))  # se já existia, recarrega a versão nova
+        resultado = _launchctl("load", "-w", str(plist))
+        if resultado.returncode != 0:
+            return f"Criei {plist}, mas o launchctl recusou: {resultado.stderr.strip()}"
+        return f"Pronto: o Optimus inicia quando você entra no Mac (launchd, {plist})."
     return f"Início automático ainda não é suportado em {alvo}."
 
 
@@ -154,6 +197,10 @@ def remover() -> str:
     elif alvo == "windows":
         if _schtasks("/Delete", "/F", "/TN", TAREFA_WINDOWS).returncode == 0:
             removidos.append(TAREFA_WINDOWS)
+    elif alvo == "macos" and _plist_mac().exists():
+        _launchctl("unload", "-w", str(_plist_mac()))
+        _plist_mac().unlink()
+        removidos.append(str(_plist_mac()))
     elif alvo == "termux" and _script_termux().exists():
         _script_termux().unlink()
         removidos.append(str(_script_termux()))
@@ -175,6 +222,11 @@ def status() -> str:
         return resultado.stdout.strip() if resultado.returncode == 0 else "Não instalado."
     if alvo == "termux":
         return f"Termux:Boot: {_script_termux()}" if _script_termux().exists() else "Não instalado."
+    if alvo == "macos":
+        if not _plist_mac().exists():
+            return "Não instalado."
+        rodando = _launchctl("list", ROTULO_MAC).returncode == 0
+        return f"launchd: instalado, {'rodando' if rodando else 'parado'} ({_plist_mac()})"
     return "Não suportado neste sistema."
 
 
@@ -186,6 +238,9 @@ def reiniciar() -> str:
     if alvo == "windows":
         _schtasks("/End", "/TN", TAREFA_WINDOWS)
         resultado = _schtasks("/Run", "/TN", TAREFA_WINDOWS)
+        return "Reiniciado." if resultado.returncode == 0 else resultado.stderr.strip()
+    if alvo == "macos" and _plist_mac().exists():
+        resultado = _launchctl("kickstart", "-k", f"gui/{os.getuid()}/{ROTULO_MAC}")
         return "Reiniciado." if resultado.returncode == 0 else resultado.stderr.strip()
     return "Reinicie o Optimus manualmente (ou reinicie o aparelho)."
 
