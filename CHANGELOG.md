@@ -19,6 +19,30 @@ Correções do primeiro uso real (i3 de 2 núcleos, `qwen3.5:2b`):
 
 Novidades:
 
+- **Reconhece upgrade de peça e recomenda/baixa o modelo:** além da detecção de hardware e do
+  aviso quando a máquina melhora (que já existiam), agora há ferramentas e o comando
+  `optimus modelos` para ver o melhor modelo que cabe no PC por família, o que já está instalado
+  e o que falta. Ferramentas `modelos_recomendados`, `modelo_baixar` (baixa pelo Ollama; vazio =
+  o recomendado) e `modelo_usar`. Do PC fraco ao supercomputador, sempre o maior que couber.
+- **Base de conhecimento própria embutida:** o Optimus já vem com conhecimento geral e benigno
+  (sobre ele mesmo, primeiros socorros, conversões e medidas, redes e PC, referência de
+  programação) em `optimus/knowledge/*.md`. Esses textos são indexados no banco local (FTS5) ao
+  iniciar, então viram respostas prontas sem precisar da web nem gastar o modelo grande — ajuda a
+  velocidade, principalmente em PC fraco. A indexação é idempotente (`optimus/conhecimento.py`):
+  só reindexa o que mudou e remove fontes de arquivos que sumiram, sem duplicar.
+- **Mais rápido e mais leve (velocidade e consumo):** a resposta agora tem um limite de
+  tamanho (`num_predict`/`max_tokens`), então o modelo para de escrever em vez de se estender
+  à toa — o que mais pesava em CPU fraca. Respostas faladas usam um limite curto
+  (`motor.max_resposta_voz`, 320 tokens) e PCs em modo econômico limitam também o texto
+  (`motor.max_resposta_economico`, 768). Em modo econômico, perguntas curtas vão direto para o
+  modelo rápido. Vale para Ollama e para servidores compatíveis com a OpenAI.
+- **Autoatualização pelo GitHub com barreira de privacidade (Zero-Leak):** `optimus/privacy_guard.py`
+  varre tudo antes de qualquer commit automático, bloqueando arquivos sensíveis (`.db`, `.env`,
+  `config.toml`, memórias, gravações) e mascarando chaves de API, tokens, chaves privadas, IPs, MACs,
+  senhas de Wi-Fi e caminhos com o nome do usuário. `optimus/updater.py` baixa atualizações com `git pull`
+  seguro (preservando os dados locais, que ficam fora do Git) e só commita/envia depois de uma revisão de
+  privacidade limpa. Ferramentas `atualizacao_verificar`, `atualizacao_baixar` e `privacidade_revisar`.
+  Veja [docs/atualizacao.md](docs/atualizacao.md).
 - Núcleo (HUD) com orbe animado, conversa **ao vivo** por voz (palavra "Optimus", duas palmas,
   interrupção com "pare"), abertura com o logo, relógio e anéis de CPU/RAM/tokens por segundo.
 - Modos Pesquisar na web, Gerar imagem, Pensar a fundo e Programar; botão Parar que cancela o pedido.

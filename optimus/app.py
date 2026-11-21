@@ -30,11 +30,24 @@ class Optimus:
         self.aviso_modelo = verificar_upgrade(self.config, self.hardware, self.perfil)
         base = cfg.pasta_base()
         self.banco = Banco(base / "optimus.db")
+        self._indexar_conhecimento(base)
         self.auditoria = Auditoria(base / "registros" / "acoes.jsonl")
         self.motor = criar_motor(self.config)
         self._lembretes: threading.Thread | None = None
         if self.config.get("recursos", "prioridade_baixa", True):
             _baixar_prioridade()
+
+    def _indexar_conhecimento(self, base) -> None:
+        """Indexa a base de conhecimento embutida no banco (idempotente, só o que mudou).
+
+        Falha aqui nunca deve travar a abertura do Optimus, então é toda protegida.
+        """
+        try:
+            from optimus import conhecimento
+
+            conhecimento.indexar_embutido(self.banco, estado_arq=base / "conhecimento.json")
+        except Exception:
+            pass
 
     def recarregar(self) -> None:
         self.config = cfg.carregar(self.config.caminho)
