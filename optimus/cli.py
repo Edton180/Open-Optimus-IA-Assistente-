@@ -85,6 +85,7 @@ def cmd_chat(args) -> int:
     print(_c("Escreva e aperte Enter. /sair para sair, /nova para limpar a conversa.", "90"))
     optimus.iniciar_lembretes(lambda l: print(_c(
         f"\n⏰ {l['texto'] if l.get('tipo') == 'timer' else 'Lembrete: ' + l['texto']}", "95")))
+    optimus.iniciar_copiados()
     historico: list[dict] = []
     while True:
         try:

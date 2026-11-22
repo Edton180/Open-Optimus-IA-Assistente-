@@ -63,6 +63,8 @@ INTENCOES: list[tuple[str, list[str]]] = [
      ["abrir", "encerrar_processo", "executar_comando"]),
     (r"\b(deslig|reinici|suspend|hibern|bloque(ia|ar) (a tela|o pc))", ["energia"]),
     (r"\b(comando|terminal|powershell|bash|instal)", ["executar_comando"]),
+    (r"\b(historico de copiad|o que (eu )?copiei|copiados|area de transferencia)",
+     ["copiados_listar", "copiado_usar", "copiado_apagar", "copiados_limpar"]),
     (r"\b(digit|tecla|clique|clicar|mouse|print|captura de tela|tela|area de transferencia|"
      r"copiad)", ["captura_tela", "digitar", "teclas", "clicar", "area_transferencia"]),
     (r"(mud|troc|troqu|qua(l|is)|list|usar|use|outra).{0,25}\bvoz", ["trocar_voz", "listar_vozes"]),
