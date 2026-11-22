@@ -28,6 +28,13 @@ def test_criar_habito_nao_duplica(tmp_path):
     assert len(b.listar_habitos()) == 1
 
 
+def test_criar_habito_nome_acentuado_nao_duplica(tmp_path):
+    b = _banco(tmp_path)
+    a = b.criar_habito("Água")
+    assert b.criar_habito("água") == a  # casefold, não lower ASCII
+    assert len(b.listar_habitos()) == 1
+
+
 def test_marcar_habito_idempotente_por_dia(tmp_path):
     b = _banco(tmp_path)
     h = b.criar_habito("Ler")

@@ -29,6 +29,16 @@ def test_recriar_mesmo_nome_regrava_passos(tmp_path):
     assert b.rotina_por_nome("noite")["passos"] == ["trancar portão"]
 
 
+def test_nome_acentuado_case_insensitive(tmp_path):
+    b = _banco(tmp_path)
+    b.criar_rotina("CAFÉ", ["moer grãos", "ferver água"])
+    # procurar com outra caixa + acento deve achar a mesma rotina (casefold, não lower ASCII)
+    assert b.rotina_por_nome("café")["passos"] == ["moer grãos", "ferver água"]
+    b.criar_rotina("café", ["só coar"])  # mesmo nome: regrava, não duplica
+    assert len(b.listar_rotinas()) == 1
+    assert b.rotina_por_nome("CAFÉ")["passos"] == ["só coar"]
+
+
 def test_passos_vazios_sao_ignorados(tmp_path):
     b = _banco(tmp_path)
     b.criar_rotina("X", ["  ", "faz algo", ""])
