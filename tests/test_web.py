@@ -86,3 +86,57 @@ def test_senha_protege_a_api():
         assert _req(base + "/api/estado", cab={"X-Optimus-Senha": "segredo"})["versao"]
     finally:
         httpd.shutdown()
+
+
+def test_rota_de_atualizacao_responde(tmp_path):
+    # A rota existe e devolve o estado do updater (aqui, fora de um repo Git, um erro tratado).
+    httpd, base = _subir()
+    try:
+        try:
+            d = _req(base + "/api/atualizacao")
+            assert "atualizado" in d or "erro" in d
+        except urllib.error.HTTPError as erro:
+            # Sem repositório Git: a rota responde 503 com {"erro": ...}, não 404.
+            assert erro.code == 503
+    finally:
+        httpd.shutdown()
+
+
+def test_adicionar_e_remover_camera_ip(tmp_path):
+    httpd, base = _subir()
+    try:
+        cab = {"X-Optimus-Senha": ""}
+        _req(base + "/api/cameras", {"nome": "Portão", "url": "192.168.0.30",
+                                     "usuario": "admin", "senha": "1234"}, cab)
+        cams = _req(base + "/api/cameras", cab=cab)["cameras"]
+        assert any(c["nome"] == "Portão" and c["id"] == "ip:0" for c in cams)
+        # Remover pela id ip:0.
+        pedido = urllib.request.Request(base + "/api/cameras/ip:0", method="DELETE",
+                                        headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(pedido, timeout=10) as r:
+            assert json.load(r)["ok"]
+        assert not _req(base + "/api/cameras", cab=cab)["cameras"]
+    finally:
+        httpd.shutdown()
+
+
+def test_estado_usa_cache_do_motor():
+    # /api/estado é chamado em loop; o status do motor não pode bater no motor a cada poll.
+    from optimus.app import Optimus
+    from optimus.config import Config
+    from optimus.engine.demo import MotorDemo
+    from optimus.web import server
+
+    config = Config(); config.definir("motor", "backend", "demo")
+    optimus = Optimus(config)
+    chamadas = {"n": 0}
+
+    class MotorContado(MotorDemo):
+        def modelos(self):
+            chamadas["n"] += 1
+            return super().modelos()
+
+    optimus.motor = MotorContado()
+    est = server.Estado(optimus)
+    est.motor_status(); est.motor_status(); est.motor_status()
+    assert chamadas["n"] == 1  # as três chamadas seguidas vêm do cache

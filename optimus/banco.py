@@ -108,6 +108,9 @@ PERSONAS_INICIAIS = [
      "Responda ao usuário.", "", ""),
 ]
 
+# Chaves das personas que já vêm no sistema: podem ser editadas, nunca excluídas.
+PERSONAS_PADRAO = frozenset(p[0] for p in PERSONAS_INICIAIS)
+
 PROMPTS_INICIAIS = [
     ("Resumo do dia", "Me dê um resumo do dia: data, hora, lembretes pendentes, estado do PC "
      "e as 5 notícias mais importantes do Brasil hoje.", "Rotina"),
@@ -471,7 +474,10 @@ class Banco:
 
     # Personas e prompts
     def personas(self) -> list[dict[str, Any]]:
-        return self._todos("SELECT * FROM personas ORDER BY rowid")
+        linhas = self._todos("SELECT * FROM personas ORDER BY rowid")
+        for linha in linhas:
+            linha["embutida"] = linha.get("chave") in PERSONAS_PADRAO
+        return linhas
 
     def persona(self, chave: str) -> dict[str, Any] | None:
         linhas = self._todos("SELECT * FROM personas WHERE chave=?", (chave,))
@@ -483,7 +489,8 @@ class Banco:
                    (chave, nome, descricao, prompt, modelo, voz))
 
     def apagar_persona(self, chave: str) -> None:
-        if chave != "optimus":
+        # As personas que já vêm no sistema não podem ser excluídas, só editadas.
+        if chave not in PERSONAS_PADRAO:
             self._exec("DELETE FROM personas WHERE chave=?", (chave,))
 
     def prompts(self) -> list[dict[str, Any]]:
