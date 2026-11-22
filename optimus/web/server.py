@@ -23,7 +23,6 @@ from urllib.parse import parse_qs, urlparse
 
 import psutil
 
-import optimus as optimus_mod
 from optimus import __version__
 from optimus import config as cfg
 from optimus.agent import mensagens_para_historico
