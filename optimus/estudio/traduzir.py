@@ -16,6 +16,7 @@ from pathlib import Path
 
 from optimus.config import pasta_base
 from optimus.estudio import idiomas
+from optimus.estudio.audio import ErroEstudio
 from optimus.estudio.legendas import Trecho
 
 Llm = Callable[[list[dict]], str]
@@ -124,7 +125,7 @@ def traduzir_textos(textos: list[str], destino: str, llm: Llm, origem: str = "",
     saida: list[str] = list(textos)
     for comeco in range(0, len(textos), lote):
         if cancelado and cancelado():
-            break
+            raise ErroEstudio("Cancelado.")
         grupo = list(range(comeco, min(len(textos), comeco + lote)))
         protegidos = {i: _proteger(textos[i], gl["manter"]) for i in grupo}
         pedido = "\n".join(f"[{i - comeco + 1}] {protegidos[i][0]}" for i in grupo)

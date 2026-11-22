@@ -186,6 +186,24 @@ def test_traducao_refaz_linha_que_faltou_e_nunca_perde():
     assert traduzir.traduzir_textos(["fica"], "en", lambda m: "") == ["fica"]
 
 
+def test_traducao_cancelada_nao_devolve_meia_legenda():
+    with pytest.raises(ErroEstudio, match="Cancelado"):
+        traduzir.traduzir_textos(["a"] * 30, "en", _llm_eco(), lote=25,
+                                 cancelado=lambda: True)
+
+
+def test_cache_da_traducao_muda_com_o_glossario(tmp_path):
+    llm = _llm_eco()
+    en, pt = idiomas.idioma("en"), idiomas.idioma("pt-BR")
+    trechos = [Trecho(0, 1, "deploy")]
+    a = dublagem._traduzidos(trechos, en, pt, llm, "p1", False, None, None, tmp_path)
+    traduzir.salvar_glossario("p1", [], {"deploy": "implantação"})
+    b = dublagem._traduzidos(trechos, en, pt, llm, "p1", False, None, None, tmp_path)
+    assert a[0].texto == b[0].texto and len(llm.chamadas) == 2  # refez com o glossário
+    dublagem._traduzidos(trechos, en, pt, llm, "p1", False, None, None, tmp_path)
+    assert len(llm.chamadas) == 2  # mesmo glossário: usa o guardado
+
+
 def test_extrair_termos():
     termos = traduzir.extrair_termos("texto", lambda m: 'ok {"termos": ["Kaik", "Optimus"]}')
     assert termos == ["Kaik", "Optimus"]

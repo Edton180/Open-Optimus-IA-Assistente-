@@ -78,7 +78,12 @@ def _traduzidos(trechos, falado, destino, llm, projeto, para_dublagem, progresso
         return trechos
     if llm is None:
         raise ErroEstudio("Para traduzir preciso do modelo de IA do Optimus.")
-    cache = pasta / f"traducao-{destino.codigo}{'-dub' if para_dublagem else ''}.json"
+    # o glossário entra na chave: mudou o projeto ou as regras, traduz de novo
+    gl = traduzir.glossario(projeto) if projeto else {}
+    regras = hashlib.sha1(json.dumps([projeto, gl], sort_keys=True, ensure_ascii=False)
+                          .encode()).hexdigest()[:8]
+    cache = pasta / (f"traducao-{destino.codigo}{'-dub' if para_dublagem else ''}"
+                     f"-{regras}.json")
     if cache.exists():
         return [Trecho(**t) for t in json.loads(cache.read_text(encoding="utf-8"))]
     novos = traduzir.traduzir(trechos, destino.codigo, llm, falado.codigo, projeto,
