@@ -19,7 +19,7 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, unquote, urlparse
 
 import psutil
 
@@ -331,12 +331,20 @@ class Manipulador(BaseHTTPRequestHandler):
         from optimus.web import estudio_api
 
         tamanho = int(self.headers.get("Content-Length") or 0)
-        if tamanho > estudio_api.LIMITE_ENVIO:
-            return self._json({"erro": "arquivo grande demais (máximo 2 GB)"}, 413)
+        tipo = self.headers.get("Content-Type", "")
+        partes = [unquote(p) for p in caminho.strip("/").split("/")[2:]]
+        if metodo == "POST" and partes == ["enviar"] and not tipo.startswith("multipart/"):
+            # vídeos grandes: vão direto para o disco, em pedaços, sem passar pela memória
+            if tamanho > estudio_api.LIMITE_ENVIO:
+                return self._json({"erro": "arquivo grande demais (máximo 2 GB)"}, 413)
+            nome = unquote(self.headers.get("X-Nome-Arquivo") or "")
+            salvo = estudio_api.receber_envio(nome, self.rfile, tamanho)
+            return self._json({"caminho": str(salvo)})
+        if tamanho > estudio_api.LIMITE_FORMULARIO:
+            return self._json({"erro": "pedido grande demais: envie arquivos grandes por "
+                                       "/api/estudio/enviar"}, 413)
         corpo = self.rfile.read(tamanho) if tamanho else b""
-        partes = caminho.strip("/").split("/")[2:]
-        status, dados = estudio_api.atender(metodo, partes, consulta,
-                                            self.headers.get("Content-Type", ""), corpo,
+        status, dados = estudio_api.atender(metodo, partes, consulta, tipo, corpo,
                                             self.estado.optimus)
         if isinstance(dados, Path):
             return self._enviar_arquivo(dados)

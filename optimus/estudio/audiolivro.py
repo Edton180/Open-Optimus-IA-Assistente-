@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import hashlib
 import html
+import json
 import re
 import zipfile
 from pathlib import Path
@@ -151,7 +152,8 @@ def gerar(arquivo: str | Path, voz: str = "", idioma: str = "", titulo: str = ""
                          ).hexdigest()[:10]
     trabalho = pasta_estudio() / "audiolivros" / f"{arquivo.stem[:30]}-{chave}"
     trabalho.mkdir(parents=True, exist_ok=True)
-    destino = (Path(saida) if saida else pasta_saidas(config)) / titulo[:60]
+    pasta_livro = re.sub(r'[\\/:*?"<>|]+', "", titulo).strip(" .")[:60] or "audiolivro"
+    destino = (Path(saida) if saida else pasta_saidas(config)) / pasta_livro  # nunca sai da pasta
     destino.mkdir(parents=True, exist_ok=True)
     total_palavras = sum(len(c.split()) for _, c in caps) or 1
     feitas, arquivos, duracoes = 0, [], []
@@ -160,7 +162,8 @@ def gerar(arquivo: str | Path, voz: str = "", idioma: str = "", titulo: str = ""
             continue
         if cancelado and cancelado():
             raise ErroEstudio("Cancelado.")
-        cache = trabalho / f"{n:03d}-{hashlib.sha1(corpo.encode()).hexdigest()[:8]}.wav"
+        entrada = json.dumps([nome, corpo, perfil.para_dict()], sort_keys=True, ensure_ascii=False)
+        cache = trabalho / f"{n:03d}-{hashlib.sha1(entrada.encode()).hexdigest()[:8]}.wav"
         if progresso:
             progresso(feitas / total_palavras, f"Capítulo {n} de {len(caps)}: {nome}")
         if cache.exists():

@@ -21,7 +21,8 @@ from typing import Any
 
 from optimus.tools.base import Contexto
 
-LIMITE_ENVIO = 2 * 1024 * 1024 * 1024  # 2 GB
+LIMITE_ENVIO = 2 * 1024 * 1024 * 1024  # 2 GB, enviado direto para o disco
+LIMITE_FORMULARIO = 200 * 1024 * 1024  # formulários (clonar uma voz) ficam na memória
 
 _ACOES = {  # rota → ferramenta (os campos do JSON viram os argumentos)
     "falar": "estudio_falar", "criar-voz": "estudio_criar_voz", "dublar": "estudio_dublar",
@@ -83,6 +84,28 @@ def salvar_envio(nome: str, dados: bytes) -> Path:
     pasta.mkdir(parents=True, exist_ok=True)
     alvo = pasta / f"{time.strftime('%Y%m%d-%H%M%S')}-{_nome_seguro(nome)}"
     alvo.write_bytes(dados)
+    return alvo
+
+
+def receber_envio(nome: str, fluxo, tamanho: int) -> Path:
+    """Copia o corpo do pedido para estudio/entradas em pedaços de 1 MB."""
+    from optimus.estudio import pasta_estudio
+    from optimus.estudio.audio import ErroEstudio
+
+    pasta = pasta_estudio() / "entradas"
+    pasta.mkdir(parents=True, exist_ok=True)
+    alvo = pasta / f"{time.strftime('%Y%m%d-%H%M%S')}-{_nome_seguro(nome)}"
+    restante = tamanho
+    with open(alvo, "wb") as f:
+        while restante > 0:
+            pedaco = fluxo.read(min(1024 * 1024, restante))
+            if not pedaco:
+                break
+            f.write(pedaco)
+            restante -= len(pedaco)
+    if restante > 0:
+        alvo.unlink(missing_ok=True)
+        raise ErroEstudio("O envio foi interrompido.")
     return alvo
 
 

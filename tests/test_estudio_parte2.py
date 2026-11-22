@@ -324,3 +324,40 @@ def test_api_estudio_historia_vai_para_a_fila(voz_falsa):
     assert feita.estado == "concluida", feita.erro
     st, r = _api("GET", "tarefas")
     assert r["tarefas"][-1]["resultado"]["arquivo"].endswith("Teste.mp3")
+
+
+# ------------------------------------------------------------------ achados do review
+def test_pacote_de_modelo_nao_escreve_fora_da_pasta(tmp_path):
+    import io
+    import tarfile
+
+    pacote = tmp_path / "m.tar.bz2"
+    with tarfile.open(pacote, "w:bz2") as tar:
+        info = tarfile.TarInfo("../modelos-extra/f.txt")  # mesmo prefixo, outra pasta
+        info.size = 1
+        tar.addfile(info, io.BytesIO(b"x"))
+    (tmp_path / "modelos").mkdir()
+    with pytest.raises(ErroEstudio):
+        transcrever._extrair(pacote, tmp_path / "modelos")
+    assert not (tmp_path / "modelos-extra").exists()
+
+
+@precisa_ffmpeg
+def test_titulo_do_audiolivro_nao_sai_da_pasta(voz_falsa, tmp_path):
+    livro = tmp_path / "l.txt"
+    livro.write_text("Uma frase só.", encoding="utf-8")
+    r = audiolivro.gerar(livro, titulo="../../fora", saida=tmp_path / "saida", m4b=False)
+    assert (tmp_path / "saida") in __import__("pathlib").Path(r["pasta"]).parents
+    assert r["titulo"] == "../../fora"
+
+
+def test_envio_grande_vai_em_pedacos_para_o_disco():
+    import io
+
+    from optimus.web import estudio_api
+
+    dados = b"v" * (3 * 1024 * 1024 + 5)
+    salvo = estudio_api.receber_envio("../vídeo grande.mp4", io.BytesIO(dados), len(dados))
+    assert salvo.read_bytes() == dados and salvo.parent.name == "entradas"
+    with pytest.raises(ErroEstudio):
+        estudio_api.receber_envio("x.mp4", io.BytesIO(b"curto"), 100)

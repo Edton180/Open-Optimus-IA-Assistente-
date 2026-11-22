@@ -294,7 +294,7 @@ def dublar(arquivo: str | Path, destino: str = "pt-BR", voz: str = "", origem: s
     p(0.92, "Juntando tudo…")
     if audio.eh_video(arquivo):
         faixa_wav = pasta / f"faixa-{alvo.codigo}.wav"
-        audio.salvar(faixa, TAXA, faixa_wav, marca_ia=False)
+        audio.salvar(faixa, TAXA, faixa_wav)  # com a marca d'água: é ela que vai no vídeo
         video = destino_dir / f"{base}{arquivo.suffix}"
         audio.juntar_video(arquivo, video, voz=faixa_wav, volume_original=volume,
                            legenda=None if legenda == "nenhuma" else srt,

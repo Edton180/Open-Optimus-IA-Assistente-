@@ -51,9 +51,9 @@ document.addEventListener("click", async (e) => {
 async function estEntrada(campoArquivo, campoCaminho) {
   const arquivo = $(campoArquivo).files[0];
   if (arquivo) {
-    const dados = new FormData();
-    dados.append("arquivo", arquivo, arquivo.name);
-    const r = await estApi("enviar", { method: "POST", body: dados });
+    // corpo cru (não formulário): o servidor grava direto no disco, até vídeos de 2 GB
+    const r = await estApi("enviar", { method: "POST", body: arquivo,
+      headers: { "Content-Type": "application/octet-stream", "X-Nome-Arquivo": encodeURIComponent(arquivo.name) } });
     return r.caminho;
   }
   const caminho = campoCaminho ? $(campoCaminho).value.trim() : "";

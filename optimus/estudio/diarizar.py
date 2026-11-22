@@ -65,7 +65,7 @@ def baixar_modelos(progresso=None) -> None:
             raiz = pasta.resolve()
             for membro in tar.getmembers():  # nada de sair da pasta (zip-slip)
                 destino = (pasta / membro.name).resolve()
-                if not str(destino).startswith(str(raiz)) or membro.issym() or membro.islnk():
+                if not destino.is_relative_to(raiz) or membro.issym() or membro.islnk():
                     raise ErroEstudio("Pacote do modelo de segmentação inválido.")
             tar.extractall(pasta)  # conferido acima
         pacote.unlink(missing_ok=True)

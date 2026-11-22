@@ -96,7 +96,7 @@ def _extrair(pacote: Path, pasta: Path) -> None:
         raiz = pasta.resolve()
         for membro in tar.getmembers():
             alvo = (pasta / membro.name).resolve()
-            if not str(alvo).startswith(str(raiz)) or membro.issym() or membro.islnk():
+            if not alvo.is_relative_to(raiz) or membro.issym() or membro.islnk():
                 raise ErroEstudio("Pacote de modelo inválido.")
         tar.extractall(pasta)  # conferido acima
 
