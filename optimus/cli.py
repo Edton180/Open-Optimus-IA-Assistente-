@@ -225,14 +225,37 @@ def cmd_modelos(args) -> int:
     """Mostra, por família, o melhor modelo que cabe neste PC e se já está instalado."""
     from optimus import hardware, modelos
 
+    from optimus.engine.ollama import MotorOllama
+
     config = cfg.carregar()
+    url = config.get("motor", "url", "http://127.0.0.1:11434")
+    if args.atualizar:
+        r = modelos.atualizar_catalogo(config.get("atualizacao", "github", ""))
+        print(r.get("mensagem") or r.get("erro"))
+        return 0 if r.get("ok") else 1
     hw = hardware.detectar()
+    if args.cabe:
+        r = modelos.cabe_neste_pc(args.cabe, hw, MotorOllama(url).info(args.cabe))
+        if args.json:
+            print(json.dumps(r, ensure_ascii=False, indent=2))
+        elif not r.get("memoria_gb"):
+            print(f"{args.cabe}: {r.get('aviso')}")
+        else:
+            veredito = "cabe" if r["cabe"] else "NÃO cabe (vai ficar lento ou não abre)"
+            print(f"{args.cabe}: precisa de ~{r['memoria_gb']} GB; este PC tem "
+                  f"{r['memoria_util_gb']} GB úteis → {veredito}.")
+        return 0
+    if args.avaliar:
+        r = modelos.avaliar(MotorOllama(url), args.avaliar)
+        print(json.dumps(r, ensure_ascii=False, indent=2) if args.json or not r.get("ok") else
+              f"{args.avaliar}: nota {r['nota']}/10 em {r['segundos']} s "
+              f"({r['tokens_por_segundo']} tokens/s). Resposta: {r['resposta']}")
+        return 0 if r.get("ok") else 1
     perfil = hardware.escolher_perfil(hw)
     memoria, usou_ram = hardware.memoria_util_gb(hw)
     try:
-        from optimus.engine.ollama import MotorOllama
 
-        instalados = MotorOllama(config.get("motor", "url", "http://127.0.0.1:11434")).modelos()
+        instalados = MotorOllama(url).modelos()
     except Exception:
         instalados = []
     por_familia = modelos.melhores_por_familia(hw)
@@ -252,6 +275,13 @@ def cmd_modelos(args) -> int:
         marca = "✓ instalado" if rec["nome"] in instalados else "baixar: optimus instalar-modelo "
         marca += "" if rec["nome"] in instalados else rec["nome"]
         print(f"  {item['familia']:20} {rec['nome']:20} {marca}")
+    novos = modelos.novidades()
+    if novos:
+        print("\nNovidades (lançamentos recentes, ainda em conferência):")
+        for m in novos:
+            print(f"  {m['nome']:22} ~{m['memoria_gb']:>6} GB  {m['laboratorio']:14} "
+                  f"{m['licenca']}")
+    print("\nOutro modelo qualquer: optimus modelos --cabe NOME  |  testar: --avaliar NOME")
     return 0
 
 
@@ -356,6 +386,94 @@ def cmd_aprender(args) -> int:
     return 0
 
 
+def cmd_chaves(args) -> int:
+    from optimus import chaves
+
+    config = cfg.carregar()
+    cofre = chaves.disponivel()
+    if args.acao == "listar":
+        print("Cofre do sistema: " + ("disponível" if cofre else
+                                      "indisponível (pip install keyring)"))
+        for item in chaves.referencias(config):
+            onde = "no cofre ✓" if item["no_cofre"] else "no config.toml (rode: optimus chaves migrar)"
+            print(f"  {item['campo']:40} {onde}")
+        return 0
+    if args.acao == "migrar":
+        r = chaves.migrar(config)
+        print(r.get("mensagem") or r.get("erro"))
+        return 0 if r["ok"] else 1
+    if not args.nome or "." not in args.nome:
+        print("Use um nome secao.campo, ex.: optimus chaves definir provedores.groq_chave")
+        return 1
+    secao, campo = args.nome.split(".", 1)
+    if args.acao == "apagar":
+        chaves.apagar(args.nome)
+        config.definir(secao, campo, "")
+        print(f"{args.nome} apagado. → {config.salvar()}")
+        return 0
+    import getpass
+
+    valor = args.valor or getpass.getpass(f"Valor de {args.nome} (não aparece na tela): ")
+    if not valor:
+        print("Nada foi alterado.")
+        return 1
+    if cofre and chaves.guardar(args.nome, valor):
+        config.definir(secao, campo, chaves.PREFIXO + args.nome)
+        print(f"{args.nome} guardado no cofre do sistema.")
+    else:
+        config.definir(secao, campo, valor)
+        print(f"Cofre indisponível: {args.nome} ficou no config.toml. Para criptografar, "
+              "instale com pip install keyring e rode optimus chaves migrar.")
+    config.salvar()
+    return 0
+
+
+def cmd_mcp(args) -> int:
+    from optimus.mcp_cliente import desligar_todos, ferramentas_mcp
+
+    config = cfg.carregar()
+    servidores = config.dados.get("mcp") or []
+    if not servidores:
+        print("Nenhum servidor MCP em [[mcp]] no config.toml. Veja docs/plugins.md.")
+        return 0
+    ferramentas = ferramentas_mcp(config)
+    for item in ferramentas.values():
+        print(f"  {item.nome:40} {item.descricao[:70]}")
+    print(f"{len(ferramentas)} ferramenta(s) de {len(servidores)} servidor(es).")
+    desligar_todos()
+    return 0
+
+
+def cmd_atualizar(args) -> int:
+    from optimus import autoatualizar
+
+    config = cfg.carregar()
+    if args.canal:
+        config.definir("atualizacao", "canal", args.canal)
+    if args.voltar:
+        r = autoatualizar.voltar(config)
+    elif args.verificar:
+        r = autoatualizar.verificar(config)
+        if r.get("notas"):
+            print("O que mudou:\n" + r["notas"] + "\n")
+    else:
+        info = autoatualizar.verificar(config)
+        if info.get("erro"):
+            print(info["erro"])
+            return 1
+        print(info.get("mensagem", ""))
+        if info.get("atualizado") or (info.get("modo") == "release" and not info.get("disponivel")):
+            return 0
+        if info.get("notas"):
+            print("\nO que mudou:\n" + info["notas"] + "\n")
+        if not args.sim and input("Atualizar agora? [s/N] ").strip().lower() not in ("s", "sim"):
+            print("Nada foi alterado.")
+            return 0
+        r = autoatualizar.baixar(config)
+    print(r.get("mensagem") or r.get("erro") or r)
+    return 0 if r.get("ok", "erro" not in r) else 1
+
+
 def main(argv: list[str] | None = None) -> int:
     if sys.platform == "win32":
         try:
@@ -390,6 +508,9 @@ def main(argv: list[str] | None = None) -> int:
     p.set_defaults(func=cmd_instalar_modelo)
     p = sub.add_parser("modelos", help="melhor modelo para este PC, por família")
     p.add_argument("--json", action="store_true")
+    p.add_argument("--atualizar", action="store_true", help="baixar o catálogo mais novo")
+    p.add_argument("--cabe", metavar="NOME", help="diz se um modelo qualquer cabe neste PC")
+    p.add_argument("--avaliar", metavar="NOME", help="teste rápido de um modelo instalado")
     p.set_defaults(func=cmd_modelos)
     p = sub.add_parser("vozes", help="vozes disponíveis")
     p.add_argument("--baixar", action="store_true", help="instala as vozes offline")
@@ -409,6 +530,19 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--sem-subpastas", action="store_true", help="não entrar nas subpastas")
     p.add_argument("--esquecer", action="store_true", help="remover do índice os docs da pasta")
     p.set_defaults(func=cmd_biblioteca)
+    sub.add_parser("mcp", help="testar os servidores MCP e listar as ferramentas deles"
+                   ).set_defaults(func=cmd_mcp)
+    p = sub.add_parser("chaves", help="guardar chaves de API no cofre do sistema")
+    p.add_argument("acao", choices=["listar", "definir", "apagar", "migrar"])
+    p.add_argument("nome", nargs="?", help="secao.campo, ex.: provedores.groq_chave")
+    p.add_argument("--valor", help="valor (sem isso, pergunta sem mostrar na tela)")
+    p.set_defaults(func=cmd_chaves)
+    p = sub.add_parser("atualizar", help="baixar a versão mais nova do GitHub (ou voltar)")
+    p.add_argument("--verificar", action="store_true", help="só olhar, sem mudar nada")
+    p.add_argument("--voltar", action="store_true", help="desfazer a última atualização")
+    p.add_argument("--sim", action="store_true", help="não perguntar antes de atualizar")
+    p.add_argument("--canal", choices=["estavel", "beta"], help="canal só nesta execução")
+    p.set_defaults(func=cmd_atualizar)
     args = parser.parse_args(argv)
     if not getattr(args, "func", None):
         args.func = cmd_chat

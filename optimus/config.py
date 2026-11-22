@@ -162,6 +162,22 @@ PADRAO: dict[str, Any] = {
         "url": "http://127.0.0.1:7860",
         "online": True,
     },
+    "provedores": {
+        # Modo "IA grátis automática" (motor.backend = "gratis"): usa estes provedores na
+        # ordem; se um bater no limite gratuito ou cair, passa para o próximo sozinho. No
+        # fim, tenta a IA local (Ollama), se estiver ligada. Só entram os que têm chave.
+        "gratis": ["groq", "gemini", "cerebras", "openrouter"],
+        # Chaves (de preferência guardadas no cofre: optimus chaves definir provedores.groq_chave)
+        "groq_chave": "",
+        "gemini_chave": "",
+        "cerebras_chave": "",
+        "openrouter_chave": "",
+        # Modelo de cada provedor: <nome>_modelo = "..." (vazio = o padrão do provedor)
+        "groq_modelo": "",
+        "gemini_modelo": "",
+        "cerebras_modelo": "",
+        "openrouter_modelo": "",
+    },
     "atualizacao": {
         # Autoatualização pelo GitHub (veja docs/atualizacao.md).
         # Pasta do repositório (vazio = a pasta onde o Optimus está instalado, se for um
@@ -169,9 +185,21 @@ PADRAO: dict[str, Any] = {
         "repo": "",
         # Verificar atualizações automaticamente ao iniciar.
         "ao_iniciar": False,
+        # Repositório no GitHub de onde vêm as releases (instalação sem Git).
+        "github": "Edton180/Open-Optimus-IA-Assistente-",
+        # Canal: "estavel" ou "beta" (recebe pré-lançamentos).
+        "canal": "estavel",
+        # Instalar sozinho versões menores e de correção (versão maior sempre pergunta).
+        "automatico": False,
+        # Esperar este tempo depois de publicada antes de instalar sozinho.
+        "espera_horas": 48,
+        # Horário em que pode instalar sozinho, ex.: "02:00-05:00" (vazio = qualquer hora).
+        "janela": "",
     },
     # Outros computadores e outras IAs (veja docs/rede.md)
     "destinos": [],
+    # Servidores MCP: outros apps e serviços viram ferramentas (veja docs/plugins.md)
+    "mcp": [],
     # Outros PCs da casa para ligar (Wake-on-LAN) e comandar por SSH (veja docs/controle.md)
     "computadores": [],
     # Câmeras IP sem Home Assistant: [[cameras]] nome = "Portão" url = "rtsp://..."
@@ -226,7 +254,12 @@ class Config:
         return self.dados[secao]
 
     def get(self, secao: str, chave: str, padrao: Any = None) -> Any:
-        return self.dados.get(secao, {}).get(chave, padrao)
+        valor = self.dados.get(secao, {}).get(chave, padrao)
+        if isinstance(valor, str) and valor.startswith("cofre:"):
+            from optimus import chaves
+
+            return chaves.resolver(valor)
+        return valor
 
     def definir(self, secao: str, chave: str, valor: Any) -> None:
         self.dados.setdefault(secao, {})[chave] = valor

@@ -147,6 +147,13 @@ async function atualizarSistema() {
       aviso.classList.remove("oculto");
     }
     else if (!d.aviso_modelo) aviso.classList.add("oculto");
+    const avisoAt = $("#aviso-atualizacao"), at = d.aviso_atualizacao;
+    if (at && at.mensagem && !avisoAt.dataset.mostrado) {
+      avisoAt.dataset.mostrado = "1";
+      avisoAt.innerHTML = "🔄 " + esc(at.mensagem) + `<div class="linha"><button class="botao pequeno">Entendi</button></div>`;
+      avisoAt.querySelector("button").onclick = () => avisoAt.classList.add("oculto");
+      avisoAt.classList.remove("oculto");
+    }
     const hw = d.hardware;
     $("#hw-info").innerHTML = [
       ["Sistema", `${hw.sistema} ${hw.versao_sistema}`], ["CPU", hw.cpu], ["Núcleos", `${hw.nucleos_fisicos} / ${hw.nucleos_logicos} threads`],
@@ -663,7 +670,7 @@ $("#verificar-atualizacao").addEventListener("click", async () => {
 });
 $("#baixar-atualizacao").addEventListener("click", async (ev) => {
   const estadoEl = $("#atualizacao-estado"); ev.target.disabled = true;
-  estadoEl.textContent = "Baixando e aplicando (git pull seguro)…";
+  estadoEl.textContent = "Baixando e aplicando (sem perder seus dados)…";
   try {
     const d = await api("/api/atualizacao", { method: "POST", json: {} });
     if (d.erro || d.ok === false) { estadoEl.textContent = "⚠️ " + (d.erro || d.mensagem); }

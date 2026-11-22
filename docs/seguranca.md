@@ -41,3 +41,20 @@ Optimus exige uma senha (`optimus config web.senha ...`). Use só em redes de co
 - Deixe `teclado_mouse` desligado se não precisar.
 - Use uma pasta de trabalho (`agente.pasta_trabalho`) para limitar onde os caminhos relativos caem.
 - Leia o comando no cartão de confirmação antes de aprovar.
+
+
+## Chaves de API no cofre do sistema
+
+As chaves de API e senhas podem ficar no cofre criptografado do sistema operacional
+(Gerenciador de Credenciais no Windows, Chaves no macOS, Secret Service/KWallet no Linux), em
+vez de escritas no `config.toml`:
+
+```bash
+pip install keyring                          # ou: pip install "optimus-assistente[seguranca]"
+optimus chaves migrar                        # move as chaves que já estão no config.toml
+optimus chaves definir motor.chave_api       # guarda uma chave nova (não aparece na tela)
+optimus chaves listar                        # mostra o que está no cofre e o que não está
+```
+
+No arquivo fica só a referência (`chave_api = "cofre:motor.chave_api"`). Sem o `keyring`,
+tudo continua funcionando com a chave no arquivo.

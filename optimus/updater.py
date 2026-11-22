@@ -116,8 +116,35 @@ class Atualizador:
             return {"ok": False, "mudou": False,
                     "erro": "Não deu para atualizar sem conflito (pull --ff-only): "
                             + (r.stderr or r.stdout).strip()}
-        return {"ok": True, "mudou": True,
-                "mensagem": f"Atualizado para a versão mais recente do ramo {est.ramo}."}
+        self._registro_anterior().write_text(est.commit_local, encoding="utf-8")
+        return {"ok": True, "mudou": True, "commit_anterior": est.commit_local[:10],
+                "mensagem": f"Atualizado para a versão mais recente do ramo {est.ramo}. "
+                            "Se algo der errado: optimus atualizar --voltar."}
+
+    def _registro_anterior(self) -> Path:
+        from optimus.config import pasta_base
+
+        pasta = pasta_base() / "backups"
+        pasta.mkdir(parents=True, exist_ok=True)
+        return pasta / "git_anterior.txt"
+
+    def voltar(self) -> dict:
+        """Desfaz o último `atualizar`, voltando ao commit de antes (sem apagar mudanças locais).
+
+        Usa `git reset --keep`, que se recusa a continuar se isso fosse sobrescrever algo que
+        você mudou à mão.
+        """
+        registro = self._registro_anterior()
+        if not registro.exists():
+            return {"ok": False, "erro": "Não há atualização para desfazer."}
+        anterior = registro.read_text(encoding="utf-8").strip()
+        r = self._git("reset", "--keep", anterior)
+        if r.returncode != 0:
+            return {"ok": False, "erro": "Não deu para voltar sem mexer nas suas mudanças: "
+                                         + (r.stderr or r.stdout).strip()}
+        registro.unlink()
+        return {"ok": True, "commit": anterior[:10],
+                "mensagem": f"Voltei para o commit {anterior[:10]}. Reinicie o Optimus."}
 
     # ------------------------------------------------------------------ subir (com barreira)
     def _diff_preparado(self) -> str:

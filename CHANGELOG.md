@@ -2,6 +2,21 @@
 
 ## 0.2 (em andamento)
 
+Fase 1 do plano de novas funções:
+
+- **Atualização pelo GitHub para qualquer instalação:** `optimus atualizar` (com `--verificar`,
+  `--voltar`, `--canal beta`). Sem Git, baixa a release, confere o SHA-256, guarda a versão atual e
+  permite voltar. Atualização automática opcional, com tempo de espera, janela de horário e versão
+  maior sempre pedindo confirmação. Workflow que publica releases com `SHA256SUMS`.
+- **Catálogo dinâmico de modelos** (`optimus modelos --atualizar`), com laboratório e licença de cada
+  um e lançamentos recentes (Gemma 4, Qwen 3.6/3.8, GLM‑5.3, Nemotron 3, DeepSeek V4...). Qualquer
+  modelo, mesmo sem avaliação, tem a memória estimada (`--cabe`) e pode ser testado no PC
+  (`--avaliar`).
+- **11 provedores novos** e **IA grátis automática** (`backend = "gratis"`: Groq, Gemini, Cerebras e
+  OpenRouter em fila, trocando sozinho ao bater no limite).
+- **Cofre de chaves** (`optimus chaves`): chaves de API no cofre criptografado do sistema.
+- **Cliente MCP** (`[[mcp]]`, `optimus mcp`): outros apps e serviços viram ferramentas.
+
 - **Licença:** o Optimus passou para a PolyForm Noncommercial 1.0.0 — livre para uso não
   comercial e com licença comercial à parte com o proprietário (LICENSE-COMMERCIAL.md).
 - **Travamentos:** um modelo que para de responder é interrompido com mensagem clara depois de

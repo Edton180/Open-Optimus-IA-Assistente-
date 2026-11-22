@@ -35,3 +35,30 @@ Reinicie o Optimus e peça: *"quanto está o dólar?"*.
 - Erros viram mensagens para o modelo, sem derrubar o Optimus.
 
 Para desligar todos os plugins: `optimus config ferramentas.plugins false`.
+
+
+## Conectar outros apps por MCP
+
+Além de plugins em Python, o Optimus fala **MCP** (Model Context Protocol). Qualquer serviço com
+servidor MCP (GitHub, Notion, Zapier, Google Drive, bancos de dados, o sistema de arquivos...)
+vira ferramenta do Optimus, sem escrever código:
+
+```toml
+[[mcp]]
+nome = "arquivos"
+comando = ["npx", "-y", "@modelcontextprotocol/server-filesystem", "C:/Users/eu/Documentos"]
+
+[[mcp]]
+nome = "notion"
+url = "https://exemplo.com/mcp"
+token = "cofre:mcp.notion.token"   # guarde com: optimus chaves definir mcp.notion.token
+risco = "critico"                  # livre | moderado (padrão) | critico (pede confirmação)
+```
+
+- `comando` roda um servidor local; `url` fala com um servidor remoto (HTTP).
+- Teste com `optimus mcp`: ele conecta e lista as ferramentas de cada servidor.
+- Cada ferramenta aparece como `mcp_<servidor>_<ferramenta>`. Para o modelo usar, cite o
+  servidor no pedido: *"procura no notion a ata de ontem"*.
+- Um servidor que não abrir é pulado, com aviso no log; o Optimus abre normalmente.
+- Por segurança, ferramentas MCP são **moderadas** por padrão. Use `risco = "critico"` para
+  servidores que mexem em coisas importantes.

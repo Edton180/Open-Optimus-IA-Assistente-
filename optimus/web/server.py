@@ -23,7 +23,6 @@ from urllib.parse import parse_qs, urlparse
 
 import psutil
 
-import optimus as optimus_mod
 from optimus import __version__
 from optimus import config as cfg
 from optimus.agent import mensagens_para_historico
@@ -342,6 +341,7 @@ class Manipulador(BaseHTTPRequestHandler):
                 "modo": optimus.config.get("agente", "modo"),
                 "avisos": estado.avisos[-10:],
                 "aviso_modelo": optimus.aviso_modelo,
+                "aviso_atualizacao": getattr(optimus, "aviso_atualizacao", None),
             })
         if recurso == "conversas":
             if metodo == "GET" and not ident:
@@ -458,17 +458,14 @@ class Manipulador(BaseHTTPRequestHandler):
         if recurso == "acoes":
             return self._json({"acoes": optimus.auditoria.ultimas(100)})
         if recurso == "atualizacao":
-            from optimus.updater import Atualizador, ErroGit
+            # Git (clone) ou release do GitHub (instalação sem Git), com SHA-256 e voltar.
+            from optimus import autoatualizar
 
-            raiz = optimus.config.get("atualizacao", "repo", "") or \
-                str(Path(optimus_mod.__file__).resolve().parent.parent)
-            try:
-                atual = Atualizador(raiz)
-                if metodo == "POST":
-                    return self._json(atual.atualizar())
-                return self._json(atual.verificar())
-            except ErroGit as erro:
-                return self._json({"erro": str(erro)}, 503)
+            if metodo == "POST" and ident == "voltar":
+                return self._json(autoatualizar.voltar(optimus.config))
+            if metodo == "POST":
+                return self._json(autoatualizar.baixar(optimus.config))
+            return self._json(autoatualizar.verificar(optimus.config))
         if recurso == "vozes":
             chave = optimus.config.get("voz", "elevenlabs_chave", "")
             return self._json({

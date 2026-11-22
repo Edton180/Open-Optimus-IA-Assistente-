@@ -1,0 +1,509 @@
+{
+ "versao": 20261122,
+ "nota": "confirmado=false: nome no Ollama ainda não conferido; não é recomendado automaticamente, só listado em novidades.",
+ "modelos": [
+  {
+   "nome": "qwen3.5:0.8b",
+   "familia": "Qwen",
+   "memoria_gb": 1.2,
+   "tipo": "geral",
+   "descricao": "Mínimo, para PCs muito fracos",
+   "laboratorio": "Alibaba",
+   "licenca": "Apache-2.0",
+   "confirmado": true,
+   "capacidades": [
+    "tools"
+   ]
+  },
+  {
+   "nome": "qwen3.5:2b",
+   "familia": "Qwen",
+   "memoria_gb": 2.2,
+   "tipo": "geral",
+   "descricao": "Leve e rápido, bom para voz",
+   "laboratorio": "Alibaba",
+   "licenca": "Apache-2.0",
+   "confirmado": true,
+   "capacidades": [
+    "tools"
+   ]
+  },
+  {
+   "nome": "qwen3.5:4b",
+   "familia": "Qwen",
+   "memoria_gb": 3.6,
+   "tipo": "geral",
+   "descricao": "Equilíbrio para PC intermediário",
+   "laboratorio": "Alibaba",
+   "licenca": "Apache-2.0",
+   "confirmado": true,
+   "capacidades": [
+    "tools"
+   ]
+  },
+  {
+   "nome": "qwen3.5:9b",
+   "familia": "Qwen",
+   "memoria_gb": 7.0,
+   "tipo": "geral",
+   "descricao": "Inteligente, pede 8 GB livres",
+   "laboratorio": "Alibaba",
+   "licenca": "Apache-2.0",
+   "confirmado": true,
+   "capacidades": [
+    "tools"
+   ]
+  },
+  {
+   "nome": "qwen3.5:27b",
+   "familia": "Qwen",
+   "memoria_gb": 18.0,
+   "tipo": "geral",
+   "descricao": "Muito forte, placa de 24 GB",
+   "laboratorio": "Alibaba",
+   "licenca": "Apache-2.0",
+   "confirmado": true,
+   "capacidades": [
+    "tools"
+   ]
+  },
+  {
+   "nome": "qwen3.5:35b-a3b",
+   "familia": "Qwen",
+   "memoria_gb": 24.0,
+   "tipo": "geral",
+   "descricao": "MoE: rápido na CPU com muita RAM",
+   "laboratorio": "Alibaba",
+   "licenca": "Apache-2.0",
+   "confirmado": true,
+   "capacidades": [
+    "tools"
+   ]
+  },
+  {
+   "nome": "qwen2.5-coder:7b",
+   "familia": "Qwen",
+   "memoria_gb": 5.5,
+   "tipo": "codigo",
+   "descricao": "Especialista em programação",
+   "laboratorio": "Alibaba",
+   "licenca": "Apache-2.0",
+   "confirmado": true,
+   "capacidades": [
+    "tools"
+   ]
+  },
+  {
+   "nome": "qwen2.5-coder:14b",
+   "familia": "Qwen",
+   "memoria_gb": 10.0,
+   "tipo": "codigo",
+   "descricao": "Programação, mais forte",
+   "laboratorio": "Alibaba",
+   "licenca": "Apache-2.0",
+   "confirmado": true,
+   "capacidades": [
+    "tools"
+   ]
+  },
+  {
+   "nome": "gemma3:1b",
+   "familia": "Gemma (Google)",
+   "memoria_gb": 1.2,
+   "tipo": "geral",
+   "descricao": "Pequeno do Google",
+   "laboratorio": "Google",
+   "licenca": "Gemma Terms",
+   "confirmado": true,
+   "capacidades": [
+    "tools"
+   ]
+  },
+  {
+   "nome": "gemma3:4b",
+   "familia": "Gemma (Google)",
+   "memoria_gb": 4.0,
+   "tipo": "visao",
+   "descricao": "Entende imagens",
+   "laboratorio": "Google",
+   "licenca": "Gemma Terms",
+   "confirmado": true,
+   "capacidades": [
+    "vision"
+   ]
+  },
+  {
+   "nome": "gemma3:12b",
+   "familia": "Gemma (Google)",
+   "memoria_gb": 9.5,
+   "tipo": "visao",
+   "descricao": "Forte, entende imagens",
+   "laboratorio": "Google",
+   "licenca": "Gemma Terms",
+   "confirmado": true,
+   "capacidades": [
+    "vision"
+   ]
+  },
+  {
+   "nome": "gemma3:27b",
+   "familia": "Gemma (Google)",
+   "memoria_gb": 19.0,
+   "tipo": "visao",
+   "descricao": "O maior Gemma",
+   "laboratorio": "Google",
+   "licenca": "Gemma Terms",
+   "confirmado": true,
+   "capacidades": [
+    "vision"
+   ]
+  },
+  {
+   "nome": "llama3.2:1b",
+   "familia": "Llama (Meta)",
+   "memoria_gb": 1.5,
+   "tipo": "geral",
+   "descricao": "Pequeno da Meta",
+   "laboratorio": "Meta",
+   "licenca": "Llama 3.2 Community",
+   "confirmado": true,
+   "capacidades": [
+    "tools"
+   ]
+  },
+  {
+   "nome": "llama3.2:3b",
+   "familia": "Llama (Meta)",
+   "memoria_gb": 2.8,
+   "tipo": "geral",
+   "descricao": "Leve da Meta",
+   "laboratorio": "Meta",
+   "licenca": "Llama 3.2 Community",
+   "confirmado": true,
+   "capacidades": [
+    "tools"
+   ]
+  },
+  {
+   "nome": "llama3.1:8b",
+   "familia": "Llama (Meta)",
+   "memoria_gb": 6.0,
+   "tipo": "geral",
+   "descricao": "Clássico da Meta",
+   "laboratorio": "Meta",
+   "licenca": "Llama 3.1 Community",
+   "confirmado": true,
+   "capacidades": [
+    "tools"
+   ]
+  },
+  {
+   "nome": "deepseek-r1:1.5b",
+   "familia": "DeepSeek",
+   "memoria_gb": 1.6,
+   "tipo": "raciocinio",
+   "descricao": "Raciocínio, pequeno",
+   "laboratorio": "DeepSeek",
+   "licenca": "MIT",
+   "confirmado": true,
+   "capacidades": [
+    "tools",
+    "thinking"
+   ]
+  },
+  {
+   "nome": "deepseek-r1:7b",
+   "familia": "DeepSeek",
+   "memoria_gb": 5.5,
+   "tipo": "raciocinio",
+   "descricao": "Raciocínio",
+   "laboratorio": "DeepSeek",
+   "licenca": "MIT",
+   "confirmado": true,
+   "capacidades": [
+    "tools",
+    "thinking"
+   ]
+  },
+  {
+   "nome": "deepseek-r1:14b",
+   "familia": "DeepSeek",
+   "memoria_gb": 10.5,
+   "tipo": "raciocinio",
+   "descricao": "Raciocínio forte",
+   "laboratorio": "DeepSeek",
+   "licenca": "MIT",
+   "confirmado": true,
+   "capacidades": [
+    "tools",
+    "thinking"
+   ]
+  },
+  {
+   "nome": "deepseek-r1:32b",
+   "familia": "DeepSeek",
+   "memoria_gb": 21.0,
+   "tipo": "raciocinio",
+   "descricao": "Raciocínio muito forte",
+   "laboratorio": "DeepSeek",
+   "licenca": "MIT",
+   "confirmado": true,
+   "capacidades": [
+    "tools",
+    "thinking"
+   ]
+  },
+  {
+   "nome": "phi4-mini",
+   "familia": "Phi (Microsoft)",
+   "memoria_gb": 3.2,
+   "tipo": "geral",
+   "descricao": "Pequeno da Microsoft",
+   "laboratorio": "Microsoft",
+   "licenca": "MIT",
+   "confirmado": true,
+   "capacidades": [
+    "tools"
+   ]
+  },
+  {
+   "nome": "phi4:14b",
+   "familia": "Phi (Microsoft)",
+   "memoria_gb": 10.0,
+   "tipo": "raciocinio",
+   "descricao": "Bom em lógica e matemática",
+   "laboratorio": "Microsoft",
+   "licenca": "MIT",
+   "confirmado": true,
+   "capacidades": [
+    "tools",
+    "thinking"
+   ]
+  },
+  {
+   "nome": "mistral:7b",
+   "familia": "Mistral",
+   "memoria_gb": 5.0,
+   "tipo": "geral",
+   "descricao": "Clássico europeu",
+   "laboratorio": "Mistral AI",
+   "licenca": "Apache-2.0",
+   "confirmado": true,
+   "capacidades": [
+    "tools"
+   ]
+  },
+  {
+   "nome": "mistral-small3.2:24b",
+   "familia": "Mistral",
+   "memoria_gb": 16.0,
+   "tipo": "visao",
+   "descricao": "Forte, com visão",
+   "laboratorio": "Mistral AI",
+   "licenca": "Apache-2.0",
+   "confirmado": true,
+   "capacidades": [
+    "vision"
+   ]
+  },
+  {
+   "nome": "gpt-oss:20b",
+   "familia": "gpt-oss (OpenAI)",
+   "memoria_gb": 14.0,
+   "tipo": "raciocinio",
+   "descricao": "Modelo aberto da OpenAI",
+   "laboratorio": "OpenAI",
+   "licenca": "Apache-2.0",
+   "confirmado": true,
+   "capacidades": [
+    "tools",
+    "thinking"
+   ]
+  },
+  {
+   "nome": "gpt-oss:120b",
+   "familia": "gpt-oss (OpenAI)",
+   "memoria_gb": 66.0,
+   "tipo": "raciocinio",
+   "descricao": "Gigante, estação de trabalho",
+   "laboratorio": "OpenAI",
+   "licenca": "Apache-2.0",
+   "confirmado": true,
+   "capacidades": [
+    "tools",
+    "thinking"
+   ]
+  },
+  {
+   "nome": "gemma4:e2b",
+   "familia": "Gemma (Google)",
+   "memoria_gb": 2.5,
+   "tipo": "visao",
+   "descricao": "Gemma 4 de bolso: roda até no celular, entende áudio",
+   "laboratorio": "Google",
+   "licenca": "Apache-2.0",
+   "confirmado": false,
+   "capacidades": [
+    "vision"
+   ]
+  },
+  {
+   "nome": "gemma4:e4b",
+   "familia": "Gemma (Google)",
+   "memoria_gb": 4.0,
+   "tipo": "visao",
+   "descricao": "Gemma 4 leve, entende imagem e áudio",
+   "laboratorio": "Google",
+   "licenca": "Apache-2.0",
+   "confirmado": false,
+   "capacidades": [
+    "vision"
+   ]
+  },
+  {
+   "nome": "gemma4:12b",
+   "familia": "Gemma (Google)",
+   "memoria_gb": 9.0,
+   "tipo": "visao",
+   "descricao": "Gemma 4 intermediário, imagem e áudio",
+   "laboratorio": "Google",
+   "licenca": "Apache-2.0",
+   "confirmado": false,
+   "capacidades": [
+    "vision"
+   ]
+  },
+  {
+   "nome": "gemma4:26b-a4b",
+   "familia": "Gemma (Google)",
+   "memoria_gb": 17.0,
+   "tipo": "visao",
+   "descricao": "Gemma 4 MoE: rápido com muita RAM",
+   "laboratorio": "Google",
+   "licenca": "Apache-2.0",
+   "confirmado": false,
+   "capacidades": [
+    "vision"
+   ]
+  },
+  {
+   "nome": "gemma4:31b",
+   "familia": "Gemma (Google)",
+   "memoria_gb": 21.0,
+   "tipo": "visao",
+   "descricao": "O maior Gemma 4",
+   "laboratorio": "Google",
+   "licenca": "Apache-2.0",
+   "confirmado": false,
+   "capacidades": [
+    "vision"
+   ]
+  },
+  {
+   "nome": "qwen3.6:27b",
+   "familia": "Qwen",
+   "memoria_gb": 18.0,
+   "tipo": "geral",
+   "descricao": "Qwen 3.6, forte em programação e agentes",
+   "laboratorio": "Alibaba",
+   "licenca": "Apache-2.0",
+   "confirmado": false,
+   "capacidades": [
+    "tools"
+   ]
+  },
+  {
+   "nome": "qwen3.6:35b-a3b",
+   "familia": "Qwen",
+   "memoria_gb": 24.0,
+   "tipo": "geral",
+   "descricao": "Qwen 3.6 MoE: rápido na CPU com muita RAM",
+   "laboratorio": "Alibaba",
+   "licenca": "Apache-2.0",
+   "confirmado": false,
+   "capacidades": [
+    "tools"
+   ]
+  },
+  {
+   "nome": "qwen3.8:27b",
+   "familia": "Qwen",
+   "memoria_gb": 18.0,
+   "tipo": "geral",
+   "descricao": "Qwen 3.8, o melhor de uma placa de 24 GB",
+   "laboratorio": "Alibaba",
+   "licenca": "Apache-2.0",
+   "confirmado": false,
+   "capacidades": [
+    "tools"
+   ]
+  },
+  {
+   "nome": "glm-5.3-flash",
+   "familia": "GLM (Z.ai)",
+   "memoria_gb": 190.0,
+   "tipo": "geral",
+   "descricao": "GLM 5.3 Flash MoE (320B/18B), multimodal",
+   "laboratorio": "Z.ai",
+   "licenca": "MIT",
+   "confirmado": false,
+   "capacidades": [
+    "tools"
+   ]
+  },
+  {
+   "nome": "nemotron3-ultra",
+   "familia": "Nemotron (NVIDIA)",
+   "memoria_gb": 320.0,
+   "tipo": "raciocinio",
+   "descricao": "Nemotron 3 Ultra, dados de treino documentados",
+   "laboratorio": "NVIDIA",
+   "licenca": "OpenMDW-1.1",
+   "confirmado": false,
+   "capacidades": [
+    "tools",
+    "thinking"
+   ]
+  },
+  {
+   "nome": "deepseek-v4-flash",
+   "familia": "DeepSeek",
+   "memoria_gb": 165.0,
+   "tipo": "raciocinio",
+   "descricao": "DeepSeek V4 Flash (284B/13B), contexto de 1M",
+   "laboratorio": "DeepSeek",
+   "licenca": "MIT",
+   "confirmado": false,
+   "capacidades": [
+    "tools",
+    "thinking"
+   ]
+  },
+  {
+   "nome": "beam",
+   "familia": "Beam (Reflection AI)",
+   "memoria_gb": 290.0,
+   "tipo": "codigo",
+   "descricao": "Beam (501B/23B), programação",
+   "laboratorio": "Reflection AI",
+   "licenca": "Apache-2.0",
+   "confirmado": false,
+   "capacidades": [
+    "tools"
+   ]
+  },
+  {
+   "nome": "muse-spark-open",
+   "familia": "Muse (Meta)",
+   "memoria_gb": 470.0,
+   "tipo": "visao",
+   "descricao": "Muse Spark Open: texto, imagem, áudio e vídeo",
+   "laboratorio": "Meta",
+   "licenca": "Muse Model License",
+   "confirmado": false,
+   "capacidades": [
+    "vision"
+   ]
+  }
+ ]
+}

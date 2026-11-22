@@ -22,6 +22,15 @@ def normal(texto: str) -> str:
 
 # (regex sobre o texto normalizado, ferramentas). A ordem define a prioridade.
 INTENCOES: list[tuple[str, list[str]]] = [
+    (r"\b(atualiz|versao (nova|mais nova|anterior)|nova versao|update|voltar? (a|para a) versao|"
+     r"desfaz(er)? a atualiza)",
+     ["atualizacao_verificar", "atualizacao_baixar", "atualizacao_voltar"]),
+    (r"\b(modelos?|cerebro|llm)\b.{0,40}\b(melhor|baix|instal|cabe|roda|test|avali|usar|use|"
+     r"troc|lista|catalogo|novo|novos|recomend)|\b(melhor|qual) (modelo|ia)\b",
+     ["modelos_recomendados", "modelo_cabe", "modelo_avaliar", "modelo_baixar", "modelo_usar",
+      "modelos_catalogo_atualizar"]),
+    (r"\bbibliotec", ["biblioteca_indexar", "biblioteca_listar", "biblioteca_esquecer",
+                       "consultar_conhecimento"]),
     (r"\b(lembre(-| )?me|me lembr|lembrete|alarme|despert|timer|cronometro|contagem regressiva|"
      r"avise[- ]me|me avis|agend)",
      ["criar_lembrete", "listar_lembretes", "cancelar_lembretes",
@@ -100,6 +109,12 @@ def selecionar_ferramentas(texto: str, disponiveis: dict[str, Any], pequeno: boo
     for nome in extras or []:
         if nome in disponiveis and nome not in escolhidas:
             escolhidas.append(nome)
+    # Ferramentas MCP: entram quando o pedido cita o servidor ("no notion", "pelo github").
+    for nome, item in disponiveis.items():
+        if nome.startswith("mcp_") and nome not in escolhidas:
+            servidor = normal(str(getattr(item, "descricao", "")).split("]", 1)[0].lstrip("["))
+            if servidor and re.search(rf"\b{re.escape(servidor)}\b", t):
+                escolhidas.append(nome)
     limite = 6 if pequeno else 16
     return {n: disponiveis[n] for n in escolhidas[:limite]}
 
@@ -149,7 +164,7 @@ _SITES = {"youtube": "https://www.youtube.com", "google": "https://www.google.co
 _IMAGEM = re.compile(
     r"^(?:(?:ei |ok )?optimus[, ]*)?(?:gere|gera|gerar|crie|cria|criar|desenhe|desenha|fa[cç]a|"
     r"faz|fazer)( pra mim| para mim)?( uma| um)? (?:imagem|desenho|ilustra[cç][aã]o|foto|arte)"
-    r"(?: de| do| da| dos| das| com| sobre)?\s*[:\-]?\s*(?P<d>.{3,})", re.I)
+    r"(?: de| do| da| dos| das| com| sobre)?\s*[:\-]?\s*(?P<d>.{3,})", re.IGNORECASE)
 
 
 def roteador_rapido(texto: str) -> tuple[str, dict[str, Any]] | None:

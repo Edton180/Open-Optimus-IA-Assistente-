@@ -299,9 +299,9 @@ textarea.campo { resize: vertical; }
 .anel b { font-size: 15px; line-height: 1; margin-top: -6px; }
 .anel span { position: absolute; bottom: 22%; font-size: 10px; letter-spacing: .12em; color: var(--sutil); }
 #grafico-cpu { width: 100%; height: 54px; display: block; margin: 2px 0 12px; }
-#aviso-modelo { border: 1px solid #3fd8ff; background: rgba(63,216,255,.08); border-radius: 12px; padding: 10px 12px;
+#aviso-modelo, #aviso-atualizacao { border: 1px solid #3fd8ff; background: rgba(63,216,255,.08); border-radius: 12px; padding: 10px 12px;
   font-size: 13px; margin-bottom: 14px; }
-#aviso-modelo .botao { margin-top: 8px; }
+#aviso-modelo .botao, #aviso-atualizacao .botao { margin-top: 8px; }
 
 /* Abertura */
 #boot { position: fixed; inset: 0; z-index: 100; background: #02060c; display: grid; place-content: center;

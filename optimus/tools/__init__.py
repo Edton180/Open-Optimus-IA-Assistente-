@@ -53,7 +53,12 @@ def ferramentas_ativas(config) -> dict[str, Ferramenta]:
             continue
         if item.grupo in ("geral",) or grupos.get(item.grupo, True):
             ativas[nome] = item
+    if config.dados.get("mcp") and grupos.get("mcp", True):
+        from optimus.mcp_cliente import ferramentas_mcp
+
+        for nome, item in ferramentas_mcp(config).items():
+            ativas.setdefault(nome, item)  # uma ferramenta nativa nunca é substituída
     return ativas
 
 
-__all__ = ["Contexto", "Ferramenta", "ferramenta", "ferramentas_ativas", "carregar_plugins"]
+__all__ = ["Contexto", "Ferramenta", "carregar_plugins", "ferramenta", "ferramentas_ativas"]
