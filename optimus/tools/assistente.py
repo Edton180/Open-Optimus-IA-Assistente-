@@ -44,7 +44,7 @@ def trocar_voz(ctx, voz: str):
 def palavra_ativacao_definir(ctx, palavra: str):
     palavra = (palavra or "").strip().split()[0] if (palavra or "").strip() else ""
     palavra = re.sub(r"[^\w-]", "", palavra).lower()
-    if len(palavra) < 2:
+    if sum(c.isalpha() for c in palavra) < 2:
         return {"erro": "A palavra de ativação precisa ter pelo menos 2 letras."}
     ctx.config.definir("voz", "palavra_ativacao", palavra)
     ctx.config.salvar()

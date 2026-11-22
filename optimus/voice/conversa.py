@@ -55,6 +55,8 @@ def conversar_por_voz(agente, config, ao_texto=print) -> None:
         if not texto:
             continue
         em_conversa = time.monotonic() - ultima_resposta < JANELA_CONVERSA
+        # relê a cada volta para pegar uma troca de palavra de ativação sem reiniciar.
+        palavra = config.get("voz", "palavra_ativacao") or "optimus"
         achou, resto = contem_palavra_ativacao(texto, palavra)
         if not achou and not em_conversa:
             continue

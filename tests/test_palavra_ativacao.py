@@ -32,6 +32,14 @@ def test_definir_curta_demais_erra(tmp_path):
     assert "erro" in assistente.palavra_ativacao_definir(ctx, "   ")
 
 
+def test_definir_exige_letras(tmp_path):
+    ctx = _ctx(tmp_path)
+    assert "erro" in assistente.palavra_ativacao_definir(ctx, "--")   # sem letras
+    assert "erro" in assistente.palavra_ativacao_definir(ctx, "7-")   # 0 letras
+    # não deve ter persistido nada inválido: continua o padrão
+    assert ctx.config.get("voz", "palavra_ativacao", "optimus") == "optimus"
+
+
 def test_roteamento_expoe_palavra_ativacao():
     from optimus.roteador import selecionar_ferramentas
 
