@@ -384,6 +384,48 @@ def cmd_aprender(args) -> int:
     return 0
 
 
+def cmd_chaves(args) -> int:
+    from optimus import chaves
+
+    config = cfg.carregar()
+    cofre = chaves.disponivel()
+    if args.acao == "listar":
+        print("Cofre do sistema: " + ("disponível" if cofre else
+                                      "indisponível (pip install keyring)"))
+        for item in chaves.referencias(config):
+            onde = "no cofre ✓" if item["no_cofre"] else "no config.toml (rode: optimus chaves migrar)"
+            print(f"  {item['campo']:40} {onde}")
+        return 0
+    if args.acao == "migrar":
+        r = chaves.migrar(config)
+        print(r.get("mensagem") or r.get("erro"))
+        return 0 if r["ok"] else 1
+    if not args.nome or "." not in args.nome:
+        print("Use um nome secao.campo, ex.: optimus chaves definir provedores.groq_chave")
+        return 1
+    secao, campo = args.nome.split(".", 1)
+    if args.acao == "apagar":
+        chaves.apagar(args.nome)
+        config.definir(secao, campo, "")
+        print(f"{args.nome} apagado. → {config.salvar()}")
+        return 0
+    import getpass
+
+    valor = args.valor or getpass.getpass(f"Valor de {args.nome} (não aparece na tela): ")
+    if not valor:
+        print("Nada foi alterado.")
+        return 1
+    if cofre and chaves.guardar(args.nome, valor):
+        config.definir(secao, campo, chaves.PREFIXO + args.nome)
+        print(f"{args.nome} guardado no cofre do sistema.")
+    else:
+        config.definir(secao, campo, valor)
+        print(f"Cofre indisponível: {args.nome} ficou no config.toml. Para criptografar, "
+              "instale com pip install keyring e rode optimus chaves migrar.")
+    config.salvar()
+    return 0
+
+
 def cmd_atualizar(args) -> int:
     from optimus import autoatualizar
 
@@ -470,6 +512,11 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--sem-subpastas", action="store_true", help="não entrar nas subpastas")
     p.add_argument("--esquecer", action="store_true", help="remover do índice os docs da pasta")
     p.set_defaults(func=cmd_biblioteca)
+    p = sub.add_parser("chaves", help="guardar chaves de API no cofre do sistema")
+    p.add_argument("acao", choices=["listar", "definir", "apagar", "migrar"])
+    p.add_argument("nome", nargs="?", help="secao.campo, ex.: provedores.groq_chave")
+    p.add_argument("--valor", help="valor (sem isso, pergunta sem mostrar na tela)")
+    p.set_defaults(func=cmd_chaves)
     p = sub.add_parser("atualizar", help="baixar a versão mais nova do GitHub (ou voltar)")
     p.add_argument("--verificar", action="store_true", help="só olhar, sem mudar nada")
     p.add_argument("--voltar", action="store_true", help="desfazer a última atualização")

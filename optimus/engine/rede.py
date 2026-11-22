@@ -43,9 +43,39 @@ PROVEDORES: dict[str, dict[str, str]] = {
     "openrouter": {"url": "https://openrouter.ai/api/v1", "modelo": "openrouter/auto"},
     "deepseek": {"url": "https://api.deepseek.com/v1", "modelo": "deepseek-chat"},
     "mistral": {"url": "https://api.mistral.ai/v1", "modelo": "mistral-large-latest"},
+    "cerebras": {"url": "https://api.cerebras.ai/v1", "modelo": "gpt-oss-120b"},
+    "qwen": {"url": "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
+             "modelo": "qwen-plus"},
+    # Modelo vazio = o Optimus escolhe sozinho na lista do provedor (/models).
+    "moonshot": {"url": "https://api.moonshot.ai/v1", "modelo": ""},
+    "zai": {"url": "https://api.z.ai/api/paas/v4", "modelo": ""},
+    "nvidia": {"url": "https://integrate.api.nvidia.com/v1", "modelo": ""},
+    "xai": {"url": "https://api.x.ai/v1", "modelo": ""},
+    "together": {"url": "https://api.together.xyz/v1", "modelo": ""},
+    "fireworks": {"url": "https://api.fireworks.ai/inference/v1", "modelo": ""},
+    "sambanova": {"url": "https://api.sambanova.ai/v1", "modelo": ""},
+    "huggingface": {"url": "https://router.huggingface.co/v1", "modelo": ""},
     "lmstudio": {"url": "http://127.0.0.1:1234/v1", "modelo": ""},
     "llamacpp": {"url": "http://127.0.0.1:8080/v1", "modelo": ""},
+    "vllm": {"url": "http://127.0.0.1:8000/v1", "modelo": ""},
 }
+
+# Ao escolher sozinho o modelo de um provedor, prefere nomes com estas palavras (na ordem).
+# Modelos ":free" primeiro (OpenRouter), depois os grandes de uso geral.
+PREFERENCIA = (":free", "instruct", "chat", "turbo", "flash", "")
+_EVITAR = ("embed", "whisper", "tts", "audio", "image", "vision-preview", "guard", "rerank",
+           "moderation")
+
+
+def escolher_modelo(lista: list[str]) -> str:
+    """Escolhe um modelo de conversa razoável na lista de um provedor."""
+    bons = [m for m in lista if not any(e in m.lower() for e in _EVITAR)]
+    for palavra in PREFERENCIA:
+        achados = [m for m in bons if palavra in m.lower()]
+        if achados:
+            return achados[0]
+    return lista[0] if lista else ""
+
 
 
 @dataclass
@@ -55,10 +85,13 @@ class Destino:
     modelo: str = ""
     prioridade: int = 5
     local: bool = True
+    testar: bool = True  # False = sempre tenta (provedor único: não há para onde fugir)
     _ultimo_teste: float = field(default=float("-inf"), repr=False)  # nunca testado
     _ligado: bool = field(default=False, repr=False)
 
     def ligado(self, cache_segundos: float = 30.0) -> bool:
+        if not self.testar:
+            return True
         agora = time.monotonic()
         # Destino desligado só é testado de novo depois de 2 minutos, para não atrasar pedidos.
         espera = cache_segundos if self._ligado else 120.0
@@ -67,9 +100,44 @@ class Destino:
             self._ultimo_teste = agora
         return self._ligado
 
+    def modelo_para(self, geral: str) -> str:
+        """Modelo deste destino. Na nuvem sem modelo definido, escolhe um na lista dele."""
+        if self.modelo:
+            return self.modelo
+        if self.local:
+            return geral
+        try:
+            self.modelo = escolher_modelo(self.motor.modelos())
+        except Exception:  # noqa: BLE001
+            self.modelo = ""
+        return self.modelo or geral
+
     def descartar(self) -> None:
         self._ligado = False
         self._ultimo_teste = time.monotonic()
+
+
+def destinos_gratis(config) -> list[Destino]:
+    """IA grátis automática: provedores com plano gratuito, na ordem, e a IA local no fim.
+
+    Se um bater no limite gratuito (erro 429) ou cair, o pedido passa para o próximo e ele
+    fica de lado por 2 minutos. Só entram os provedores com chave cadastrada.
+    """
+    saida = []
+    for i, nome in enumerate(config.get("provedores", "gratis", []) or []):
+        nome = str(nome).lower()
+        chave = config.get("provedores", f"{nome}_chave", "")
+        if nome not in PROVEDORES or not chave:
+            continue
+        info = PROVEDORES[nome]
+        modelo = config.get("provedores", f"{nome}_modelo", "") or info["modelo"]
+        saida.append(Destino(nome=nome, motor=MotorOpenAI(info["url"], chave_api=chave),
+                             modelo=modelo, prioridade=i + 1, local=False))
+    url_local = config.get("motor", "url", "") or "http://127.0.0.1:11434"
+    if "11434" not in url_local:
+        url_local = "http://127.0.0.1:11434"
+    saida.append(Destino(nome="IA local", motor=MotorOllama(url_local), prioridade=99))
+    return saida
 
 
 def criar_destino(dados: dict[str, Any]) -> Destino:
@@ -82,7 +150,9 @@ def criar_destino(dados: dict[str, Any]) -> Destino:
     if backend == "ollama":
         motor: Motor = MotorOllama(url or "http://127.0.0.1:11434")
     else:
-        motor = MotorOpenAI(url, chave_api=dados.get("chave_api", ""))
+        from optimus.chaves import resolver
+
+        motor = MotorOpenAI(url, chave_api=resolver(dados.get("chave_api", "")) or "")
     local = any(p in url for p in ("127.0.0.1", "localhost", "192.168.", "10.", "172.16."))
     return Destino(nome=dados.get("nome") or backend, motor=motor, modelo=modelo,
                    prioridade=int(dados.get("prioridade", 5)), local=local)
@@ -112,7 +182,7 @@ class MotorRede(Motor):
                     ao_pedaco(pedaco)
 
             try:
-                resposta = destino.motor.conversar(mensagens, destino.modelo or modelo,
+                resposta = destino.motor.conversar(mensagens, destino.modelo_para(modelo),
                                                    ferramentas, opcoes, ao_pedaco=repassar,
                                                    cancelado=cancelado)
                 self.ultimo_destino = destino
@@ -128,7 +198,7 @@ class MotorRede(Motor):
     def transmitir(self, mensagens, modelo, opcoes=None):
         for destino in self._candidatos():
             try:
-                yield from destino.motor.transmitir(mensagens, destino.modelo or modelo, opcoes)
+                yield from destino.motor.transmitir(mensagens, destino.modelo_para(modelo), opcoes)
                 self.ultimo_destino = destino
                 return
             except ErroMotor:

@@ -162,6 +162,22 @@ PADRAO: dict[str, Any] = {
         "url": "http://127.0.0.1:7860",
         "online": True,
     },
+    "provedores": {
+        # Modo "IA grátis automática" (motor.backend = "gratis"): usa estes provedores na
+        # ordem; se um bater no limite gratuito ou cair, passa para o próximo sozinho. No
+        # fim, tenta a IA local (Ollama), se estiver ligada. Só entram os que têm chave.
+        "gratis": ["groq", "gemini", "cerebras", "openrouter"],
+        # Chaves (de preferência guardadas no cofre: optimus chaves definir provedores.groq_chave)
+        "groq_chave": "",
+        "gemini_chave": "",
+        "cerebras_chave": "",
+        "openrouter_chave": "",
+        # Modelo de cada provedor: <nome>_modelo = "..." (vazio = o padrão do provedor)
+        "groq_modelo": "",
+        "gemini_modelo": "",
+        "cerebras_modelo": "",
+        "openrouter_modelo": "",
+    },
     "atualizacao": {
         # Autoatualização pelo GitHub (veja docs/atualizacao.md).
         # Pasta do repositório (vazio = a pasta onde o Optimus está instalado, se for um
@@ -236,7 +252,12 @@ class Config:
         return self.dados[secao]
 
     def get(self, secao: str, chave: str, padrao: Any = None) -> Any:
-        return self.dados.get(secao, {}).get(chave, padrao)
+        valor = self.dados.get(secao, {}).get(chave, padrao)
+        if isinstance(valor, str) and valor.startswith("cofre:"):
+            from optimus import chaves
+
+            return chaves.resolver(valor)
+        return valor
 
     def definir(self, secao: str, chave: str, valor: Any) -> None:
         self.dados.setdefault(secao, {})[chave] = valor

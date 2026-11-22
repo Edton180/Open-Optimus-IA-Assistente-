@@ -27,7 +27,9 @@ casa = ["bleak>=0.22"]
 documentos = ["pypdf>=4.0"]
 # Controle de mouse, teclado e capturas de tela
 desktop = ["pyautogui>=0.9", "mss>=9.0", "pyperclip>=1.8"]
-completo = ["optimus-assistente[voz,desktop,casa,documentos]"]
+# Cofre do sistema para as chaves de API (Windows, macOS e Linux)
+seguranca = ["keyring>=25"]
+completo = ["optimus-assistente[voz,desktop,casa,documentos,seguranca]"]
 dev = ["pytest>=8", "ruff>=0.4"]
 
 [project.scripts]

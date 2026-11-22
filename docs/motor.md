@@ -11,6 +11,29 @@
 | `openai`, `anthropic`, `gemini`, `groq`, `openrouter`, `deepseek`, `mistral` | Provedores na nuvem, só pondo a chave | já preenchido |
 | `demo` | Testar a interface sem IA | — |
 
+## IA grátis automática
+
+Com `backend = "gratis"`, o Optimus usa provedores que têm plano gratuito, na ordem da lista.
+Se um bater no limite gratuito ou cair, ele passa para o próximo sozinho, sem você ver erro. No
+fim da fila fica a IA local (Ollama), se estiver ligada.
+
+```bash
+optimus config motor.backend gratis
+optimus chaves definir provedores.groq_chave     # pede a chave sem mostrar na tela
+optimus chaves definir provedores.gemini_chave
+```
+
+A ordem fica em `[provedores] gratis = ["groq", "gemini", "cerebras", "openrouter"]`. Só entram
+os que têm chave. O modelo de cada um pode ser trocado em `<nome>_modelo`.
+
+## Provedores na nuvem
+
+Basta pôr o nome em `motor.backend` e a chave: `openai`, `anthropic`, `gemini`, `groq`,
+`openrouter`, `deepseek`, `mistral`, `cerebras`, `qwen` (Alibaba), `moonshot` (Kimi), `zai`
+(GLM), `nvidia` (NIM), `xai` (Grok), `together`, `fireworks`, `sambanova` e `huggingface`.
+Locais: `lmstudio`, `llamacpp`, `vllm`. Sem `motor.modelo`, o Optimus usa o padrão do provedor
+ou escolhe sozinho um modelo de conversa na lista dele.
+
 ## Escolha automática pelo hardware
 
 `optimus hardware` mostra o que foi detectado:

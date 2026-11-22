@@ -248,7 +248,9 @@ class Falante:
     def __init__(self, voz: str = "valkyrie", velocidade: float = 1.0, online: bool = True,
                  config=None):
         voz_cfg = (config.dados.get("voz", {}) if config is not None else {}) or {}
-        self.chave_elevenlabs = voz_cfg.get("elevenlabs_chave", "") or ""
+        from optimus.chaves import resolver
+
+        self.chave_elevenlabs = resolver(voz_cfg.get("elevenlabs_chave", "")) or ""
         self.voz_elevenlabs = voz_cfg.get("elevenlabs_voz", "") or VOZ_ELEVENLABS_PADRAO
         self.pedida = voz
         self.voz = escolher_voz(voz, online, self.chave_elevenlabs)
