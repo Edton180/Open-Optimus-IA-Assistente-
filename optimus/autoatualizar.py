@@ -85,10 +85,24 @@ def baixar(config) -> dict:
         except releases.ErroRelease:
             decisao = None
         if decisao and decisao.alvo:
-            return releases.instalar(decisao.alvo, pasta_programa(config), optimus.__version__)
+            return _por_release(decisao, config)
         return baixar_github(config)
     except (ErroGit, releases.ErroRelease) as erro:
         return {"ok": False, "erro": str(erro)}
+
+
+def _por_release(decisao, config) -> dict:
+    resultado = releases.instalar(decisao.alvo, pasta_programa(config), optimus.__version__)
+    if resultado.get("ok", True):
+        _marcar_modo("release")
+    return resultado
+
+
+def _marcar_modo(modo: str) -> None:
+    dados = _ler_registro()
+    dados["ultimo_modo"] = modo
+    _registro().parent.mkdir(parents=True, exist_ok=True)
+    _registro().write_text(json.dumps(dados, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 def voltar(config) -> dict:
@@ -96,7 +110,9 @@ def voltar(config) -> dict:
     try:
         if git:
             return git.voltar()
-        if (releases._pasta_backups() / "ultima.json").exists():
+        # Desfaz a atualização mais recente, seja por release ou pelo commit do GitHub.
+        if _ler_registro().get("ultimo_modo") != "github" \
+                and (releases._pasta_backups() / "ultima.json").exists():
             return releases.voltar()
         return voltar_github(config)
     except (ErroGit, releases.ErroRelease, OSError) as erro:
@@ -125,7 +141,7 @@ def automatico(config) -> dict | None:
             info = verificar_github(config)
             return info if info.get("disponivel") else None
         if decisao.instalar_sozinho:
-            return releases.instalar(decisao.alvo, pasta_programa(config), optimus.__version__)
+            return _por_release(decisao, config)
         return decisao.para_dict()
     except Exception as erro:  # noqa: BLE001 - nunca atrapalha a abertura do Optimus
         log.info("Verificação automática de atualização falhou: %s", erro)
@@ -251,6 +267,7 @@ def baixar_github(config) -> dict:
         return {"ok": False, "erro": "A atualização falhou. Tente de novo; se continuar, "
                                      "use \"Voltar versão\". Detalhe: " + saida.strip()[-500:]}
     registrar_commit(sha)
+    _marcar_modo("github")
     return {"ok": True, "mudou": True, "modo": "github", "commit": sha[:7],
             "mensagem": f"Optimus atualizado para o commit {sha[:7]}. Reinicie o Optimus para "
                         "usar a nova versão. Se algo der errado, use \"Voltar versão\"."}

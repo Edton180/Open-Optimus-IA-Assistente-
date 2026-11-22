@@ -95,3 +95,15 @@ def test_automatico_so_avisa_no_modo_github(ambiente):
 def test_sem_nada_para_desfazer(ambiente):
     config, _ = ambiente
     assert not autoatualizar.voltar(config)["ok"]
+
+
+def test_voltar_desfaz_a_mais_recente_mesmo_com_backup_antigo_de_release(ambiente, monkeypatch):
+    config, chamadas = ambiente
+    backups = releases._pasta_backups()
+    backups.mkdir(parents=True, exist_ok=True)
+    (backups / "ultima.json").write_text("{}", encoding="utf-8")  # sobra de uma release antiga
+    monkeypatch.setattr(releases, "voltar", lambda: {"ok": True, "via": "release"})
+    autoatualizar.registrar_commit(SHA_VELHO)
+    assert autoatualizar.baixar(config)["ok"]
+    v = autoatualizar.voltar(config)
+    assert v.get("via") != "release" and chamadas[-1].endswith(SHA_VELHO)
