@@ -15,10 +15,14 @@ pelo modelo de IA na nuvem que faz a tradução.
 
 ```bash
 pip install "optimus-assistente[estudio]"     # transcrição, legendas, dublagem, vozes, ffmpeg
+pip install "optimus-assistente[omnivoice]"   # clonar, criar voz por descrição, 600+ idiomas
 pip install "optimus-assistente[clonagem]"    # clonar voz e conversor de voz (PyTorch, ~3 GB)
 pip install "optimus-assistente[isolar]"      # separar voz da música (Demucs, PyTorch)
 optimus estudio diagnostico                   # mostra o que está pronto e o que falta
+optimus estudio modelos                       # motores e modelos: instalar, remover, licença
 ```
+
+Também dá para instalar tudo pela aba **Modelos** da tela Estúdio.
 
 Com placa de vídeo (NVIDIA ou Apple), clonagem e transcrição ficam muitas vezes mais rápidas.
 
@@ -158,9 +162,83 @@ tradução antes, gere a legenda, edite o `.srt` e duble com `--legenda-pronta`.
 
 ## Idiomas
 
-Português do Brasil, português de Portugal, inglês (EUA e Reino Unido), espanhol (Espanha e
-latino), francês, alemão, italiano, japonês, chinês, coreano, russo, árabe, hindi, holandês,
-polonês e turco.
+Principais (vozes prontas para todos): português do Brasil, português de Portugal, inglês (EUA
+e Reino Unido), espanhol (Espanha e latino), francês, alemão, italiano, japonês, chinês,
+coreano, russo, árabe, hindi, holandês, polonês e turco.
+
+Transcrição e tradução aceitam os ~100 idiomas do Whisper pelo nome ("ucraniano", "suaíli") ou
+código. Com o **OmniVoice**, a narração e a clonagem vão a mais de 600 idiomas: use o código
+ISO do idioma (por exemplo `qu` para quíchua).
+
+## Motores de voz
+
+| Motor | Para quê | Instalar |
+|---|---|---|
+| Vozes do Optimus (Kokoro, Edge, ElevenLabs, sistema) | narração pronta em pt-BR e 17 idiomas | `[estudio]` |
+| **OmniVoice** | clonagem em 600+ idiomas, voz por descrição, sons, duração exata | `pip install omnivoice` |
+| Chatterbox | clonagem em 23 idiomas e conversor de voz | `pip install chatterbox-tts` |
+| **Piper** (sherpa-onnx) | vozes offline leves: Faber, Cadu, Jeff, Edresson (pt-BR) e outras | `[estudio]` |
+| Servidor remoto | qualquer servidor compatível com a OpenAI (outra máquina com placa de vídeo) | configurar |
+
+Qual motor clona: `optimus config estudio.motor_clone auto` (padrão: Chatterbox para os idiomas
+dele, OmniVoice para o resto), ou `chatterbox`, `omnivoice`, `remoto`.
+
+Servidor remoto (outro PC ou nuvem, inclusive outro Optimus com `optimus gui --rede`):
+
+```bash
+optimus config estudio.servidor_voz_url http://pc-da-sala:8765/v1
+optimus chaves definir estudio.servidor_voz_chave     # se o servidor pedir chave
+optimus config estudio.motor_transcricao remoto       # transcrever lá também
+```
+
+Use a voz **Servidor remoto** para narrar com ele.
+
+## Marcas de expressão
+
+Funcionam em qualquer voz e em qualquer lugar (narração, audiolivro, história, dublagem):
+
+```text
+Olá! [pausa 1,5] Você não vai acreditar. [risada] Sério.
+```
+
+- `[pausa]` (0,6 s) ou `[pausa 2]`: silêncio do tamanho pedido.
+- `[risada]`, `[suspiro]`, `[respiração]`, `[tosse]`, `[choro]`, `[bocejo]`, `[hum]`: o OmniVoice
+  faz o som; nos outros motores a marca é retirada para não ser lida.
+
+## Desempenho
+
+`optimus estudio desempenho qualidade` (ou na aba Modelos) escolhe de uma vez o modelo de
+transcrição e a qualidade das vozes: `rapido`, `equilibrado`, `qualidade` ou `auto` (olha a placa
+de vídeo e a memória do PC).
+
+## Receitas e pastas observadas
+
+Uma **receita** é uma ação com as opções já escolhidas. Já vêm algumas (Legendar em português,
+Dublar para inglês, Transcrever, Separar voz e música, Virar audiolivro), e você salva as suas:
+
+```bash
+optimus estudio receitas
+optimus estudio receita "Dublar para inglês" video.mp4
+optimus estudio observar ~/Videos/para-dublar "Dublar para português"
+```
+
+Pelo chat: "salva como receita dublar para inglês com a minha voz", "observa a pasta Vídeos/para
+dublar com a receita Dublar para português". Uma **pasta observada** processa cada arquivo novo
+que chega nela (quando terminar de copiar) enquanto o `optimus gui` estiver aberto ou com
+`optimus estudio observar`. Arquivos que já estavam na pasta não são mexidos.
+
+## Para programas de IA (servidor MCP)
+
+O Optimus oferece as ferramentas do estúdio para Claude Desktop, Cursor, VS Code, LM Studio e
+qualquer programa que fale MCP:
+
+```json
+{"mcpServers": {"optimus": {"command": "optimus", "args": ["mcp-servidor"]}}}
+```
+
+`--grupos estudio,produtividade` inclui outros grupos (`*` = todos) e `--so-livres` tira as
+ações de risco moderado. Ações críticas (como clonar uma voz) nunca saem por aí: precisam da
+confirmação no próprio Optimus.
 
 ## Para outros programas (API compatível com a OpenAI)
 
@@ -182,7 +260,9 @@ Com senha (`web.senha`), mande `Authorization: Bearer SUA_SENHA`. Os nomes de vo
 |---|---|---|
 | Vozes pt-BR offline | Kokoro (ONNX) | Apache-2.0 |
 | Vozes online em 18 idiomas | Microsoft Edge (neural) | serviço online gratuito |
+| Clonagem, voz por descrição, 600+ idiomas | OmniVoice (k2-fsa) | Apache-2.0 |
 | Clonagem e conversor de voz | Chatterbox Multilingual | MIT |
+| Vozes offline leves | Piper (pelo sherpa-onnx) | MIT; cada voz tem a sua (Faber: CC0) |
 | Transcrição | faster-whisper | MIT |
 | Transcrição reserva (modelos do GitHub) e quem fala quando | sherpa-onnx (Whisper ONNX, Silero VAD, pyannote 3.0, CAM++) | Apache-2.0 / MIT |
 | Separar voz da música | Demucs (htdemucs) | MIT |

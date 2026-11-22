@@ -142,7 +142,8 @@ $("#estudio-abas").addEventListener("click", (e) => {
   if (!b) return;
   $$("#estudio-abas button").forEach((x) => x.classList.toggle("ativo", x === b));
   $$(".estudio-aba").forEach((a) => a.classList.toggle("oculto", a.dataset.aba !== b.dataset.abaEstudio));
-  const extra = { historico: estHistorico, pronuncia: estPronuncia, ferramentas: estDiagnostico }[b.dataset.abaEstudio];
+  const extra = { historico: estHistorico, pronuncia: estPronuncia, ferramentas: estDiagnostico,
+    modelos: estModelos, automacao: estReceitas }[b.dataset.abaEstudio];
   if (extra) extra().catch(() => {});
 });
 
@@ -200,7 +201,7 @@ $("#est-video-ir").addEventListener("click", async (e) => {
 
 $("#est-criar").addEventListener("click", async (e) => {
   try {
-    await estFila("criar-voz", { nome: $("#est-criar-nome").value.trim(), descricao: $("#est-criar-desc").value.trim() }, e.target);
+    await estFila("criar-voz", { nome: $("#est-criar-nome").value.trim(), descricao: $("#est-criar-desc").value.trim(), motor: $("#est-criar-motor").value }, e.target);
     await estCarregarVozes();
   } catch (erro) { alert(erro.message); }
 });
@@ -280,6 +281,83 @@ $("#est-tarefas").addEventListener("click", async (e) => {
   if (c) await estApi(`tarefas/${encodeURIComponent(c.dataset.cancelar)}/cancelar`, { method: "POST" });
   if (r) await estApi(`tarefas/${encodeURIComponent(r.dataset.repetir)}/repetir`, { method: "POST" });
   if (c || r) estTarefas();
+});
+
+// ---------- modelos e desempenho ----------
+const NOMES_TIPO = { voz: "voz", clonagem: "clonagem", transcricao: "transcrição", isolamento: "separar voz", falantes: "quem fala" };
+
+async function estModelos() {
+  const r = await estApi("modelos");
+  $("#est-desempenho").value = r.desempenho || "auto";
+  $("#est-desempenho-info").textContent = `Agora: ${r.atual.descricao} (transcrição ${r.atual.transcricao}). Recomendado para este PC: ${r.recomendada}.`;
+  $("#est-modelos").innerHTML = r.modelos.map((m) => `<tr><td>${m.instalado ? "✅" : ""}</td>
+    <td><b>${esc(m.nome)}</b><div class="sutil">${esc(m.descricao)}</div></td><td>${esc(NOMES_TIPO[m.tipo] || m.tipo)}</td>
+    <td>${esc(m.licenca)}</td><td>${m.ocupado_mb ? esc(m.ocupado_mb + " MB") : "~" + esc(m.tamanho_mb) + " MB"}</td>
+    <td>${m.instalado ? `<button class="botao" data-modelo-remover="${esc(m.id)}">Remover</button>` : `<button class="botao primario" data-modelo-instalar="${esc(m.id)}">Instalar</button>`}</td></tr>`).join("");
+}
+
+$("#est-desempenho").addEventListener("change", async (e) => {
+  try { await estApi("desempenho", { method: "POST", json: { escolha: e.target.value } }); estModelos(); }
+  catch (erro) { alert(erro.message); }
+});
+
+$("#est-modelos").addEventListener("click", async (e) => {
+  const i = e.target.closest("[data-modelo-instalar]"), r = e.target.closest("[data-modelo-remover]");
+  if (!i && !r) return;
+  const botao = i || r;
+  const id = i ? i.dataset.modeloInstalar : r.dataset.modeloRemover;
+  if (r && !confirm("Remover " + id + "?")) return;
+  botao.disabled = true;
+  try {
+    await estApi(`modelos/${encodeURIComponent(id)}/${i ? "instalar" : "remover"}`, { method: "POST" });
+    if (i) estVigiar(); else estModelos();
+  } catch (erro) { alert(erro.message); botao.disabled = false; }
+});
+
+// ---------- receitas e pastas observadas ----------
+async function estReceitas() {
+  const r = await estApi("receitas");
+  const nomes = r.receitas.map((x) => `<option value="${esc(x.nome)}">${esc(x.nome)}</option>`).join("");
+  document.querySelectorAll(".est-receitas").forEach((s) => { const atual = s.value; s.innerHTML = nomes; if (atual) s.value = atual; });
+  if (!$("#est-rec-acao").options.length) {
+    $("#est-rec-acao").innerHTML = r.acoes.map((a) => `<option value="${esc(a)}">${esc(a.replace("estudio_", "").replace(/_/g, " "))}</option>`).join("");
+  }
+  $("#est-rec-lista").innerHTML = r.receitas.map((x) => `<tr><td><b>${esc(x.nome)}</b><div class="sutil">${esc(x.descricao || "")}</div></td>
+    <td>${esc(x.acao.replace("estudio_", ""))}</td><td class="sutil">${esc(Object.entries(x.opcoes).map(([k, v]) => k + "=" + v).join("; "))}</td>
+    <td>${x.pronta ? "" : `<button class="botao" data-receita-apagar="${esc(x.nome)}">Apagar</button>`}</td></tr>`).join("");
+  $("#est-obs-lista").innerHTML = r.observadas.map((o) => `<tr><td>📂 ${esc(o.pasta)}</td><td>→ ${esc(o.receita)}</td>
+    <td><button class="botao" data-obs-parar="${esc(o.pasta)}">Parar</button></td></tr>`).join("") || '<tr><td class="sutil">Nenhuma pasta observada.</td></tr>';
+}
+
+$("#est-rec-salvar").addEventListener("click", async (e) => {
+  try {
+    await estFila("receitas", { nome: $("#est-rec-nome").value.trim(), acao: $("#est-rec-acao").value, opcoes: $("#est-rec-opcoes").value.trim() }, e.target);
+    $("#est-rec-nome").value = ""; $("#est-rec-opcoes").value = ""; estReceitas();
+  } catch (erro) { alert(erro.message); }
+});
+
+$("#est-obs-ir").addEventListener("click", async (e) => {
+  try { await estFila("observar", { pasta: $("#est-obs-pasta").value.trim(), receita: $("#est-obs-receita").value }, e.target); estReceitas(); }
+  catch (erro) { alert(erro.message); }
+});
+
+$("#est-rec-rodar").addEventListener("click", async (e) => {
+  const saida = $("#est-rec-saida");
+  try {
+    const arquivo = await estEntrada("#est-rec-arquivo", "#est-rec-caminho");
+    const r = await estFila(`receitas/${encodeURIComponent($("#est-rec-rodar-nome").value)}/rodar`, { arquivo }, e.target);
+    if (r.tarefa) estAviso(saida, r.mensagem || "Comecei. Acompanhe em Tarefas.");
+    else saida.innerHTML = `<p class="sutil">${esc(r.mensagem || "Pronto.")}</p><div class="linha">${estLinks(estCaminhos(r))}</div>`;
+  } catch (erro) { estAviso(saida, erro.message, true); }
+});
+
+$("#est-rec-lista").addEventListener("click", async (e) => {
+  const b = e.target.closest("[data-receita-apagar]");
+  if (b) { await estApi("receitas/" + encodeURIComponent(b.dataset.receitaApagar), { method: "DELETE" }); estReceitas(); }
+});
+$("#est-obs-lista").addEventListener("click", async (e) => {
+  const b = e.target.closest("[data-obs-parar]");
+  if (b) { await estApi("observar?pasta=" + encodeURIComponent(b.dataset.obsParar), { method: "DELETE" }); estReceitas(); }
 });
 
 estAtualizarVideo();

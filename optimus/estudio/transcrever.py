@@ -6,6 +6,9 @@ Dois motores, escolhidos sozinhos:
 - **sherpa-onnx** (`pip install sherpa-onnx`): Whisper em ONNX com detecção de fala (Silero
   VAD); baixa os modelos do GitHub. Serve de reserva quando o Hugging Face não abre.
 
+- **remoto**: um servidor compatível com a OpenAI (`estudio.servidor_voz_url`), para usar a
+  placa de vídeo de outra máquina.
+
 Detecta o idioma sozinho, ou use `idioma="pt-BR"`. Para o melhor resultado em português do
 Brasil, use "large-v3-turbo" (com placa de vídeo) ou "medium"/"small" no CPU.
 """
@@ -49,6 +52,10 @@ def modelo_padrao(config=None) -> str:
         escolhido = config.get("estudio", "modelo_transcricao", "")
         if escolhido:
             return escolhido
+        if str(config.get("estudio", "desempenho", "auto")).strip().lower() != "auto":
+            from optimus.estudio import desempenho
+
+            return desempenho.atual(config).transcricao
     return "large-v3-turbo" if shutil.which("nvidia-smi") else "small"
 
 
@@ -186,14 +193,30 @@ def transcrever(caminho: str | Path, idioma: str = "", modelo: str = "", config=
     caminho = Path(caminho)
     if not caminho.exists():
         raise ErroEstudio(f"Arquivo não encontrado: {caminho}")
-    codigo = idiomas.idioma(idioma).whisper if idioma else None
+    codigo = (idiomas.idioma(idioma).whisper or None) if idioma else None
     nome = modelo or modelo_padrao(config)
     escolhido = motor or (config.get("estudio", "motor_transcricao", "") if config else "") \
         or motor_disponivel()
     if not escolhido:
+        from optimus.estudio import remoto
+
+        if remoto.configurado(config):
+            escolhido = "remoto"
+    if not escolhido:
         raise ErroEstudio("A transcrição precisa de um motor: pip install faster-whisper "
                           "(ou pip install sherpa-onnx)")
-    if escolhido == "faster-whisper":
+    if escolhido == "remoto":
+        from optimus.estudio import remoto
+
+        (progresso or (lambda *a: None))(0.05, "Enviando para o servidor de transcrição…")
+        trechos, lingua = remoto.transcrever(caminho, idioma, config)
+        try:  # a OpenAI devolve o nome em inglês ("portuguese"); outros, o código
+            lingua = (idiomas.idioma(lingua).whisper or lingua) if lingua else ""
+        except ValueError:
+            lingua = {"portuguese": "pt", "english": "en", "spanish": "es", "french": "fr",
+                      "german": "de", "italian": "it", "japanese": "ja", "chinese": "zh"
+                      }.get(lingua.lower(), "")
+    elif escolhido == "faster-whisper":
         try:
             trechos, lingua = _faster(caminho, codigo, nome, progresso, cancelado)
         except ErroEstudio:

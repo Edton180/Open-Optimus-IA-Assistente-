@@ -34,7 +34,7 @@ class Perfil:
     id: str
     nome: str
     tipo: str = "pronta"  # pronta | clonada | criada
-    motor: str = "padrao"  # padrao (vozes do Optimus) | edge | clone
+    motor: str = "padrao"  # padrao (vozes do Optimus) | edge | clone | omnivoice | piper | remoto
     base: str = ""  # voz do Optimus (prime, valkyrie...) ou voz do motor
     genero: str = "feminina"
     idioma: str = "pt-BR"
@@ -43,6 +43,7 @@ class Perfil:
     efeito: str = ""  # "" | cyber | sussurro
     expressividade: float = 0.5  # 0 neutra ... 1 dramática (vozes clonadas)
     descricao: str = ""
+    instrucao: str = ""  # atributos para o OmniVoice ("female, elderly, low pitch")
     amostra: str = ""  # nome do arquivo dentro da pasta do perfil
     consentimento: dict = field(default_factory=dict)
     criado: float = 0.0
@@ -83,6 +84,18 @@ def _prontas() -> list[Perfil]:
     saida.append(Perfil("mordomo", "Mordomo", "pronta", "padrao", "nexus", "masculina",
                         velocidade=0.92, tom=-1.5,
                         descricao="Original do Optimus: mordomo calmo, formal e grave"))
+    from optimus.estudio import omnivoice, piper
+
+    if piper.instalado():
+        saida += [Perfil(v.perfil_id, v.nome, "pronta", "piper", v.id, v.genero, v.idioma,
+                         descricao=f"Offline e leve (Piper, {v.licenca}); baixa "
+                                   f"~{v.tamanho_mb} MB na primeira vez") for v in piper.VOZES]
+    if omnivoice.instalado():
+        saida.append(Perfil("omnivoice-auto", "Automática (OmniVoice)", "pronta", "omnivoice",
+                            "", "feminina", "pt-BR",
+                            descricao="O OmniVoice escolhe uma voz natural para o idioma"))
+    saida.append(Perfil("remota", "Servidor remoto", "pronta", "remoto", "", "feminina",
+                        descricao="Voz do servidor configurado em estudio.servidor_voz_url"))
     return saida
 
 
@@ -234,12 +247,24 @@ def interpretar_descricao(descricao: str) -> dict:
     return ajustes
 
 
-def criar(nome: str, descricao: str, idioma: str = "pt-BR", base: str = "") -> Perfil:
+def criar(nome: str, descricao: str, idioma: str = "pt-BR", base: str = "",
+          motor: str = "") -> Perfil:
     """Cria uma voz nova a partir de uma descrição ("voz feminina jovem e animada").
 
-    Usa uma voz pronta como ponto de partida e ajusta tom, ritmo, expressão e efeito. Se a
-    base for uma voz clonada, os ajustes valem sobre ela."""
+    Com o OmniVoice instalado (ou `motor="omnivoice"`), a voz é desenhada pelo próprio modelo
+    a partir da descrição. Sem ele, usa uma voz pronta como ponto de partida e ajusta tom,
+    ritmo, expressão e efeito. Se a base for uma voz clonada, os ajustes valem sobre ela."""
+    from optimus.estudio import omnivoice
+
     ajustes = interpretar_descricao(descricao)
+    if motor == "omnivoice" or (not motor and not base and omnivoice.instalado()):
+        p = Perfil(_novo_id(nome), nome.strip() or "Voz criada", "criada", "omnivoice", "",
+                   ajustes["genero"], idioma, velocidade=ajustes["velocidade"],
+                   efeito="cyber" if ajustes["efeito"] == "cyber" else "",
+                   expressividade=ajustes["expressividade"], descricao=descricao.strip(),
+                   instrucao=omnivoice.instrucao(descricao, ajustes["genero"]),
+                   criado=time.time())
+        return _salvar(p)
     origem = obter(base) if base else \
         obter("prime" if ajustes["genero"] == "masculina" else "valkyrie")
     p = Perfil(_novo_id(nome), nome.strip() or "Voz criada", "criada", origem.motor,

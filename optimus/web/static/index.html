@@ -168,6 +168,8 @@
         <button data-aba-estudio="historia">História e podcast</button>
         <button data-aba-estudio="ferramentas">Ferramentas</button>
         <button data-aba-estudio="pronuncia">Pronúncia</button>
+        <button data-aba-estudio="automacao">Receitas e pastas</button>
+        <button data-aba-estudio="modelos">Modelos</button>
         <button data-aba-estudio="historico">Histórico</button>
       </div>
 
@@ -209,7 +211,8 @@
         <div class="grade">
           <div class="cartao"><h3>Criar voz pela descrição</h3>
             <input id="est-criar-nome" class="campo" placeholder="Nome (ex.: Narradora)">
-            <input id="est-criar-desc" class="campo" style="margin-top:.5rem" placeholder="feminina, calma, grave, lenta…">
+            <input id="est-criar-desc" class="campo" style="margin-top:.5rem" placeholder="feminina, idosa, grave, sotaque britânico, sussurro…">
+            <label style="display:block;margin-top:.5rem">Como criar<select id="est-criar-motor" class="campo"><option value="">Automático (OmniVoice se instalado)</option><option value="omnivoice">Desenhada pelo OmniVoice</option><option value="ajustes">Ajustes sobre uma voz pronta</option></select></label>
             <div class="linha fim"><button class="botao" id="est-criar">Criar voz</button></div></div>
           <div class="cartao"><h3>Clonar uma voz</h3>
             <p class="sutil">De 5 a 90 segundos de fala limpa, sem música.</p>
@@ -265,6 +268,35 @@
         <p class="sutil">Como cada palavra deve ser falada em todas as vozes (nomes, siglas, marcas).</p>
         <div class="linha"><input id="est-pron-escrito" class="campo" placeholder="Escrito (ex.: Kaik)"><input id="est-pron-falado" class="campo" placeholder="Falado (ex.: Káique)"><button class="botao" id="est-pron-add">Adicionar</button></div>
         <table class="tabela" style="margin-top:.6rem"><tbody id="est-pron-lista"></tbody></table>
+      </div>
+
+      <div class="estudio-aba oculto" data-aba="automacao">
+        <div class="grade">
+          <div class="cartao"><h3>Nova receita</h3>
+            <p class="sutil">Uma ação com as opções já escolhidas, para repetir com um clique ou numa pasta observada.</p>
+            <input id="est-rec-nome" class="campo" placeholder="Nome (ex.: Dublar para inglês com a minha voz)">
+            <div class="linha" style="margin-top:.5rem"><label>Ação<select id="est-rec-acao" class="campo"></select></label></div>
+            <input id="est-rec-opcoes" class="campo" placeholder="Opções: idioma=en-US; voz=Minha voz">
+            <div class="linha fim"><button class="botao" id="est-rec-salvar">Salvar receita</button></div></div>
+          <div class="cartao"><h3>Observar uma pasta</h3>
+            <p class="sutil">Cada arquivo novo que chegar na pasta passa pela receita sozinho, enquanto o Optimus estiver aberto.</p>
+            <input id="est-obs-pasta" class="campo" placeholder="D:\Videos\para dublar">
+            <div class="linha" style="margin-top:.5rem"><label>Receita<select id="est-obs-receita" class="campo est-receitas"></select></label></div>
+            <div class="linha fim"><button class="botao primario" id="est-obs-ir">📂 Observar</button></div></div>
+        </div>
+        <div class="cartao"><h3>Rodar uma receita</h3>
+          <div class="linha"><input type="file" id="est-rec-arquivo"><input id="est-rec-caminho" class="campo" placeholder="ou o caminho do arquivo" style="flex:1"><select id="est-rec-rodar-nome" class="campo est-receitas"></select><button class="botao primario" id="est-rec-rodar">▶️ Rodar</button></div>
+          <div id="est-rec-saida" aria-live="polite"></div>
+          <table class="tabela" style="margin-top:.6rem"><thead><tr><th>Receita</th><th>Ação</th><th>Opções</th><th></th></tr></thead><tbody id="est-rec-lista"></tbody></table>
+          <h3 style="margin-top:1rem">Pastas observadas</h3>
+          <table class="tabela"><tbody id="est-obs-lista"></tbody></table></div>
+      </div>
+
+      <div class="cartao estudio-aba oculto" data-aba="modelos">
+        <div class="linha entre"><h3>Motores e modelos</h3>
+          <label>Desempenho<select id="est-desempenho" class="campo"><option value="auto">Automático</option><option value="rapido">Rápido</option><option value="equilibrado">Equilibrado</option><option value="qualidade">Qualidade máxima</option></select></label></div>
+        <p class="sutil" id="est-desempenho-info"></p>
+        <table class="tabela"><thead><tr><th></th><th>Modelo</th><th>Para</th><th>Licença</th><th>Tamanho</th><th></th></tr></thead><tbody id="est-modelos"></tbody></table>
       </div>
 
       <div class="cartao estudio-aba oculto" data-aba="historico">

@@ -6,6 +6,9 @@
 - Vozes clonadas: Chatterbox Multilingual (licença MIT, 23 idiomas, inclusive português). A
   amostra em português do Brasil faz a voz sair com sotaque brasileiro. Opcional: `pip install
   chatterbox-tts` (baixa o modelo na primeira vez; com placa de vídeo fica bem mais rápido).
+- OmniVoice (Apache-2.0, `pip install omnivoice`): clonagem, criação de voz por descrição e
+  600+ idiomas; também faz a duração exata de cada fala na dublagem.
+- Vozes Piper offline (sherpa-onnx) e um servidor de voz remoto compatível com a OpenAI.
 - Conversor de voz (voz para voz): Chatterbox VC, mantém a fala e troca o timbre.
 
 Depois da síntese aplicam-se tom, ritmo e efeito do perfil, e o dicionário de pronúncia vale
@@ -51,13 +54,39 @@ def dispositivo() -> str:
     return "cpu"
 
 
-def clonagem_instalada() -> bool:
+def chatterbox_instalado() -> bool:
     try:
         import importlib.util
 
         return importlib.util.find_spec("chatterbox") is not None
     except (ImportError, ValueError):
         return False
+
+
+def clonagem_instalada() -> bool:
+    from optimus.estudio import omnivoice
+
+    return chatterbox_instalado() or omnivoice.instalado()
+
+
+def motor_clone(lingua: idiomas.Idioma, config=None) -> str:
+    """chatterbox | omnivoice | remoto, conforme a configuração e o que está instalado."""
+    from optimus.estudio import omnivoice, remoto
+
+    pedido = str(config.get("estudio", "motor_clone", "auto") if config is not None
+                 else "auto").strip().lower() or "auto"
+    if pedido in ("chatterbox", "omnivoice", "remoto"):
+        return pedido
+    if chatterbox_instalado() and lingua.clone:
+        return "chatterbox"
+    if omnivoice.instalado():
+        return "omnivoice"
+    if chatterbox_instalado():
+        return "chatterbox"  # vai explicar que o idioma não tem clonagem
+    if remoto.configurado(config):
+        return "remoto"
+    raise ErroEstudio("A clonagem de voz precisa de um motor: pip install omnivoice (600+ "
+                      "idiomas) ou pip install chatterbox-tts (23 idiomas).")
 
 
 def dividir_texto(texto: str, maximo: int = 280) -> list[str]:
@@ -111,15 +140,15 @@ def mudar_tom(amostras, taxa: int, semitons: float):
     return np.frombuffer(bruto, dtype="<f4").copy()
 
 
-def _pos(amostras, perfil: Perfil, ritmo_extra: float = 1.0):
+def _pos(amostras, perfil: Perfil, esticar: float = 1.0):
+    """Tom, ritmo (só para motores sem controle de ritmo) e efeito do perfil."""
     from optimus.voice.tts import aplicar_efeito
 
     x = amostras
     if perfil.tom:
         x = mudar_tom(x, TAXA, perfil.tom)
-    fator = (perfil.velocidade or 1.0) * (ritmo_extra or 1.0)
-    if perfil.motor == "clone" and abs(fator - 1) > 0.01:
-        x = audio.esticar(x, TAXA, fator)  # o Chatterbox não tem controle de ritmo
+    if abs((esticar or 1.0) - 1) > 0.01:
+        x = audio.esticar(x, TAXA, esticar)
     if perfil.efeito:
         x = aplicar_efeito(x, TAXA, perfil.efeito)
     return x
@@ -186,12 +215,23 @@ def _gerar_outro_idioma(texto: str, perfil: Perfil, idioma: idiomas.Idioma, velo
                 texto, voice=m if perfil.genero.startswith("m") else f,
                 speed=velocidade * (perfil.velocidade or 1), lang=idioma.kokoro)
             return _decodificar(audio.wav_bytes(x, taxa_k), "wav")
-    raise ErroEstudio(f"Sem voz para {idioma.nome} agora: precisa de internet (vozes Edge) "
-                      "ou de uma voz clonada (pip install chatterbox-tts).")
+    from optimus.estudio import omnivoice, piper
+
+    if omnivoice.instalado():
+        return omnivoice.gerar(texto, descricao=perfil.descricao, genero=perfil.genero,
+                               velocidade=velocidade * (perfil.velocidade or 1))
+    if piper.instalado():
+        locais = [v for v in piper.VOZES if v.idioma.lower() == idioma.codigo.lower()
+                  and piper.baixada(v)]
+        if locais:
+            x, taxa_p = piper.gerar(texto, locais[0].id, velocidade * (perfil.velocidade or 1))
+            return _para_numpy(x, taxa_p)
+    raise ErroEstudio(f"Sem voz para {idioma.nome} agora: precisa de internet (vozes Edge), "
+                      "do OmniVoice (pip install omnivoice, 600+ idiomas) ou de uma voz clonada.")
 
 
 def _modelo_clone():
-    if not clonagem_instalada():
+    if not chatterbox_instalado():
         raise ErroEstudio("A clonagem de voz precisa do motor Chatterbox: "
                           "pip install chatterbox-tts (cerca de 3 GB com o modelo).")
     with _TRAVA:
@@ -231,36 +271,83 @@ def _gerar_clone(texto: str, perfil: Perfil, idioma: idiomas.Idioma):
 
 
 # ---------------------------------------------------------------------- API pública
+def _uma_frase(frase: str, perfil: Perfil, lingua: idiomas.Idioma, velocidade: float, config,
+               duracao: float, passos: int):
+    """Gera uma frase e diz quanto falta esticar (motores sem controle de ritmo)."""
+    from optimus.estudio import expressao, omnivoice, piper, remoto
+
+    ritmo = velocidade * (perfil.velocidade or 1.0)
+    if perfil.motor in ("clone", "omnivoice"):
+        qual = motor_clone(lingua, config) if perfil.motor == "clone" else "omnivoice"
+        if qual == "omnivoice":
+            amostra = perfil.caminho_amostra() if perfil.motor == "clone" else None
+            if perfil.motor == "clone" and (not amostra or not amostra.exists()):
+                raise ErroEstudio(f"A amostra da voz '{perfil.nome}' sumiu. Clone de novo.")
+            x = omnivoice.gerar(frase, amostra=amostra,
+                                descricao=perfil.instrucao or perfil.descricao,
+                                genero=perfil.genero, velocidade=ritmo, duracao=duracao,
+                                passos=passos)
+            return x, 1.0
+        frase = expressao.sem_sons(frase)
+        if qual == "remoto":
+            x, _ = remoto.falar(frase, perfil.base or perfil.nome, ritmo, lingua.codigo, config)
+            return x, 1.0
+        return _gerar_clone(frase, perfil, lingua), ritmo
+    frase = expressao.sem_sons(frase)
+    if not frase:
+        return None, 1.0
+    if perfil.motor == "piper":
+        x, taxa = piper.gerar(frase, perfil.base, ritmo)
+        return _para_numpy(x, taxa), 1.0
+    if perfil.motor == "remoto":
+        x, _ = remoto.falar(frase, perfil.base, ritmo, lingua.codigo, config)
+        return x, 1.0
+    if lingua.codigo == "pt-BR":
+        return _gerar_padrao(frase, perfil, velocidade, config), 1.0
+    return _gerar_outro_idioma(frase, perfil, lingua, velocidade), 1.0
+
+
 def gerar(texto: str, voz: str | Perfil = "", idioma: str = "", velocidade: float = 1.0,
-          config=None, cancelado=None):
+          config=None, cancelado=None, duracao: float = 0.0):
     """Texto → numpy float32 mono a 24 kHz. Textos longos são gerados por frases e unidos
-    com pausas naturais."""
+    com pausas naturais. Aceita as marcas de `expressao` ([pausa 1,5], [risada]...).
+
+    `duracao` (segundos): pede ao OmniVoice a fala já com esse tempo (dublagem). Os outros
+    motores ignoram, e quem chama ajusta o tempo depois."""
     import numpy as np
+
+    from optimus.estudio import desempenho, expressao
 
     perfil = voz if isinstance(voz, Perfil) else obter(voz)
     lingua = idiomas.idioma(idioma or perfil.idioma)
     texto = pronuncia.aplicar(texto.strip(), lingua.codigo)
     if not texto:
         raise ErroEstudio("Texto vazio.")
-    pausa = np.zeros(int(TAXA * 0.22), dtype="float32")
-    pedacos = []
-    for frase in dividir_texto(texto):
-        if cancelado and cancelado():
-            raise ErroEstudio("Cancelado.")
-        if perfil.motor == "clone":
-            x = _gerar_clone(frase, perfil, lingua)
-        elif lingua.codigo == "pt-BR":
-            x = _gerar_padrao(frase, perfil, velocidade, config)
-        else:
-            x = _gerar_outro_idioma(frase, perfil, lingua, velocidade)
-        if x is None or not len(x):
-            continue
-        pedacos += [audio.cortar_silencio(x, TAXA), pausa]
-    if not pedacos:
+    passos = desempenho.atual(config).passos
+    blocos = [(dividir_texto(t) if t else [], p) for t, p in expressao.partes(texto)]
+    total = sum(len(f) for frases, _ in blocos for f in frases) or 1
+    falado = max(0.0, duracao - sum(p for _, p in blocos)) if duracao else 0.0
+    pedacos: list = []
+    for frases, pausa_depois in blocos:
+        for n, frase in enumerate(frases):
+            if cancelado and cancelado():
+                raise ErroEstudio("Cancelado.")
+            alvo = falado * len(frase) / total if falado else 0.0
+            x, esticar = _uma_frase(frase, perfil, lingua, velocidade, config, alvo, passos)
+            if x is None or not len(x):
+                continue
+            x = audio.cortar_silencio(x, TAXA)
+            if abs(esticar - 1) > 0.01:
+                x = audio.esticar(x, TAXA, esticar)  # o Chatterbox não tem controle de ritmo
+            pedacos.append(x)
+            if n + 1 < len(frases):
+                pedacos.append(np.zeros(int(TAXA * (0.0 if alvo else 0.22)), dtype="float32"))
+        if pausa_depois and pedacos:
+            pedacos.append(np.zeros(int(TAXA * pausa_depois), dtype="float32"))
+    if not [p for p in pedacos if len(p)]:
         raise ErroEstudio("O motor de voz não devolveu áudio.")
-    junto = np.concatenate(pedacos[:-1])
-    ritmo = velocidade if perfil.motor == "clone" else 1.0
-    return audio.normalizar(_pos(junto, perfil, ritmo))
+    junto = np.concatenate(pedacos)
+    return audio.normalizar(_pos(junto, perfil))
 
 
 def converter(entrada: str | Path, voz: str | Perfil, config=None):
@@ -269,7 +356,7 @@ def converter(entrada: str | Path, voz: str | Perfil, config=None):
     A voz de destino pode ser clonada (usa a amostra) ou pronta (o Optimus gera uma amostra
     curta com ela)."""
     perfil = voz if isinstance(voz, Perfil) else obter(voz)
-    if not clonagem_instalada():
+    if not chatterbox_instalado():
         raise ErroEstudio("O conversor de voz precisa do Chatterbox: pip install chatterbox-tts")
     alvo = perfil.caminho_amostra()
     temporario = None
@@ -299,9 +386,13 @@ def converter(entrada: str | Path, voz: str | Perfil, config=None):
 
 def descarregar() -> int:
     """Tira os modelos de voz da memória (útil depois de uma dublagem longa)."""
+    from optimus.estudio import omnivoice, piper
+
     with _TRAVA:
         n = len(_MODELOS)
         _MODELOS.clear()
+    omnivoice.descarregar()
+    piper.descarregar()
     try:
         import gc
 

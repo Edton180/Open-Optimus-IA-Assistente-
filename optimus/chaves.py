@@ -24,7 +24,8 @@ PREFIXO = "cofre:"
 
 # Campos de configuração que guardam segredos (secao, chave). Destinos têm chave_api cada um.
 CAMPOS_SECRETOS = [("motor", "chave_api"), ("voz", "elevenlabs_chave"), ("web", "senha"),
-                   ("web", "token_comando"), ("casa", "token")]
+                   ("web", "token_comando"), ("casa", "token"),
+                   ("estudio", "servidor_voz_chave")]
 
 
 def _keyring():

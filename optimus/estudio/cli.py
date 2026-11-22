@@ -33,8 +33,12 @@ def diagnostico() -> list[tuple[str, bool, str]]:
         ("Audiolivro a partir de PDF (pypdf)", _instalado("pypdf"), "pip install pypdf"),
         ("Vozes offline pt-BR (Kokoro)", tts.kokoro_instalado(), "optimus voz-diagnostico"),
         ("Vozes online em 18 idiomas (Edge)", tts.edge_instalado(), "pip install edge-tts"),
-        ("Clonagem e conversor de voz (Chatterbox)", motores.clonagem_instalada(),
-         "pip install chatterbox-tts"),
+        ("Clonagem, criar voz e 600+ idiomas (OmniVoice)", _instalado("omnivoice"),
+         "pip install omnivoice"),
+        ("Clonagem em 23 idiomas e conversor de voz (Chatterbox)",
+         motores.chatterbox_instalado(), "pip install chatterbox-tts"),
+        ("Vozes Piper offline (sherpa-onnx < 2)", _instalado("sherpa_onnx"),
+         'pip install "sherpa-onnx<2"'),
         ("Placa de vídeo", motores.dispositivo() != "cpu" or bool(shutil.which("nvidia-smi")),
          "opcional: deixa clonagem e transcrição bem mais rápidas"),
     ]
@@ -92,6 +96,30 @@ def executar(args, criar_optimus) -> int:
             for p in vozes.listar():
                 print(f"  {p.nome:24} {p.tipo:8} {p.genero:9} {p.descricao}")
             return 0
+        if acao == "modelos":
+            return _modelos(args)
+        if acao == "receitas":
+            from optimus.estudio import automacao
+
+            for r in automacao.receitas():
+                opcoes = "; ".join(f"{k}={v}" for k, v in r.opcoes.items())
+                print(f"  {r.nome:32} {r.acao:24} {opcoes}")
+            for d in automacao.observadas():
+                print(f"  📂 {d['pasta']} → {d['receita']}")
+            return 0
+        if acao == "desempenho":
+            from optimus import config as cfg
+            from optimus.estudio import desempenho
+
+            config = cfg.carregar()
+            if args.itens:
+                desempenho.escolher(config, args.itens[0])
+            atual = desempenho.atual(config)
+            print(f"  Atual: {atual.descricao} (transcrição {atual.transcricao}, "
+                  f"{atual.passos} passos). Recomendada aqui: {desempenho.recomendar()}")
+            return 0
+        if acao == "observar":
+            return _observar(args)
         if acao == "pronuncia":
             if len(args.itens) >= 2:
                 pronuncia.adicionar(args.itens[0], " ".join(args.itens[1:]))
@@ -170,6 +198,13 @@ def executar(args, criar_optimus) -> int:
             return 0
         if acao == "verificar-ia":
             return _imprimir(marca.detectar(args.itens[0]))
+        if acao == "receita":
+            from optimus.estudio import automacao
+
+            if len(args.itens) < 2:
+                print("Use: optimus estudio receita \"Nome da receita\" arquivo")
+                return 1
+            return _imprimir(automacao.aplicar(args.itens[0], args.itens[1], config))
         if acao == "converter":
             x = motores.converter(args.itens[0], args.voz, config)
             destino = args.saida or str(pasta_saidas(config) / "convertido.mp3")
@@ -180,6 +215,51 @@ def executar(args, criar_optimus) -> int:
         return 1
     print(f"Ação desconhecida: {acao}")
     return 1
+
+
+def _modelos(args) -> int:
+    from optimus.estudio import modelos
+
+    if len(args.itens) >= 2 and args.itens[0] in ("instalar", "baixar", "remover"):
+        for ident in args.itens[1:]:
+            if args.itens[0] == "remover":
+                modelos.remover(ident)
+                print(f"  Removido: {ident}")
+            else:
+                modelos.instalar(ident, _progresso)
+                print(f"\n  Instalado: {ident}")
+        return 0
+    for m in modelos.listar():
+        estado = "✅" if m["instalado"] else "  "
+        print(f"  {estado} {m['id']:30} {m['tipo']:12} {m['licenca']:16} ~{m['tamanho_mb']} MB"
+              f"  {m['descricao']}")
+    print("\n  Instalar: optimus estudio modelos instalar ID   Remover: ... remover ID")
+    return 0
+
+
+def _observar(args) -> int:
+    import time
+
+    from optimus import config as cfg
+    from optimus.estudio import automacao
+
+    if len(args.itens) >= 2:
+        regra = automacao.observar(args.itens[0], " ".join(args.itens[1:]))
+        print(f"  Observando {regra['pasta']} com a receita '{regra['receita']}'.")
+    if not automacao.observadas():
+        print("  Nenhuma pasta observada. Use: optimus estudio observar PASTA \"Receita\"")
+        return 1
+    for d in automacao.observadas():
+        print(f"  📂 {d['pasta']} → {d['receita']}")
+    print("  Esperando arquivos novos (Ctrl+C para sair)…")
+    obs = automacao.Observador(cfg.carregar(), ao_processar=lambda item: print(
+        f"  ✔ {item['arquivo']}: {item['resultado']}"))
+    try:
+        while True:
+            obs.uma_vez()
+            time.sleep(obs.intervalo)
+    except KeyboardInterrupt:
+        return 0
 
 
 def registrar(sub, funcao) -> None:
@@ -201,11 +281,19 @@ def registrar(sub, funcao) -> None:
   optimus estudio separar musica.mp3
   optimus estudio quem-fala entrevista.mp4
   optimus estudio verificar-ia audio.mp3
-  optimus estudio pronuncia Kaik Káique""")
+  optimus estudio pronuncia Kaik Káique
+  optimus estudio modelos                       (motores e modelos: instalar/remover)
+  optimus estudio modelos instalar omnivoice piper-pt_BR-faber-medium
+  optimus estudio desempenho qualidade          (auto, rapido, equilibrado, qualidade)
+  optimus estudio receitas
+  optimus estudio receita "Dublar para inglês" video.mp4
+  optimus estudio observar ~/Videos/para-dublar "Dublar para português"
+""")
     p.add_argument("acao", choices=["diagnostico", "vozes", "falar", "clonar", "criar-voz",
                                     "transcrever", "traduzir", "legendar", "dublar",
                                     "converter", "pronuncia", "audiolivro", "historia",
-                                    "separar", "quem-fala", "verificar-ia"])
+                                    "separar", "quem-fala", "verificar-ia", "modelos",
+                                    "desempenho", "receitas", "receita", "observar"])
     p.add_argument("itens", nargs="*", help="texto, nome e/ou arquivo, conforme a ação")
     p.add_argument("--voz", default="", help="voz a usar (padrão Valkyrie)")
     p.add_argument("--idioma", default="", help="idioma (padrão português do Brasil)")
