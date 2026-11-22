@@ -32,7 +32,10 @@ seguranca = ["keyring>=25"]
 # Estúdio de voz: transcrever, legendar, traduzir e dublar (ffmpeg incluído), vozes em
 # português do Brasil e em outros 17 idiomas
 estudio = ["numpy>=1.24", "imageio-ffmpeg>=0.4", "faster-whisper>=1.0", "edge-tts>=6.1",
-           "kokoro-onnx>=0.4", "miniaudio>=1.59"]
+           "kokoro-onnx>=0.4", "miniaudio>=1.59", "sherpa-onnx>=1.10", "pypdf>=4",
+           "sounddevice>=0.4", "pyautogui>=0.9", "pyperclip>=1.8"]
+# Separar a voz da música (Demucs, MIT). Grande: instala o PyTorch.
+isolar = ["demucs>=4"]
 # Clonagem e conversor de voz (Chatterbox, MIT). Grande: instala o PyTorch.
 clonagem = ["chatterbox-tts>=0.1"]
 # QR code para abrir o Optimus no celular

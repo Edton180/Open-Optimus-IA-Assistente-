@@ -392,6 +392,24 @@ def cmd_estudio(args) -> int:
     return executar(args, _criar)
 
 
+def cmd_ditado(args) -> int:
+    from optimus.estudio import ditado, transcrever
+
+    if not transcrever.motor_disponivel():
+        print("O ditado precisa de transcrição: pip install faster-whisper (ou sherpa-onnx)")
+        return 1
+    config = cfg.carregar()
+    if args.sem_janela:
+        ditado.terminal(args.idioma, config)
+    else:
+        try:
+            ditado.janela(args.idioma, config)
+        except Exception as erro:  # noqa: BLE001 - sem tkinter ou sem tela
+            print(f"Não consegui abrir o botão ({erro}). Use: optimus ditado --sem-janela")
+            return 1
+    return 0
+
+
 def cmd_chaves(args) -> int:
     from optimus import chaves
 
@@ -541,6 +559,10 @@ def main(argv: list[str] | None = None) -> int:
     from optimus.estudio.cli import registrar as registrar_estudio
 
     registrar_estudio(sub, cmd_estudio)
+    p = sub.add_parser("ditado", help="botão flutuante que escuta e digita em qualquer programa")
+    p.add_argument("--idioma", default="pt-BR")
+    p.add_argument("--sem-janela", action="store_true", help="ditar pelo terminal")
+    p.set_defaults(func=cmd_ditado)
     p = sub.add_parser("chaves", help="guardar chaves de API no cofre do sistema")
     p.add_argument("acao", choices=["listar", "definir", "apagar", "migrar"])
     p.add_argument("nome", nargs="?", help="secao.campo, ex.: provedores.groq_chave")

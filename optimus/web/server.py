@@ -19,7 +19,7 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, unquote, urlparse
 
 import psutil
 
@@ -302,6 +302,8 @@ class Manipulador(BaseHTTPRequestHandler):
         if not self._autorizado():
             return self._json({"erro": "senha necessária"}, 401)
         try:
+            if caminho.startswith("/api/estudio/"):
+                return self._estudio(metodo, caminho, parse_qs(url.query))
             self._api(metodo, caminho, parse_qs(url.query))
         except Exception as erro:  # noqa: BLE001
             log.exception("Erro na API")
@@ -323,6 +325,67 @@ class Manipulador(BaseHTTPRequestHandler):
             metodo, caminho, self.headers.get("Content-Type", ""), corpo,
             self.estado.optimus.config)
         self._bytes_status(dados, tipo, status)
+
+    # Tela Estúdio: vozes, narração, clonagem, legendas, dublagem, audiolivro (estudio_api.py)
+    def _estudio(self, metodo: str, caminho: str, consulta: dict) -> None:
+        from optimus.web import estudio_api
+
+        tamanho = int(self.headers.get("Content-Length") or 0)
+        tipo = self.headers.get("Content-Type", "")
+        partes = [unquote(p) for p in caminho.strip("/").split("/")[2:]]
+        if metodo == "POST" and partes == ["enviar"] and not tipo.startswith("multipart/"):
+            # vídeos grandes: vão direto para o disco, em pedaços, sem passar pela memória
+            if tamanho > estudio_api.LIMITE_ENVIO:
+                return self._json({"erro": "arquivo grande demais (máximo 2 GB)"}, 413)
+            nome = unquote(self.headers.get("X-Nome-Arquivo") or "")
+            salvo = estudio_api.receber_envio(nome, self.rfile, tamanho)
+            return self._json({"caminho": str(salvo)})
+        if tamanho > estudio_api.LIMITE_FORMULARIO:
+            return self._json({"erro": "pedido grande demais: envie arquivos grandes por "
+                                       "/api/estudio/enviar"}, 413)
+        corpo = self.rfile.read(tamanho) if tamanho else b""
+        status, dados = estudio_api.atender(metodo, partes, consulta, tipo, corpo,
+                                            self.estado.optimus)
+        if isinstance(dados, Path):
+            return self._enviar_arquivo(dados)
+        return self._json(dados, status)
+
+    def _enviar_arquivo(self, alvo: Path) -> None:
+        """Manda um arquivo em pedaços, com suporte a Range (para o player poder avançar)."""
+        total = alvo.stat().st_size
+        inicio, fim = 0, total - 1
+        faixa = re.match(r"bytes=(\d*)-(\d*)", self.headers.get("Range") or "")
+        if faixa and (faixa.group(1) or faixa.group(2)):
+            if faixa.group(1):
+                inicio = int(faixa.group(1))
+                fim = min(int(faixa.group(2)), total - 1) if faixa.group(2) else total - 1
+            else:
+                inicio = max(0, total - int(faixa.group(2)))
+            if inicio > fim:
+                self.send_response(416)
+                self.send_header("Content-Range", f"bytes */{total}")
+                self.end_headers()
+                return
+            self.send_response(206)
+            self.send_header("Content-Range", f"bytes {inicio}-{fim}/{total}")
+        else:
+            self.send_response(200)
+        tipo = mimetypes.guess_type(alvo.name)[0] or "application/octet-stream"
+        self.send_header("Content-Type", tipo)
+        self.send_header("Accept-Ranges", "bytes")
+        self.send_header("Content-Length", str(fim - inicio + 1))
+        nome = alvo.name.encode("ascii", "replace").decode().replace('"', "")
+        self.send_header("Content-Disposition", f'inline; filename="{nome}"')
+        self.end_headers()
+        with open(alvo, "rb") as f:
+            f.seek(inicio)
+            restante = fim - inicio + 1
+            while restante > 0:
+                pedaco = f.read(min(1024 * 1024, restante))
+                if not pedaco:
+                    break
+                self.wfile.write(pedaco)
+                restante -= len(pedaco)
 
     def _bytes_status(self, dados: bytes, tipo: str, status: int) -> None:
         self.send_response(status)

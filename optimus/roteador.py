@@ -33,9 +33,15 @@ INTENCOES: list[tuple[str, list[str]]] = [
      r"(video|legenda|audio|srt)|glossario|tarefas? do estudio)",
      ["estudio_transcrever", "estudio_traduzir_legenda", "estudio_legendar", "estudio_dublar",
       "estudio_tarefas", "estudio_cancelar", "estudio_vozes", "glossario_adicionar"]),
+    (r"\b(audio ?livro|livro (em|para) audio|narr\w* (o |esse |este |meu )?livro|epub|"
+     r"podcast|historia com (vozes|personagens)|roteiro|personagens|dialogo|"
+     r"separ\w* (a )?voz|isol\w* (a )?voz|karaoke|tir\w* a (voz|musica)|"
+     r"quem (fala|falou)|quantas pessoas falam|marca d.?agua|gerad[oa] por ia|e voz de ia)",
+     ["estudio_audiolivro", "estudio_historia", "estudio_separar_voz", "estudio_quem_fala",
+      "estudio_verificar_ia", "estudio_vozes", "estudio_tarefas"]),
     (r"\b(narr[ae]|narrac|locuc|locutor|clon\w* (a |minha |sua |uma |essa |esta )?voz|"
      r"voz (clonad|nova|propria|original)|cri\w* (uma )?(nova )?voz|vozes do estudio|"
-     r"estudio de voz|pronuncia|convert\w* (a )?voz|troca\w* a voz|audio ?livro|podcast|"
+     r"estudio de voz|pronuncia|convert\w* (a )?voz|troca\w* a voz|"
      r"texto (em|para) (voz|audio|fala)|(gera|grava|salva)\w* (um |uma |o |a )?(audio|mp3))",
      ["estudio_vozes", "estudio_falar", "estudio_clonar_voz", "estudio_criar_voz",
       "estudio_ajustar_voz", "estudio_apagar_voz", "estudio_converter_voz",

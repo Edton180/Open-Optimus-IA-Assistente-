@@ -234,6 +234,19 @@ def estudio_traduzir_legenda(ctx, arquivo: str, idioma: str, projeto: str = ""):
         return _erro(erro)
 
 
+def _pares(texto_pares: str) -> dict[str, str]:
+    """'Ana=Valkyrie; Bruno: Nexus' → {"Ana": "Valkyrie", "Bruno": "Nexus"}."""
+    import re
+
+    saida = {}
+    for parte in re.split(r"[;,\n]+", texto_pares or ""):
+        if re.search(r"[=:]", parte):
+            quem, voz = re.split(r"\s*[=:]\s*", parte.strip(), maxsplit=1)
+            if quem.strip() and voz.strip():
+                saida[quem.strip()] = voz.strip()
+    return saida
+
+
 def _na_fila(ctx, tipo: str, titulo: str, trabalho, **args) -> dict:
     from optimus.estudio.fila import fila
 
@@ -250,11 +263,12 @@ def _na_fila(ctx, tipo: str, titulo: str, trabalho, **args) -> dict:
      "idioma": texto("Idioma da legenda (vazio = o mesmo da fala)"),
      "no_video": {"type": "string", "enum": ["nao", "faixa", "queimada"],
                   "description": "Colocar no vídeo (padrão: só gerar o arquivo .srt)"},
-     "projeto": texto("Glossário a usar (opcional)")},
+     "projeto": texto("Glossário a usar (opcional)"),
+     "falantes": {**_BOOL, "description": "Pôr o nome de quem fala em cada fala"}},
     grupo="estudio", risco=MODERADO, obrigatorios=["arquivo"],
 )
 def estudio_legendar(ctx, arquivo: str, idioma: str = "", no_video: str = "nao",
-                     projeto: str = ""):
+                     projeto: str = "", falantes: bool = False):
     from optimus.estudio import dublagem, idiomas, traduzir
     from optimus.estudio.audio import ErroEstudio
 
@@ -269,7 +283,8 @@ def estudio_legendar(ctx, arquivo: str, idioma: str = "", no_video: str = "nao",
     def trabalho(progresso, cancelado, **_):
         return dublagem.legendar(entrada, idioma, queimar=no_video == "queimada",
                                  embutir=no_video == "faixa", llm=llm, projeto=projeto,
-                                 config=_config(ctx), progresso=progresso, cancelado=cancelado)
+                                 config=_config(ctx), progresso=progresso, cancelado=cancelado,
+                                 falantes=bool(falantes))
 
     return _na_fila(ctx, "legenda", f"legendar {entrada.name}", trabalho, arquivo=str(entrada),
                     idioma=idioma)
@@ -289,7 +304,13 @@ def estudio_legendar(ctx, arquivo: str, idioma: str = "", no_video: str = "nao",
      "legenda": {"type": "string", "enum": ["faixa", "queimada", "nenhuma"]},
      "volume_original": numero("Volume do áudio original por baixo, 0 a 1 (padrão 0.12)"),
      "legenda_pronta": texto("Legenda revisada para dublar a partir dela (opcional)"),
-     "projeto": texto("Glossário a usar (opcional)")},
+     "projeto": texto("Glossário a usar (opcional)"),
+     "separar_falantes": {**_BOOL, "description": "Uma voz diferente para cada pessoa que "
+                                                  "fala no vídeo"},
+     "elenco": texto("Voz de cada pessoa, ex.: 'Pessoa 1=Nexus; Pessoa 2=Aurora'"),
+     "fundo": {"type": "string", "enum": ["original", "musica", "nenhum"],
+               "description": "O que fica por baixo da voz nova: o áudio original baixinho, só "
+                              "a música e os efeitos (sem a voz antiga), ou nada"}},
     grupo="estudio", obrigatorios=["arquivo"],
     risco=lambda a, c: Avaliacao(CRITICO if a.get("voz_original") else MODERADO,
                                  f"dublar {a.get('arquivo')}"
@@ -299,7 +320,8 @@ def estudio_legendar(ctx, arquivo: str, idioma: str = "", no_video: str = "nao",
 def estudio_dublar(ctx, arquivo: str, idioma: str = "pt-BR", voz: str = "",
                    voz_original: bool = False, consentimento: bool = False,
                    legenda: str = "faixa", volume_original: float = 0.12,
-                   legenda_pronta: str = "", projeto: str = ""):
+                   legenda_pronta: str = "", projeto: str = "", separar_falantes: bool = False,
+                   elenco: str = "", fundo: str = "original"):
     from optimus.estudio import dublagem, idiomas, traduzir, vozes
     from optimus.estudio.audio import ErroEstudio
 
@@ -313,11 +335,22 @@ def estudio_dublar(ctx, arquivo: str, idioma: str = "pt-BR", voz: str = "",
                             "que é a voz dela ou que tem autorização."}
         pronta = str(_arquivo(ctx, legenda_pronta)) if legenda_pronta else None
         llm = None if pronta else traduzir.llm_do_contexto(ctx)
+        papeis = _pares(elenco)
+        for nome_voz in papeis.values():
+            vozes.obter(nome_voz)
+        if fundo == "musica":
+            from optimus.estudio import isolar
+
+            if not isolar.instalado():
+                raise ErroEstudio("Para manter só a música por baixo, instale: "
+                                  "pip install demucs")
     except (ErroEstudio, ValueError) as erro:
         return _erro(erro)
 
     def trabalho(progresso, cancelado, **_):
         return dublagem.dublar(entrada, alvo.codigo, voz, voz_original=bool(voz_original),
+                               separar_falantes=bool(separar_falantes or papeis),
+                               elenco=papeis or None, fundo=fundo or "original",
                                consentimento=bool(consentimento),
                                volume_original=float(volume_original or 0), legenda=legenda,
                                llm=llm, projeto=projeto, legenda_pronta=pronta,
@@ -355,6 +388,152 @@ def estudio_cancelar(ctx, tarefa: str = ""):
     if not alvo or not f.cancelar(alvo):
         return {"erro": "Não há tarefa rodando para cancelar."}
     return {"mensagem": "Cancelado."}
+
+
+# ---------------------------------------------------------------------- produções longas
+@ferramenta(
+    "estudio_audiolivro",
+    "Transforma um livro ou texto longo (EPUB, PDF, DOCX, TXT, Markdown) em audiolivro: um "
+    "MP3 por capítulo e um M4B com marcadores de capítulo e capa. Roda em segundo plano e "
+    "continua de onde parou.",
+    {"arquivo": texto("O livro (.epub .pdf .docx .txt .md)"),
+     "voz": texto("Voz do narrador (padrão Valkyrie)"),
+     "idioma": texto("Idioma da narração (padrão português do Brasil)"),
+     "titulo": texto("Título do audiolivro (padrão: nome do arquivo)"),
+     "autor": texto("Autor (opcional)"),
+     "capa": texto("Imagem da capa, .jpg ou .png (opcional)"),
+     "velocidade": numero("Ritmo: 0.7 a 1.5 (padrão 1)")},
+    grupo="estudio", risco=MODERADO, obrigatorios=["arquivo"],
+)
+def estudio_audiolivro(ctx, arquivo: str, voz: str = "", idioma: str = "", titulo: str = "",
+                       autor: str = "", capa: str = "", velocidade: float = 1.0):
+    from optimus.estudio import audiolivro, vozes
+    from optimus.estudio.audio import ErroEstudio
+
+    try:
+        entrada = _arquivo(ctx, arquivo)
+        imagem = str(_arquivo(ctx, capa)) if capa else None
+        vozes.obter(voz)
+    except (ErroEstudio, ValueError) as erro:
+        return _erro(erro)
+
+    def trabalho(progresso, cancelado, **_):
+        return audiolivro.gerar(entrada, voz, idioma, titulo, autor, imagem,
+                                velocidade=float(velocidade or 1), config=_config(ctx),
+                                progresso=progresso, cancelado=cancelado)
+
+    return _na_fila(ctx, "audiolivro", f"audiolivro de {entrada.name}", trabalho,
+                    arquivo=str(entrada), voz=voz)
+
+
+@ferramenta(
+    "estudio_historia",
+    "Gera uma história, podcast ou diálogo com uma voz para cada personagem, a partir de um "
+    "roteiro com uma fala por linha ('Ana: oi', '[Bruno] tudo bem?', '(pausa 2)'). Sai um "
+    "áudio único e a legenda com o nome de quem fala.",
+    {"roteiro": texto("O roteiro, ou o caminho de um .txt com ele"),
+     "elenco": texto("Voz de cada personagem, ex.: 'Ana=Valkyrie; Bruno=Nexus' (opcional)"),
+     "narrador": texto("Voz do narrador (linhas sem nome)"),
+     "idioma": texto("Idioma (padrão português do Brasil)"),
+     "titulo": texto("Nome do arquivo final")},
+    grupo="estudio", risco=LIVRE, obrigatorios=["roteiro"],
+)
+def estudio_historia(ctx, roteiro: str, elenco: str = "", narrador: str = "", idioma: str = "",
+                     titulo: str = ""):
+    from optimus.estudio import historia
+    from optimus.estudio.audio import ErroEstudio
+
+    if len(roteiro) < 300 and "\n" not in roteiro and roteiro.lower().endswith((".txt", ".md")):
+        try:
+            roteiro = str(_arquivo(ctx, roteiro))
+        except ErroEstudio as erro:
+            return _erro(erro)
+    papeis = _pares(elenco)
+
+    def trabalho(progresso, cancelado, **_):
+        return historia.gerar(roteiro, papeis, narrador, idioma, titulo, config=_config(ctx),
+                              progresso=progresso, cancelado=cancelado)
+
+    return _na_fila(ctx, "historia", f"história {titulo or ''}".strip(), trabalho)
+
+
+@ferramenta(
+    "estudio_separar_voz",
+    "Separa a voz da música de um áudio ou vídeo (isolamento vocal): sai um arquivo só com a "
+    "voz e outro só com a música e os efeitos. Bom para karaokê e para limpar uma gravação "
+    "antes de clonar.",
+    {"arquivo": texto("Áudio ou vídeo")},
+    grupo="estudio", risco=LIVRE, obrigatorios=["arquivo"],
+)
+def estudio_separar_voz(ctx, arquivo: str):
+    from optimus.estudio import isolar, pasta_saidas, registrar
+    from optimus.estudio.audio import ErroEstudio
+
+    try:
+        entrada = _arquivo(ctx, arquivo)
+        if not isolar.instalado():
+            raise ErroEstudio("Para separar a voz da música, instale: pip install demucs")
+    except ErroEstudio as erro:
+        return _erro(erro)
+
+    def trabalho(progresso, cancelado, **_):
+        import shutil
+
+        partes = isolar.separar(entrada, progresso)
+        pasta = pasta_saidas(_config(ctx))
+        saida = {}
+        for nome, caminho in partes.items():
+            destino = pasta / f"{entrada.stem}.{nome}.wav"
+            shutil.copyfile(caminho, destino)
+            saida[nome] = str(destino)
+        registrar("separacao", saida["voz"], entrada.name)
+        return saida
+
+    return _na_fila(ctx, "separacao", f"separar a voz de {entrada.name}", trabalho,
+                    arquivo=str(entrada))
+
+
+@ferramenta(
+    "estudio_quem_fala",
+    "Descobre quantas pessoas falam num áudio ou vídeo e quando cada uma fala (diarização).",
+    {"arquivo": texto("Áudio ou vídeo"),
+     "pessoas": numero("Quantas pessoas, se souber (0 = descobrir sozinho)")},
+    grupo="estudio", risco=LIVRE, obrigatorios=["arquivo"],
+)
+def estudio_quem_fala(ctx, arquivo: str, pessoas: float = 0):
+    from optimus.estudio import diarizar
+    from optimus.estudio.audio import ErroEstudio
+
+    try:
+        turnos = diarizar.falantes(_arquivo(ctx, arquivo), int(pessoas or 0))
+    except ErroEstudio as erro:
+        return _erro(erro)
+    tempo: dict[str, float] = {}
+    for t in turnos:
+        tempo[t.falante] = tempo.get(t.falante, 0.0) + t.duracao
+    return {"pessoas": len(tempo),
+            "tempo_de_fala": {k: f"{v:.0f}s" for k, v in tempo.items()},
+            "turnos": [{"de": t.inicio, "ate": t.fim, "quem": t.falante} for t in turnos[:200]]}
+
+
+@ferramenta(
+    "estudio_verificar_ia",
+    "Verifica se um áudio ou vídeo tem a marca d'água de voz gerada pelo Open Optimus.",
+    {"arquivo": texto("Áudio ou vídeo")},
+    grupo="estudio", risco=LIVRE, obrigatorios=["arquivo"],
+)
+def estudio_verificar_ia(ctx, arquivo: str):
+    from optimus.estudio import marca
+    from optimus.estudio.audio import ErroEstudio
+
+    try:
+        r = marca.detectar(_arquivo(ctx, arquivo))
+    except ErroEstudio as erro:
+        return _erro(erro)
+    r["resposta"] = ("Tem a marca de voz gerada pelo Open Optimus." if r["marcado"]
+                     else "Não encontrei a marca do Open Optimus (isso não prova que é voz "
+                          "humana: outra ferramenta pode ter gerado).")
+    return r
 
 
 # ---------------------------------------------------------------------- pronúncia e glossário
