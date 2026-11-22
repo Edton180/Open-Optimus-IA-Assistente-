@@ -64,6 +64,11 @@ python3 -m venv "$DADOS/venv"
 "$DADOS/venv/bin/python" -m pip install --upgrade pip >/dev/null
 "$DADOS/venv/bin/python" -m pip install "$PASTA[completo]" || "$DADOS/venv/bin/python" -m pip install "$PASTA"
 ln -sf "$DADOS/venv/bin/optimus" "$HOME/.local/bin/optimus"
+# Guarda qual commit foi instalado, para a atualização pelo GitHub saber comparar.
+COMMIT="$(git -C "$PASTA" rev-parse HEAD 2>/dev/null || true)"
+if [[ -n "$COMMIT" ]]; then
+  "$DADOS/venv/bin/python" -c "from optimus import autoatualizar; autoatualizar.registrar_commit('$COMMIT')" || true
+fi
 ok "Optimus instalado (comando: optimus)"
 
 # 4. Vozes naturais offline (feminina e masculina) já prontas

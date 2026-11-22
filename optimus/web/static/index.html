@@ -269,6 +269,10 @@
 
       <div class="cartao estudio-aba oculto" data-aba="historico">
         <div class="linha entre"><h3>Histórico</h3><input id="est-hist-busca" class="campo" placeholder="Buscar…" style="max-width:260px"></div>
+        <div class="linha">
+          <label class="sutil"><input type="checkbox" id="est-hist-arquivos"> Apagar também os arquivos de áudio e vídeo</label>
+          <button class="botao" id="est-hist-limpar" title="Os favoritos (★) ficam">🗑️ Limpar histórico</button>
+        </div>
         <table class="tabela"><tbody id="est-historico"></tbody></table>
       </div>
 
@@ -325,6 +329,11 @@
       <div class="cartao" id="cartao-celular">
         <h3>📱 Celular e agenda</h3>
         <p class="sutil">Aponte a câmera do celular para o QR code para abrir o Optimus (mesma rede Wi-Fi). O link da agenda põe seus lembretes no calendário do iPhone, Google Agenda ou Outlook (no iPhone: Ajustes › Calendário › Contas › Adicionar conta › Outra › Calendário assinado).</p>
+        <div class="linha">
+          <input id="celular-senha" type="password" autocomplete="new-password" placeholder="Senha para o celular (mín. 4 caracteres)" aria-label="Senha para o celular">
+          <button class="botao primario" id="ligar-celular">📶 Ligar acesso pelo celular</button>
+          <button class="botao oculto" id="desligar-celular">Desligar acesso</button>
+        </div>
         <div class="linha">
           <button class="botao" id="mostrar-celular">Mostrar QR code e link da agenda</button>
           <button class="botao oculto" id="trocar-agenda" title="O link antigo para de funcionar">Trocar link da agenda</button>
@@ -450,6 +459,7 @@
   <input type="password" class="campo" name="senha" autofocus><button class="botao primario">Entrar</button></form></div>
 
 <video id="gestos-video" class="oculto" muted playsinline title="Câmera dos gestos (clique para trocar de câmera)"></video>
+<div id="gestos-dica" class="oculto" aria-live="polite">Mostre a mão para a câmera</div>
 <script src="/voz.js"></script>
 <script src="/gestos.js"></script>
 <script src="/hud.js"></script>

@@ -77,3 +77,38 @@ def test_agenda_pela_api_com_chave_do_link():
         assert cfg["token_agenda"]  # criada na primeira vez
     finally:
         httpd.shutdown()
+
+
+def test_ligar_acesso_pelo_celular_pela_interface(monkeypatch):
+    import json
+
+    httpd, base = _subir("")
+    monkeypatch.setattr(server, "porta_celular", lambda config, porta: 0)  # porta livre
+    try:
+        def post(caminho, corpo):
+            pedido = urllib.request.Request(base + caminho, data=json.dumps(corpo).encode(),
+                                            headers={"Content-Type": "application/json"})
+            with urllib.request.urlopen(pedido, timeout=5) as r:
+                return json.loads(r.read())
+
+        with pytest.raises(urllib.error.HTTPError) as erro:  # sem senha não abre para a rede
+            post("/api/celular", {})
+        assert erro.value.code == 400
+        dados = post("/api/celular", {"senha": "1234"})
+        assert dados["ligado"] and dados["qr"].lstrip().startswith("<svg")
+        porta = server._servidor_celular.server_address[1]
+        assert dados["url"].endswith(f":{porta}")
+        # a porta do celular exige a senha; com ela, responde
+        with pytest.raises(urllib.error.HTTPError) as erro:
+            urllib.request.urlopen(f"http://127.0.0.1:{porta}/api/estado", timeout=5)
+        assert erro.value.code == 401
+        pedido = urllib.request.Request(f"http://127.0.0.1:{porta}/api/estado",
+                                        headers={"X-Optimus-Senha": "1234"})
+        with urllib.request.urlopen(pedido, timeout=5) as r:
+            assert r.status == 200
+        assert server.Manipulador.estado.optimus.config.get("web", "celular") is True
+        dados = post("/api/celular/desligar", {})
+        assert not dados["ligado"] and server._servidor_celular is None
+    finally:
+        server.desligar_celular()
+        httpd.shutdown()

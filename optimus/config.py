@@ -121,6 +121,9 @@ PADRAO: dict[str, Any] = {
         "porta": 8765,
         # Senha para acessar a interface de outro aparelho (celular). Vazio = só neste PC.
         "senha": "",
+        # Acesso pelo celular ligado pela interface (abre uma 2ª porta na rede, com a senha).
+        "celular": False,
+        "porta_celular": 0,  # 0 = porta da interface + 1 (8766)
         # Token para o Home Assistant/Alexa mandarem comandos (POST /api/comando). Vazio = off.
         "token_comando": "",
         # Chave do link da agenda (calendário do iPhone/Google). Criada sozinha; apague p/ trocar.

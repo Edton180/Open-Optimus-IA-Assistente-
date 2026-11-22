@@ -114,7 +114,8 @@ async function estHistorico() {
   const r = await estApi("historico?busca=" + encodeURIComponent(busca));
   $("#est-historico").innerHTML = r.itens.slice(0, 100).map((i) => `<tr><td class="sutil">${esc(i.quando)}</td><td>${esc(i.tipo)}</td>
     <td>${esc((i.texto || "").slice(0, 80))}</td><td>${esc(i.voz || "")}</td><td>${estLinks([i.arquivo])}</td>
-    <td><button class="botao" data-favorito="${esc(i.id)}" title="Favorito">${i.favorito ? "★" : "☆"}</button></td></tr>`).join("") || '<tr><td class="sutil">Nada ainda.</td></tr>';
+    <td><button class="botao" data-favorito="${esc(i.id)}" title="Favorito">${i.favorito ? "★" : "☆"}</button>
+    <button class="botao" data-apagar-hist="${esc(i.id)}" title="Apagar do histórico">🗑️</button></td></tr>`).join("") || '<tr><td class="sutil">Nada ainda.</td></tr>';
 }
 
 async function estPronuncia() {
@@ -273,6 +274,20 @@ $("#est-hist-busca").addEventListener("input", () => { clearTimeout(Estudio.busc
 $("#est-historico").addEventListener("click", async (e) => {
   const b = e.target.closest("[data-favorito]");
   if (b) { await estApi(`historico/${encodeURIComponent(b.dataset.favorito)}/favorito`, { method: "POST" }); estHistorico(); }
+  const a = e.target.closest("[data-apagar-hist]");
+  if (a) {
+    const arq = $("#est-hist-arquivos").checked ? "?arquivos=1" : "";
+    await estApi(`historico/${encodeURIComponent(a.dataset.apagarHist)}${arq}`, { method: "DELETE" });
+    estHistorico();
+  }
+});
+$("#est-hist-limpar").addEventListener("click", async () => {
+  const arquivos = $("#est-hist-arquivos").checked;
+  const aviso = "Apagar todo o histórico do Estúdio? Os favoritos (★) ficam."
+    + (arquivos ? " Os arquivos de áudio e vídeo gerados também serão apagados." : "");
+  if (!confirm(aviso)) return;
+  await estApi("historico" + (arquivos ? "?arquivos=1" : ""), { method: "DELETE" });
+  estHistorico();
 });
 
 $("#est-tarefas").addEventListener("click", async (e) => {

@@ -398,6 +398,11 @@ body.modo-hud #lateral { background: rgba(4,11,20,.96); border-right-color: rgba
   object-fit: cover; transform: scaleX(-1); border: 1px solid var(--vermelho); border-radius: 10px;
   z-index: 40; cursor: pointer; background: #000; box-shadow: 0 4px 18px rgba(0,0,0,.45); }
 #gestos-video.oculto { display: none; }
+#gestos-dica { position: fixed; right: 16px; bottom: calc(16px + min(120px, 22.5vw) + 6px); width: 160px;
+  max-width: 30vw; z-index: 40; font-size: 12px; text-align: center; padding: 4px 6px; border-radius: 8px;
+  color: #d6f6ff; background: linear-gradient(90deg, rgba(63,216,255,.35) calc(var(--progresso, 0) * 100%),
+  rgba(0,0,0,.65) 0); border: 1px solid rgba(63,216,255,.4); pointer-events: none; }
+#gestos-dica.oculto { display: none; }
 #botao-gestos.ligado { background: rgba(63,183,255,.16); border-color: #3fd8ff; color: #d6f6ff; }
 .qr { margin: 8px 16px 0 0; text-align: center; }
 .qr svg { width: 180px; height: 180px; background: #fff; border-radius: 8px; }

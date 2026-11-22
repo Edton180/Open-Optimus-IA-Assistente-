@@ -682,20 +682,45 @@ $("#baixar-atualizacao").addEventListener("click", async (ev) => {
 });
 
 // ---------- Celular e agenda ----------
-async function mostrarCelular(nova) {
+function desenharCelular(d) {
   const estadoEl = $("#celular-estado"); const qr = $("#celular-qr");
+  const figura = (svg, legenda) => svg ? `<figure class="qr">${svg}<figcaption>${esc(legenda)}</figcaption></figure>` : "";
+  qr.innerHTML = figura(d.qr, "Abrir no celular") + figura(d.agenda_qr, "Assinar a agenda");
+  const partes = [];
+  if (d.dica) partes.push("⚠️ " + esc(d.dica));
+  if (d.ligado) {
+    partes.push(`✅ Acesso pelo celular ligado. No celular (mesma rede Wi-Fi), leia o QR code ou abra <code>${esc(d.url)}</code> e entre com a senha.`);
+    partes.push("Se o celular não abrir, libere o Optimus (Python) no firewall do computador para redes privadas.");
+    if (!d.qr) partes.push("Para ver o QR code, instale: <code>pip install segno</code>");
+  }
+  partes.push(`Agenda: <code>${esc(d.agenda)}</code>`);
+  estadoEl.innerHTML = partes.join("<br>");
+  $("#trocar-agenda").classList.remove("oculto");
+  $("#desligar-celular").classList.toggle("oculto", !d.ligado);
+  $("#ligar-celular").textContent = d.ligado ? "🔑 Trocar senha do celular" : "📶 Ligar acesso pelo celular";
+}
+async function mostrarCelular(nova) {
+  const estadoEl = $("#celular-estado");
   estadoEl.textContent = "Carregando…";
-  try {
-    const d = await api("/api/celular" + (nova ? "?nova_chave=1" : ""));
-    const figura = (svg, legenda) => svg ? `<figure class="qr">${svg}<figcaption>${esc(legenda)}</figcaption></figure>` : "";
-    qr.innerHTML = figura(d.qr, "Abrir no celular") + figura(d.agenda_qr, "Assinar a agenda");
-    estadoEl.innerHTML = `${d.dica ? "⚠️ " + esc(d.dica) + "<br>" : ""}Endereço: <code>${esc(d.url)}</code><br>Agenda: <code>${esc(d.agenda)}</code>`
-      + (d.rede && !d.qr ? "<br>Para ver o QR code, instale: <code>pip install segno</code>" : "");
-    $("#trocar-agenda").classList.remove("oculto");
-  } catch (e) { estadoEl.textContent = "⚠️ " + e.message; }
+  try { desenharCelular(await api("/api/celular" + (nova ? "?nova_chave=1" : ""))); }
+  catch (e) { estadoEl.textContent = "⚠️ " + e.message; }
 }
 $("#mostrar-celular").addEventListener("click", () => mostrarCelular(false));
 $("#trocar-agenda").addEventListener("click", () => mostrarCelular(true));
+$("#ligar-celular").addEventListener("click", async (ev) => {
+  const estadoEl = $("#celular-estado"); const campo = $("#celular-senha");
+  ev.target.disabled = true; estadoEl.textContent = "Ligando…";
+  try {
+    const d = await api("/api/celular", { method: "POST", json: { senha: campo.value } });
+    if (d.erro) { estadoEl.textContent = "⚠️ " + d.erro; return; }
+    campo.value = ""; desenharCelular(d);
+  } catch (e) { estadoEl.textContent = "⚠️ " + e.message; }
+  finally { ev.target.disabled = false; }
+});
+$("#desligar-celular").addEventListener("click", async () => {
+  try { desenharCelular(await api("/api/celular/desligar", { method: "POST" })); }
+  catch (e) { $("#celular-estado").textContent = "⚠️ " + e.message; }
+});
 
 // ---------- Casa ----------
 let vigiaCameras = null;
@@ -877,11 +902,39 @@ function executarGesto(gesto, rotulo) {
   } else if (gesto === "Thumb_Down" && confirmacaoAberta) confirmacaoAberta.responder(false);
   else if (gesto === "Victory") alternarAoVivo(!aoVivo.ligado);
   else if (gesto === "Pointing_Up" && !estado.ocupado && !gravandoManual) mic.click();
+  else if (gesto === "Closed_Fist") { botaoFalar.click(); avisoVoz(estado.falar ? "🔊 Respostas em voz ligadas." : "🔇 Respostas em voz desligadas."); }
+  else if (gesto === "ILoveYou") irPara(modoHud && telaAtual() === "chat" ? "chat" : "hud");
+  else if (gesto === "Swipe_Left" || gesto === "Swipe_Right") trocarTelaPorGesto(gesto === "Swipe_Right" ? 1 : -1);
+  else if (gesto === "Swipe_Up" || gesto === "Swipe_Down") rolarPorGesto(gesto === "Swipe_Up" ? 1 : -1);
+}
+function telaAtual() {
+  const t = document.querySelector(".tela.ativa");
+  return t ? t.id.replace("tela-", "") : "chat";
+}
+function trocarTelaPorGesto(direcao) {
+  const telas = Array.from(document.querySelectorAll(".menu button[data-tela]")).map((b) => b.dataset.tela);
+  const atual = telaAtual() === "chat" ? (modoHud ? "hud" : "chat") : telaAtual();
+  const i = Math.max(0, telas.indexOf(atual));
+  irPara(telas[(i + direcao + telas.length) % telas.length]);
+}
+function rolarPorGesto(direcao) {
+  // No chat rola as mensagens; nas outras telas, a própria tela.
+  const alvo = telaAtual() === "chat" ? document.getElementById("mensagens") : document.querySelector(".tela.ativa");
+  const caixa = alvo && alvo.scrollHeight > alvo.clientHeight ? alvo : document.scrollingElement;
+  caixa.scrollBy({ top: direcao * caixa.clientHeight * 0.6, behavior: "smooth" });
+}
+function mostrarDicaGesto(info, temMao) {
+  const dica = document.getElementById("gestos-dica");
+  if (!dica) return;
+  if (!temMao) { dica.textContent = "Mostre a mão para a câmera"; dica.style.setProperty("--progresso", "0"); return; }
+  if (!info) { dica.textContent = "✋ mão vista"; dica.style.setProperty("--progresso", "0"); return; }
+  dica.textContent = GESTOS_ROTULOS[info.gesto] || "";
+  dica.style.setProperty("--progresso", String(info.progresso));
 }
 async function alternarGestos(ligar, idCamera) {
   const botao = $("#botao-gestos"), video = $("#gestos-video");
   if (!ligar) {
-    Gestos.desligar(); video.classList.add("oculto");
+    Gestos.desligar(); video.classList.add("oculto"); document.getElementById("gestos-dica").classList.add("oculto");
     botao.classList.remove("ligado"); botao.textContent = "✋ Gestos";
     return;
   }
@@ -889,10 +942,11 @@ async function alternarGestos(ligar, idCamera) {
   let id = idCamera;
   if (id === undefined) { try { id = localStorage.getItem("optimus_camera_gestos") || ""; } catch (e) { id = ""; } }
   try {
-    try { await Gestos.ligar(executarGesto, video, id); }
-    catch (e) { if (!id || e.name === "NotAllowedError") throw e; await Gestos.ligar(executarGesto, video, ""); } // câmera salva foi desligada
-    video.classList.remove("oculto"); botao.classList.add("ligado"); botao.textContent = "✋ Gestos ligados";
-    avisoVoz("Gestos: ✋ parar · 👍 aprovar · 👎 negar · ✌️ ao vivo · ☝️ falar. Clique no vídeo para trocar de câmera.");
+    try { await Gestos.ligar(executarGesto, video, id, mostrarDicaGesto); }
+    catch (e) { if (!id || e.name === "NotAllowedError") throw e; await Gestos.ligar(executarGesto, video, "", mostrarDicaGesto); } // câmera salva foi desligada
+    video.classList.remove("oculto"); document.getElementById("gestos-dica").classList.remove("oculto");
+    botao.classList.add("ligado"); botao.textContent = "✋ Gestos ligados";
+    avisoVoz("Gestos: ✋ parar · 👍 aprovar · 👎 negar · ✌️ ao vivo · ☝️ falar · ✊ voz liga/desliga · 🤟 Núcleo/Conversas · 👈👉 trocar de tela · 👆👇 rolar. Segure o gesto parado por meio segundo. Clique no vídeo para trocar de câmera.");
   } catch (e) {
     botao.textContent = "✋ Gestos";
     avisoVoz("⚠️ Gestos: " + (e.name === "NotAllowedError" ? "libere a câmera para este site (cadeado na barra de endereço)."

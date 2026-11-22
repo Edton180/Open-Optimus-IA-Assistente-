@@ -60,6 +60,51 @@ def registrar(tipo: str, arquivo: str | Path, texto: str = "", voz: str = "",
     return item
 
 
+def _apagar_arquivo(caminho: str) -> bool:
+    """Apaga o áudio/vídeo gerado, mas só se estiver numa pasta de saídas do Estúdio."""
+    try:
+        alvo = Path(caminho).resolve()
+        permitidas = {(pasta_estudio() / "saidas").resolve(), pasta_saidas().resolve()}
+        try:
+            from optimus.config import carregar
+
+            permitidas.add(pasta_saidas(carregar()).resolve())
+        except Exception:  # noqa: BLE001 - sem config: só as pastas padrão
+            pass
+        if alvo.is_file() and any(alvo.is_relative_to(p) for p in permitidas):
+            alvo.unlink()
+            return True
+    except OSError:
+        pass
+    return False
+
+
+def apagar_historico(item_id: str = "", tudo: bool = False, manter_favoritos: bool = True,
+                     apagar_arquivos: bool = False) -> int:
+    """Remove um item (por id) ou o histórico todo. Devolve quantos itens saíram.
+
+    `apagar_arquivos` também apaga os arquivos gerados (só dentro das pastas de saídas).
+    """
+    try:
+        itens = json.loads(_arq_historico().read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return 0
+    if tudo:
+        sair = [i for i in itens if not (manter_favoritos and i.get("favorito"))]
+    else:
+        sair = [i for i in itens if item_id and i.get("id") == item_id]
+    if not sair:
+        return 0
+    ids = {id(i) for i in sair}
+    ficam = [i for i in itens if id(i) not in ids]
+    if apagar_arquivos:
+        for i in sair:
+            _apagar_arquivo(i.get("arquivo", ""))
+    _arq_historico().write_text(json.dumps(ficam, ensure_ascii=False, indent=1),
+                                encoding="utf-8")
+    return len(sair)
+
+
 def favoritar(item_id: str, favorito: bool = True) -> bool:
     try:
         itens = json.loads(_arq_historico().read_text(encoding="utf-8"))

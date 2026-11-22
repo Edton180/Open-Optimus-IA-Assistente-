@@ -8,6 +8,7 @@ Rotas:
   POST falar | criar-voz | clonar (multipart: nome, consentimento, arquivo)
   POST dublar | legendar | audiolivro | historia | separar | transcrever | verificar
   POST tarefas/<id>/cancelar | tarefas/<id>/repetir | historico/<id>/favorito
+  DELETE historico[/<id>]?arquivos=1&favoritos=1 (apaga um item ou o histórico)
   POST pronuncia {escrito, falado}   DELETE pronuncia/<escrito>   DELETE vozes/<voz>
 """
 
@@ -179,6 +180,15 @@ def atender(metodo: str, partes: list[str], consulta: dict, tipo: str, corpo: by
                 alvo = arquivo_permitido((consulta.get("caminho") or [""])[0], config)
                 return (200, alvo) if alvo else (404, {"erro": "arquivo não encontrado"})
         if metodo == "DELETE":
+            if recurso == "historico":
+                from optimus.estudio import apagar_historico
+
+                arquivos = _verdade((consulta.get("arquivos") or [""])[0])
+                if ident:
+                    return 200, {"removidos": apagar_historico(ident, apagar_arquivos=arquivos)}
+                manter = not _verdade((consulta.get("favoritos") or [""])[0])
+                return 200, {"removidos": apagar_historico(tudo=True, manter_favoritos=manter,
+                                                           apagar_arquivos=arquivos)}
             if recurso == "pronuncia" and ident:
                 return 200, {"removido": pronuncia.remover(ident)}
             if recurso == "vozes" and ident:
