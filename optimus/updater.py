@@ -37,8 +37,12 @@ def raiz_instalada() -> Path:
 
 
 def eh_checkout_git(raiz: str | Path) -> bool:
-    """True se a pasta for mesmo um clone do Git (tem .git), não uma instalação por pip."""
-    return (Path(raiz).expanduser() / ".git").is_dir()
+    """True se a pasta for mesmo um clone do Git, não uma instalação por pip.
+
+    `.git` é uma pasta num clone normal, mas um **arquivo** (com `gitdir: ...`) numa worktree do
+    Git; `.exists()` cobre os dois, então uma worktree também é atualizada por `git pull`.
+    """
+    return (Path(raiz).expanduser() / ".git").exists()
 
 
 class ErroGit(RuntimeError):

@@ -160,6 +160,21 @@ def test_construir_atualizador_escolhe_git_ou_pip(tmp_path):
     assert isinstance(construir_atualizador(cfg), Atualizador)
 
 
+def test_eh_checkout_git_reconhece_worktree(tmp_path):
+    from optimus.updater import eh_checkout_git
+
+    # Clone normal: .git é pasta.
+    (tmp_path / ".git").mkdir()
+    assert eh_checkout_git(tmp_path) is True
+    # Worktree do Git: .git é um arquivo com "gitdir: ...".
+    outra = tmp_path / "wt"; outra.mkdir()
+    (outra / ".git").write_text("gitdir: /algum/lugar/.git/worktrees/wt\n")
+    assert eh_checkout_git(outra) is True
+    # Instalação por pip: sem .git.
+    vazia = tmp_path / "site-packages"; vazia.mkdir()
+    assert eh_checkout_git(vazia) is False
+
+
 def test_atualizador_pip_verifica_e_atualiza_sem_rede():
     from optimus.updater import AtualizadorPip
 
