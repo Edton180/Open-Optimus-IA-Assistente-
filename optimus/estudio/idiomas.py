@@ -200,3 +200,42 @@ def voz_edge(i: Idioma, genero: str = "feminina") -> str:
                   if str(v.get("Locale", "")).lower().startswith(prefixo)]
     candidatas.sort(key=lambda v: (v.get("Gender") != quer, "Multilingual" in v["ShortName"]))
     return candidatas[0]["ShortName"] if candidatas else ""
+
+# Nomes em inglês que servidores compatíveis com a OpenAI devolvem ("portuguese") → código
+WHISPER_INGLES = {
+    "english": "en", "chinese": "zh", "german": "de", "spanish": "es", "russian": "ru",
+    "korean": "ko", "french": "fr", "japanese": "ja", "portuguese": "pt", "turkish": "tr",
+    "polish": "pl", "catalan": "ca", "dutch": "nl", "arabic": "ar", "swedish": "sv",
+    "italian": "it", "indonesian": "id", "hindi": "hi", "finnish": "fi", "vietnamese": "vi",
+    "hebrew": "he", "ukrainian": "uk", "greek": "el", "malay": "ms", "czech": "cs",
+    "romanian": "ro", "danish": "da", "hungarian": "hu", "tamil": "ta", "norwegian": "no",
+    "thai": "th", "urdu": "ur", "croatian": "hr", "bulgarian": "bg", "lithuanian": "lt",
+    "latin": "la", "maori": "mi", "malayalam": "ml", "welsh": "cy", "slovak": "sk",
+    "telugu": "te", "persian": "fa", "latvian": "lv", "bengali": "bn", "serbian": "sr",
+    "azerbaijani": "az", "slovenian": "sl", "kannada": "kn", "estonian": "et",
+    "macedonian": "mk", "breton": "br", "basque": "eu", "icelandic": "is", "armenian": "hy",
+    "nepali": "ne", "mongolian": "mn", "bosnian": "bs", "kazakh": "kk", "albanian": "sq",
+    "swahili": "sw", "galician": "gl", "marathi": "mr", "punjabi": "pa", "sinhala": "si",
+    "khmer": "km", "shona": "sn", "yoruba": "yo", "somali": "so", "afrikaans": "af",
+    "occitan": "oc", "georgian": "ka", "belarusian": "be", "tajik": "tg", "sindhi": "sd",
+    "gujarati": "gu", "amharic": "am", "yiddish": "yi", "lao": "lo", "uzbek": "uz",
+    "faroese": "fo", "haitian creole": "ht", "pashto": "ps", "turkmen": "tk", "nynorsk": "nn",
+    "maltese": "mt", "sanskrit": "sa", "luxembourgish": "lb", "myanmar": "my", "tibetan": "bo",
+    "tagalog": "tl", "malagasy": "mg", "assamese": "as", "tatar": "tt", "hawaiian": "haw",
+    "lingala": "ln", "hausa": "ha", "bashkir": "ba", "javanese": "jw", "sundanese": "su",
+    "cantonese": "yue",
+}
+
+
+def codigo_detectado(lingua: str) -> str:
+    """Código do Whisper a partir do que o reconhecimento devolveu: "pt", "pt-BR" ou
+    "portuguese". Vazio se não reconhecer."""
+    t = (lingua or "").strip().lower()
+    if not t:
+        return ""
+    if t in WHISPER_INGLES:
+        return WHISPER_INGLES[t]
+    try:
+        return idioma(t).whisper or ""
+    except ValueError:
+        return ""

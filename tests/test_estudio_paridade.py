@@ -201,6 +201,9 @@ def test_servidor_remoto_fala_e_transcreve(monkeypatch, tmp_path):
     midia.write_bytes(b"x")
     trechos, falado = transcrever.transcrever(midia, config=config, motor="remoto")
     assert trechos[0].texto == "Olá mundo" and falado.codigo == "pt-BR"
+    assert idiomas.codigo_detectado("russian") == "ru"
+    assert idiomas.codigo_detectado("Haitian Creole") == "ht"
+    assert idiomas.codigo_detectado("pt") == "pt" and idiomas.codigo_detectado("??") == ""
     with pytest.raises(ErroEstudio, match="servidor_voz_url"):
         remoto.falar("Oi", config=_Config())
 

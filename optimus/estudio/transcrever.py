@@ -210,12 +210,11 @@ def transcrever(caminho: str | Path, idioma: str = "", modelo: str = "", config=
 
         (progresso or (lambda *a: None))(0.05, "Enviando para o servidor de transcrição…")
         trechos, lingua = remoto.transcrever(caminho, idioma, config)
-        try:  # a OpenAI devolve o nome em inglês ("portuguese"); outros, o código
-            lingua = (idiomas.idioma(lingua).whisper or lingua) if lingua else ""
-        except ValueError:
-            lingua = {"portuguese": "pt", "english": "en", "spanish": "es", "french": "fr",
-                      "german": "de", "italian": "it", "japanese": "ja", "chinese": "zh"
-                      }.get(lingua.lower(), "")
+        detectado = lingua
+        lingua = idiomas.codigo_detectado(detectado)  # "portuguese" (OpenAI) ou "pt"
+        if not lingua and not idioma:
+            raise ErroEstudio(f"Não reconheci o idioma '{detectado}' que o servidor devolveu. "
+                              "Diga o idioma do áudio (ex.: idioma=pt-BR).")
     elif escolhido == "faster-whisper":
         try:
             trechos, lingua = _faster(caminho, codigo, nome, progresso, cancelado)
