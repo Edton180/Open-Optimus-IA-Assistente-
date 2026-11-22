@@ -394,10 +394,10 @@ class Banco:
 
     # Copiados (histórico da área de transferência)
     def guardar_copiado(self, texto: str, limite: int = 100) -> int | None:
-        """Guarda um texto copiado. Ignora vazio e repetição do mais recente; uma cópia
-        igual mais antiga sobe para o topo; mantém só os 'limite' últimos."""
-        texto = (texto or "").strip()
-        if not texto:
+        """Guarda um texto copiado, preservando espaços e quebras de linha. Ignora vazio e
+        repetição do mais recente; uma cópia igual mais antiga sobe para o topo; mantém só
+        os 'limite' últimos."""
+        if not texto or not texto.strip():
             return None
         ultimo = self._todos("SELECT texto FROM copiados ORDER BY id DESC LIMIT 1")
         if ultimo and ultimo[0]["texto"] == texto:

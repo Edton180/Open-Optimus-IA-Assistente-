@@ -51,12 +51,22 @@ def test_apagar_e_limpar(tmp_path):
 
 
 # --------------------------------------------------------------- ferramentas
-def test_ferramenta_listar(tmp_path):
+def test_ferramenta_listar_so_previa_nao_texto_inteiro(tmp_path):
     ctx = _ctx(tmp_path)
     ctx.banco.guardar_copiado("primeiro")
-    ctx.banco.guardar_copiado("segundo")
+    ctx.banco.guardar_copiado("segredo-super-secreto-" + "x" * 200)
     r = cp.copiados_listar(ctx, limite=5)
-    assert [c["texto"] for c in r["copiados"]] == ["segundo", "primeiro"]
+    # ordem mais recente primeiro, com prévia (não o texto inteiro)
+    assert "previa" in r["copiados"][0] and "texto" not in r["copiados"][0]
+    assert r["copiados"][1]["previa"] == "primeiro"
+    # o texto grande não vaza inteiro no resultado da ferramenta
+    assert "x" * 200 not in str(r)
+
+
+def test_preserva_espacos_e_quebras(tmp_path):
+    b = _banco(tmp_path)
+    cid = b.guardar_copiado("  codigo\n  indentado\n")
+    assert b.copiado(cid)["texto"] == "  codigo\n  indentado\n"  # restaurável exato
 
 
 def test_ferramenta_usar_item_inexistente(tmp_path):
