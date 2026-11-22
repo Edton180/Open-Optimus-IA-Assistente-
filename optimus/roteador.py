@@ -29,6 +29,17 @@ INTENCOES: list[tuple[str, list[str]]] = [
      r"troc|lista|catalogo|novo|novos|recomend)|\b(melhor|qual) (modelo|ia)\b",
      ["modelos_recomendados", "modelo_cabe", "modelo_avaliar", "modelo_baixar", "modelo_usar",
       "modelos_catalogo_atualizar"]),
+    (r"\b(dubl|legend|transcrev|transcric|srt\b|traduz\w* (o |esse |este |a |essa |meu |minha )?"
+     r"(video|legenda|audio|srt)|glossario|tarefas? do estudio)",
+     ["estudio_transcrever", "estudio_traduzir_legenda", "estudio_legendar", "estudio_dublar",
+      "estudio_tarefas", "estudio_cancelar", "estudio_vozes", "glossario_adicionar"]),
+    (r"\b(narr[ae]|narrac|locuc|locutor|clon\w* (a |minha |sua |uma |essa |esta )?voz|"
+     r"voz (clonad|nova|propria|original)|cri\w* (uma )?(nova )?voz|vozes do estudio|"
+     r"estudio de voz|pronuncia|convert\w* (a )?voz|troca\w* a voz|audio ?livro|podcast|"
+     r"texto (em|para) (voz|audio|fala)|(gera|grava|salva)\w* (um |uma |o |a )?(audio|mp3))",
+     ["estudio_vozes", "estudio_falar", "estudio_clonar_voz", "estudio_criar_voz",
+      "estudio_ajustar_voz", "estudio_apagar_voz", "estudio_converter_voz",
+      "pronuncia_adicionar", "pronuncia_listar", "pronuncia_remover"]),
     (r"\b(senha|password)\b.{0,20}\b(gera|cri|nova|forte|aleatori)|\b(gera|cri)\w* (uma )?senha",
      ["gerar_senha"]),
     (r"\b(cara ou coroa|joga(r)? (uma )?moeda|rola(r)? (um )?dado|sorte(ia|ar|io)|escolhe (um|uma) )",

@@ -30,12 +30,14 @@ optimus config agente.modo seguro    # altera um valor
 | voz | modelo_stt | automático | `tiny` a `large-v3-turbo` |
 | voz | falar_respostas | true | No `optimus voz` |
 | internet | max_resultados | 5 | Resultados por pesquisa |
+| estudio | pasta_saidas | `<pasta do Optimus>/estudio/saidas` | Onde ficam narrações, legendas e vídeos dublados, veja [estudio.md](estudio.md) |
+| estudio | modelo_transcricao | automático | `tiny` a `large-v3-turbo` (com placa de vídeo, `large-v3-turbo`) |
 | web | host / porta | `127.0.0.1` / 8765 | Interface |
 | web | senha | | Obrigatória para `--rede` |
 | recursos | uso | `equilibrado` | `economico`, `equilibrado`, `maximo` |
 | recursos | ram_minima_gb | 1.5 | Troca para o modelo rápido abaixo disso |
 | recursos | prioridade_baixa | true | |
-| ferramentas | internet, arquivos, comandos, programas, teclado_mouse, lembretes, memoria, casa, plugins | tudo ligado menos teclado_mouse | Liga/desliga grupos |
+| ferramentas | internet, arquivos, comandos, programas, teclado_mouse, lembretes, memoria, casa, estudio, plugins | tudo ligado menos teclado_mouse | Liga/desliga grupos |
 | casa | url / token | | Home Assistant |
 | casa | webcams | true | Webcams por cabo (USB) e a do notebook aparecem como câmeras `usb:0`, `usb:1`... |
 | cameras | (lista) | vazia | Câmeras IP sem Home Assistant: `nome` e `url` (http, rtsp ou `usb:N`), veja [casa.md](casa.md) |

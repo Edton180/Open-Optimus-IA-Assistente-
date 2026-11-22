@@ -109,6 +109,13 @@ PADRAO: dict[str, Any] = {
         "buscador": "duckduckgo",
         "max_resultados": 5,
     },
+    "estudio": {
+        # Pasta dos áudios, legendas e vídeos dublados. Vazio = <pasta do Optimus>/estudio/saidas
+        "pasta_saidas": "",
+        # Modelo de transcrição: vazio = automático (large-v3-turbo com placa de vídeo, small
+        # sem). Opções: tiny, base, small, medium, large-v3, large-v3-turbo.
+        "modelo_transcricao": "",
+    },
     "web": {
         "host": "127.0.0.1",
         "porta": 8765,
@@ -151,6 +158,7 @@ PADRAO: dict[str, Any] = {
         "memoria": True,
         "casa": True,
         "controle": True,
+        "estudio": True,
         "plugins": True,
     },
     "casa": {
