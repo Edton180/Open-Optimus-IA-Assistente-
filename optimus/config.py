@@ -198,6 +198,8 @@ PADRAO: dict[str, Any] = {
     },
     # Outros computadores e outras IAs (veja docs/rede.md)
     "destinos": [],
+    # Servidores MCP: outros apps e serviços viram ferramentas (veja docs/plugins.md)
+    "mcp": [],
     # Outros PCs da casa para ligar (Wake-on-LAN) e comandar por SSH (veja docs/controle.md)
     "computadores": [],
     # Câmeras IP sem Home Assistant: [[cameras]] nome = "Portão" url = "rtsp://..."

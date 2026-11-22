@@ -426,6 +426,22 @@ def cmd_chaves(args) -> int:
     return 0
 
 
+def cmd_mcp(args) -> int:
+    from optimus.mcp_cliente import desligar_todos, ferramentas_mcp
+
+    config = cfg.carregar()
+    servidores = config.dados.get("mcp") or []
+    if not servidores:
+        print("Nenhum servidor MCP em [[mcp]] no config.toml. Veja docs/plugins.md.")
+        return 0
+    ferramentas = ferramentas_mcp(config)
+    for item in ferramentas.values():
+        print(f"  {item.nome:40} {item.descricao[:70]}")
+    print(f"{len(ferramentas)} ferramenta(s) de {len(servidores)} servidor(es).")
+    desligar_todos()
+    return 0
+
+
 def cmd_atualizar(args) -> int:
     from optimus import autoatualizar
 
@@ -512,6 +528,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--sem-subpastas", action="store_true", help="não entrar nas subpastas")
     p.add_argument("--esquecer", action="store_true", help="remover do índice os docs da pasta")
     p.set_defaults(func=cmd_biblioteca)
+    sub.add_parser("mcp", help="testar os servidores MCP e listar as ferramentas deles"
+                   ).set_defaults(func=cmd_mcp)
     p = sub.add_parser("chaves", help="guardar chaves de API no cofre do sistema")
     p.add_argument("acao", choices=["listar", "definir", "apagar", "migrar"])
     p.add_argument("nome", nargs="?", help="secao.campo, ex.: provedores.groq_chave")
