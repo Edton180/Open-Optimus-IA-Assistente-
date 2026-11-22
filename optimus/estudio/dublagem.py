@@ -167,16 +167,19 @@ def _faixa_dublada(trechos: list[Trecho], elenco: dict, idioma: idiomas.Idioma,
         if cancelado and cancelado():
             raise ErroEstudio("Cancelado.")
         perfil = elenco.get(t.falante) or elenco[""]
-        chave = _hash(t.texto, perfil.id, perfil.tom, perfil.velocidade, idioma.codigo)
+        proximo = trechos[n + 1].inicio if n + 1 < len(trechos) else duracao or t.fim + 2.0
+        espaco = max(t.duracao, proximo - t.inicio - 0.05)
+        # O OmniVoice já gera a fala com o tempo do trecho original; os outros são ajustados
+        alvo = round(min(t.duracao, espaco), 2) if t.duracao >= 0.4 else 0.0
+        chave = _hash(t.texto, perfil.id, perfil.tom, perfil.velocidade, idioma.codigo, alvo)
         cache = pasta / "falas" / f"{n:05d}-{chave}.wav"
         if cache.exists():
             x, _ = audio.ler_wav(cache.read_bytes())
         else:
-            x = motores.gerar(t.texto, perfil, idioma.codigo, config=config, cancelado=cancelado)
+            x = motores.gerar(t.texto, perfil, idioma.codigo, config=config, cancelado=cancelado,
+                              duracao=alvo)
             cache.parent.mkdir(parents=True, exist_ok=True)
             cache.write_bytes(audio.wav_bytes(x, TAXA))
-        proximo = trechos[n + 1].inicio if n + 1 < len(trechos) else duracao or t.fim + 2.0
-        espaco = max(t.duracao, proximo - t.inicio - 0.05)
         x, fator = audio.caber(x, TAXA, espaco)
         if fator > 1.01:
             ajustes.append(n)

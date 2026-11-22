@@ -115,6 +115,18 @@ PADRAO: dict[str, Any] = {
         # Modelo de transcrição: vazio = automático (large-v3-turbo com placa de vídeo, small
         # sem). Opções: tiny, base, small, medium, large-v3, large-v3-turbo.
         "modelo_transcricao": "",
+        # Desempenho: auto | rapido | equilibrado | qualidade (auto olha a placa e a memória)
+        "desempenho": "auto",
+        # Motor da clonagem: auto | chatterbox | omnivoice | remoto
+        "motor_clone": "auto",
+        # Motor da transcrição: vazio = automático | faster-whisper | sherpa-onnx | remoto
+        "motor_transcricao": "",
+        # Servidor de voz remoto compatível com a OpenAI (outra máquina com placa de vídeo)
+        "servidor_voz_url": "",
+        "servidor_voz_chave": "",
+        "servidor_voz_modelo": "tts-1",
+        "servidor_voz_transcricao": "whisper-1",
+        "servidor_voz_voz": "alloy",
     },
     "web": {
         "host": "127.0.0.1",

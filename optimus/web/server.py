@@ -815,6 +815,12 @@ def iniciar(host: str = "127.0.0.1", porta: int = 8765, abrir_navegador: bool = 
     Manipulador.senha = senha if host not in ("127.0.0.1", "localhost") else ""
     servidor = ThreadingHTTPServer((host, porta), Manipulador)
     servidor.daemon_threads = True
+    try:  # pastas observadas do estúdio passam a rodar enquanto a interface estiver aberta
+        from optimus.estudio import automacao
+
+        automacao.iniciar_se_preciso(optimus.config)
+    except Exception:  # noqa: BLE001
+        pass
     endereco = f"http://{'127.0.0.1' if host in ('0.0.0.0', '') else host}:{porta}"
     print(f"Optimus {__version__} rodando em {endereco}  (Ctrl+C para parar)")
     if host not in ("127.0.0.1", "localhost"):

@@ -273,7 +273,10 @@ def test_gerar_usa_pronuncia_e_frases(voz_falsa):
 
 
 def test_clone_sem_motor_explica_como_instalar(monkeypatch, tmp_path):
-    monkeypatch.setattr(motores, "clonagem_instalada", lambda: False)
+    from optimus.estudio import omnivoice
+
+    monkeypatch.setattr(motores, "chatterbox_instalado", lambda: False)
+    monkeypatch.setattr(omnivoice, "instalado", lambda: False)
     p = vozes.Perfil("x", "X", "clonada", "clone", amostra="amostra.wav")
     (vozes.pasta_vozes() / "x").mkdir(parents=True)
     (vozes.pasta_vozes() / "x" / "amostra.wav").write_bytes(b"")
@@ -292,6 +295,7 @@ def test_clone_chama_chatterbox_em_portugues(monkeypatch):
             return _seno(0.5)
 
     monkeypatch.setattr(motores, "_modelo_clone", lambda: Falso())
+    monkeypatch.setattr(motores, "chatterbox_instalado", lambda: True)
     p = vozes.Perfil("x", "X", "clonada", "clone", amostra="amostra.wav", expressividade=0.9)
     (vozes.pasta_vozes() / "x").mkdir(parents=True)
     (vozes.pasta_vozes() / "x" / "amostra.wav").write_bytes(b"RIFF")

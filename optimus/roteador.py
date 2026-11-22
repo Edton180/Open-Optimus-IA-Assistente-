@@ -25,6 +25,15 @@ INTENCOES: list[tuple[str, list[str]]] = [
     (r"\b(atualiz|versao (nova|mais nova|anterior)|nova versao|update|voltar? (a|para a) versao|"
      r"desfaz(er)? a atualiza)",
      ["atualizacao_verificar", "atualizacao_baixar", "atualizacao_voltar"]),
+    (r"receitas? do estudio|salv\w* (uma |como |essa )?receita|rod\w* a receita|"
+     r"pastas? observad|observ\w* (a |essa |esta |uma )?pasta",
+     ["estudio_receitas", "estudio_salvar_receita", "estudio_rodar_receita",
+      "estudio_observar_pasta"]),
+    (r"\b(omnivoice|chatterbox|piper|faster.?whisper|demucs|sherpa)\b|"
+     r"\bmodelos? (de voz|de transcricao|do estudio)|\bmotor(es)? (de voz|do estudio)|"
+     r"desempenho do estudio",
+     ["estudio_modelos", "estudio_instalar_modelo", "estudio_remover_modelo",
+      "estudio_desempenho"]),
     (r"\b(modelos?|cerebro|llm)\b.{0,40}\b(melhor|baix|instal|cabe|roda|test|avali|usar|use|"
      r"troc|lista|catalogo|novo|novos|recomend)|\b(melhor|qual) (modelo|ia)\b",
      ["modelos_recomendados", "modelo_cabe", "modelo_avaliar", "modelo_baixar", "modelo_usar",

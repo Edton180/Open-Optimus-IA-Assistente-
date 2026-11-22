@@ -10,6 +10,9 @@ Rotas:
   POST tarefas/<id>/cancelar | tarefas/<id>/repetir | historico/<id>/favorito
   DELETE historico[/<id>]?arquivos=1&favoritos=1 (apaga um item ou o histórico)
   POST pronuncia {escrito, falado}   DELETE pronuncia/<escrito>   DELETE vozes/<voz>
+  GET  modelos | receitas            POST modelos/<id>/instalar | modelos/<id>/remover
+  POST desempenho {escolha} | receitas {nome, acao, opcoes} | receitas/<nome>/rodar {arquivo}
+  POST observar {pasta, receita}     DELETE receitas/<nome> | observar?pasta=...
 """
 
 from __future__ import annotations
@@ -175,7 +178,20 @@ def atender(metodo: str, partes: list[str], consulta: dict, tipo: str, corpo: by
                 from optimus.estudio import idiomas
 
                 return 200, {"idiomas": [{"codigo": i.codigo, "nome": i.nome}
-                                         for i in idiomas.IDIOMAS]}
+                                         for i in idiomas.todos()]}
+            if recurso == "modelos":
+                from optimus.estudio import desempenho, modelos
+
+                atual = desempenho.atual(config)
+                return 200, {"modelos": modelos.listar(),
+                             "desempenho": str(config.get("estudio", "desempenho", "auto")),
+                             "atual": atual.para_dict(), "recomendada": desempenho.recomendar()}
+            if recurso == "receitas":
+                from optimus.estudio import automacao
+
+                return 200, {"receitas": [r.para_dict() for r in automacao.receitas()],
+                             "observadas": automacao.observadas(),
+                             "acoes": sorted(automacao.ACOES_PERMITIDAS)}
             if recurso == "arquivo":
                 alvo = arquivo_permitido((consulta.get("caminho") or [""])[0], config)
                 return (200, alvo) if alvo else (404, {"erro": "arquivo não encontrado"})
@@ -193,6 +209,15 @@ def atender(metodo: str, partes: list[str], consulta: dict, tipo: str, corpo: by
                 return 200, {"removido": pronuncia.remover(ident)}
             if recurso == "vozes" and ident:
                 return 200, _ferramenta("estudio_apagar_voz", {"voz": ident}, ctx)
+            if recurso == "receitas" and ident:
+                from optimus.estudio import automacao
+
+                return 200, {"removida": automacao.apagar_receita(ident)}
+            if recurso == "observar":
+                from optimus.estudio import automacao
+
+                return 200, {"parou": automacao.parar_de_observar(
+                    (consulta.get("pasta") or [""])[0])}
         if metodo == "POST":
             if recurso == "enviar":
                 if not dados.get("arquivo"):
@@ -216,6 +241,38 @@ def atender(metodo: str, partes: list[str], consulta: dict, tipo: str, corpo: by
                 if partes[2] == "repetir":
                     nova = fila().repetir(tarefa.id)
                     return 200, {"tarefa": nova.id if nova else None}
+            if recurso == "modelos" and len(partes) == 3:
+                from optimus.estudio import modelos
+
+                if partes[2] == "remover":
+                    return 200, {"modelo": modelos.remover(partes[1])}
+                if partes[2] == "instalar":
+                    return 200, _ferramenta("estudio_instalar_modelo", {"modelo": partes[1]}, ctx)
+            if recurso == "desempenho":
+                from optimus.estudio import desempenho
+
+                return 200, {"atual": desempenho.escolher(config, str(dados.get("escolha", "auto"))
+                                                          ).para_dict()}
+            if recurso == "receitas":
+                from optimus.estudio import automacao
+
+                if len(partes) == 3 and partes[2] == "rodar":
+                    resultado = automacao.aplicar(partes[1], dados.get("arquivo", ""), config)
+                    return (400 if resultado.get("erro") else 200), resultado
+                opcoes = dados.get("opcoes") or {}
+                if isinstance(opcoes, str):
+                    from optimus.tools.estudio import _pares
+
+                    opcoes = _pares(opcoes)
+                r = automacao.salvar_receita(dados.get("nome", ""), dados.get("acao", ""),
+                                             opcoes, dados.get("descricao", ""))
+                return 200, {"receita": r.para_dict()}
+            if recurso == "observar":
+                from optimus.estudio import automacao
+
+                regra = automacao.observar(dados.get("pasta", ""), dados.get("receita", ""))
+                automacao.iniciar_se_preciso(config)
+                return 200, {"observando": regra}
             if recurso == "historico" and len(partes) == 3 and partes[2] == "favorito":
                 from optimus.estudio import favoritar
 

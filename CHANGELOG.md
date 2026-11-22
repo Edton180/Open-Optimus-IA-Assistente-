@@ -45,6 +45,23 @@ Estúdio de voz (parte 2):
 - **Ditado em qualquer programa** (`optimus ditado`), com pontuação falada.
 - Transcrição reserva com sherpa-onnx (modelos do GitHub) quando o faster-whisper não abre.
 
+Estúdio de voz (paridade completa):
+
+- **OmniVoice** (Apache-2.0) como motor: clonagem em 600+ idiomas, **voz desenhada pela
+  descrição** ("feminina idosa, grave, sotaque britânico"), voz automática por idioma, sons como
+  `[risada]` e **fala já no tempo certo** na dublagem.
+- **Vozes Piper offline** (Faber, Cadu, Jeff e Edresson em pt-BR, e outros idiomas), baixadas do
+  GitHub na primeira vez.
+- **Servidor de voz remoto** compatível com a OpenAI para narrar, clonar e transcrever com a placa
+  de vídeo de outra máquina.
+- **Gerenciador de modelos** (`optimus estudio modelos`, aba Modelos): instala, remove, mostra
+  tamanho e licença. **Predefinições de desempenho** (rápido, equilibrado, qualidade, automática).
+- **Marcas de expressão** em qualquer motor: `[pausa 1,5]`, `[risada]`, `[suspiro]`...
+- **Receitas** (ações com opções salvas) e **pastas observadas** que processam cada arquivo novo.
+- **Servidor MCP** (`optimus mcp-servidor`): Claude Desktop, Cursor, VS Code e outros usam o
+  estúdio do Optimus como ferramenta.
+- Transcrição e tradução aceitam ~100 idiomas (todos os do Whisper) e qualquer código ISO.
+
 Fase 2 (produtividade):
 
 - **Utilitários do dia a dia:** gerar senha forte, cara ou coroa, dado e sorteio, "quantos dias

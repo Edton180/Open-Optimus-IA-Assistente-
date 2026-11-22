@@ -392,6 +392,13 @@ def cmd_estudio(args) -> int:
     return executar(args, _criar)
 
 
+def cmd_mcp_servidor(args) -> int:
+    from optimus import mcp_servidor
+
+    grupos = [g for g in (args.grupos or "estudio").split(",") if g.strip()]
+    return mcp_servidor.principal(cfg.carregar(), grupos, not args.so_livres, args.pasta)
+
+
 def cmd_ditado(args) -> int:
     from optimus.estudio import ditado, transcrever
 
@@ -559,6 +566,13 @@ def main(argv: list[str] | None = None) -> int:
     from optimus.estudio.cli import registrar as registrar_estudio
 
     registrar_estudio(sub, cmd_estudio)
+    p = sub.add_parser("mcp-servidor", help="oferecer as ferramentas do Optimus a outros "
+                       "programas de IA (MCP por stdio)")
+    p.add_argument("--grupos", default="estudio",
+                   help="grupos de ferramentas separados por vírgula (padrão: estudio; * = todos)")
+    p.add_argument("--so-livres", action="store_true", help="sem as ações de risco moderado")
+    p.add_argument("--pasta", default="", help="pasta de trabalho (padrão: a pasta pessoal)")
+    p.set_defaults(func=cmd_mcp_servidor)
     p = sub.add_parser("ditado", help="botão flutuante que escuta e digita em qualquer programa")
     p.add_argument("--idioma", default="pt-BR")
     p.add_argument("--sem-janela", action="store_true", help="ditar pelo terminal")

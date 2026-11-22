@@ -111,18 +111,22 @@ def estudio_clonar_voz(ctx, nome: str, arquivo: str, consentimento: bool = False
 @ferramenta(
     "estudio_criar_voz",
     "Cria uma voz nova a partir de uma descrição, ex.: 'masculina grave e calma', 'feminina "
-    "jovem e animada', 'robótica', 'sussurro'. Pode partir de outra voz (base).",
+    "jovem e animada', 'idosa, rouca, sotaque britânico', 'robótica', 'sussurro'. Com o "
+    "OmniVoice instalado, o próprio modelo desenha a voz. Pode partir de outra voz (base).",
     {"nome": texto("Nome da voz"), "descricao": texto("Como a voz deve soar"),
-     "base": texto("Voz de partida (opcional), inclusive uma clonada")},
+     "base": texto("Voz de partida (opcional), inclusive uma clonada"),
+     "motor": {"type": "string", "enum": ["", "omnivoice", "ajustes"],
+               "description": "omnivoice = desenhada pelo modelo; ajustes = sobre uma voz pronta"}},
     grupo="estudio", risco=LIVRE, obrigatorios=["nome", "descricao"],
 )
-def estudio_criar_voz(ctx, nome: str, descricao: str, base: str = ""):
+def estudio_criar_voz(ctx, nome: str, descricao: str, base: str = "", motor: str = ""):
     from optimus.estudio import vozes
     from optimus.estudio.audio import ErroEstudio
 
     try:
-        p = vozes.criar(nome, descricao, base=base)
-        return {"voz": p.nome, "tom": p.tom, "velocidade": p.velocidade, "efeito": p.efeito,
+        p = vozes.criar(nome, descricao, base=base, motor=motor)
+        return {"voz": p.nome, "motor": p.motor, "tom": p.tom, "velocidade": p.velocidade,
+                "efeito": p.efeito, "atributos": p.instrucao,
                 "mensagem": f"Criei a voz '{p.nome}'. Peça uma amostra para ouvir."}
     except ErroEstudio as erro:
         return _erro(erro)
@@ -592,3 +596,150 @@ def glossario_adicionar(ctx, projeto: str = "geral", manter: str = "", traducoes
     gl = traduzir.salvar_glossario(projeto or "geral",
                                    [m.strip() for m in manter.split(",") if m.strip()], fixas)
     return {"glossario": gl}
+
+
+# ---------------------------------------------------------------------- modelos e desempenho
+@ferramenta(
+    "estudio_modelos",
+    "Lista os motores e modelos do estúdio (OmniVoice, Chatterbox, Whisper, Piper, Demucs…) "
+    "com o que está instalado, tamanho e licença.",
+    {}, grupo="estudio", risco=LIVRE,
+)
+def estudio_modelos(ctx):
+    from optimus.estudio import desempenho, modelos
+
+    return {"modelos": modelos.listar(), "desempenho": desempenho.atual(_config(ctx)).nome}
+
+
+@ferramenta(
+    "estudio_instalar_modelo",
+    "Instala um motor ou baixa um modelo do estúdio (ex.: omnivoice, chatterbox, "
+    "piper-pt_BR-faber-medium, whisper-medium). Veja os nomes em estudio_modelos.",
+    {"modelo": texto("Id do modelo")},
+    grupo="estudio", risco=MODERADO, obrigatorios=["modelo"],
+)
+def estudio_instalar_modelo(ctx, modelo: str):
+    from optimus.estudio import modelos
+
+    item = modelos.obter(modelo)
+
+    def trabalho(progresso, cancelado, **_):
+        return modelos.instalar(item.id, progresso)
+
+    return _na_fila(ctx, "modelo", f"Instalar {item.nome}", trabalho)
+
+
+@ferramenta(
+    "estudio_remover_modelo",
+    "Remove um motor ou modelo do estúdio para liberar espaço.",
+    {"modelo": texto("Id do modelo")},
+    grupo="estudio", risco=MODERADO, obrigatorios=["modelo"],
+)
+def estudio_remover_modelo(ctx, modelo: str):
+    from optimus.estudio import modelos
+    from optimus.estudio.audio import ErroEstudio
+
+    try:
+        return {"removido": modelos.remover(modelo)}
+    except ErroEstudio as erro:
+        return _erro(erro)
+
+
+@ferramenta(
+    "estudio_desempenho",
+    "Mostra ou muda a predefinição de desempenho do estúdio: auto, rapido, equilibrado ou "
+    "qualidade (modelo de transcrição e qualidade das vozes).",
+    {"escolha": {"type": "string", "enum": ["", "auto", "rapido", "equilibrado", "qualidade"]}},
+    grupo="estudio", risco=LIVRE, obrigatorios=[],
+)
+def estudio_desempenho(ctx, escolha: str = ""):
+    from optimus.estudio import desempenho
+
+    config = _config(ctx)
+    if escolha and config is not None:
+        try:
+            desempenho.escolher(config, escolha)
+        except ValueError as erro:
+            return _erro(erro)
+    atual = desempenho.atual(config)
+    return {"atual": atual.para_dict(), "recomendada": desempenho.recomendar(),
+            "opcoes": [p.para_dict() for p in desempenho.PREDEFINICOES.values()]}
+
+
+# ---------------------------------------------------------------------- receitas e pastas
+@ferramenta(
+    "estudio_receitas",
+    "Lista as receitas do estúdio (ações com opções salvas, ex.: 'Dublar para inglês') e as "
+    "pastas observadas.",
+    {}, grupo="estudio", risco=LIVRE,
+)
+def estudio_receitas(ctx):
+    from optimus.estudio import automacao
+
+    return {"receitas": [r.para_dict() for r in automacao.receitas()],
+            "pastas_observadas": automacao.observadas()}
+
+
+@ferramenta(
+    "estudio_salvar_receita",
+    "Salva uma receita: uma ação do estúdio (dublar, legendar, transcrever, separar_voz, "
+    "audiolivro…) com as opções escolhidas, para repetir depois ou usar numa pasta observada.",
+    {"nome": texto("Nome da receita, ex.: Dublar para inglês com a minha voz"),
+     "acao": texto("dublar | legendar | transcrever | traduzir_legenda | separar_voz | "
+                   "audiolivro | quem_fala | verificar_ia | converter_voz"),
+     "opcoes": texto("Opções: 'idioma=en-US; voz=Minha voz; no_video=queimada'"),
+     "descricao": texto("Descrição curta (opcional)")},
+    grupo="estudio", risco=LIVRE, obrigatorios=["nome", "acao"],
+)
+def estudio_salvar_receita(ctx, nome: str, acao: str, opcoes: str = "", descricao: str = ""):
+    from optimus.estudio import automacao
+    from optimus.estudio.audio import ErroEstudio
+
+    try:
+        r = automacao.salvar_receita(nome, acao, _pares(opcoes), descricao)
+        return {"receita": r.para_dict()}
+    except ErroEstudio as erro:
+        return _erro(erro)
+
+
+@ferramenta(
+    "estudio_rodar_receita",
+    "Roda uma receita do estúdio num arquivo.",
+    {"receita": texto("Nome da receita"), "arquivo": texto("Arquivo de entrada")},
+    grupo="estudio", risco=MODERADO, obrigatorios=["receita", "arquivo"],
+)
+def estudio_rodar_receita(ctx, receita: str, arquivo: str):
+    from optimus.estudio import automacao
+    from optimus.estudio.audio import ErroEstudio
+
+    try:
+        return automacao.aplicar(receita, _arquivo(ctx, arquivo), _config(ctx))
+    except ErroEstudio as erro:
+        return _erro(erro)
+
+
+@ferramenta(
+    "estudio_observar_pasta",
+    "Observa uma pasta: cada arquivo novo que chegar nela passa pela receita sozinho "
+    "(ex.: tudo que cair em 'para dublar' sai dublado). parar=true deixa de observar.",
+    {"pasta": texto("Pasta a observar"), "receita": texto("Nome da receita"),
+     "parar": {**_BOOL, "description": "Deixar de observar a pasta"}},
+    grupo="estudio", risco=MODERADO, obrigatorios=["pasta"],
+)
+def estudio_observar_pasta(ctx, pasta: str, receita: str = "", parar: bool = False):
+    from optimus.estudio import automacao
+    from optimus.estudio.audio import ErroEstudio
+
+    alvo = resolver(ctx, pasta)
+    if parar:
+        return {"parou": automacao.parar_de_observar(alvo)}
+    if not receita:
+        return {"erro": "Diga qual receita usar. Receitas: "
+                        + ", ".join(r.nome for r in automacao.receitas())}
+    try:
+        regra = automacao.observar(alvo, receita)
+    except ErroEstudio as erro:
+        return _erro(erro)
+    automacao.iniciar_se_preciso(_config(ctx))
+    return {"observando": regra, "mensagem": f"Pronto: arquivos novos em {regra['pasta']} "
+                                             f"passam pela receita '{regra['receita']}'."}
