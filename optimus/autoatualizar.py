@@ -58,6 +58,7 @@ def verificar(config) -> dict:
             return saida
         saida = decidir(config).para_dict()
         saida["modo"] = "release"
+        saida["atualizado"] = not saida["disponivel"]
         return saida
     except (ErroGit, releases.ErroRelease) as erro:
         return {"erro": str(erro)}

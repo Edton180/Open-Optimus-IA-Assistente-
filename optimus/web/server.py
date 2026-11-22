@@ -23,6 +23,7 @@ from urllib.parse import parse_qs, urlparse
 
 import psutil
 
+import optimus as optimus_mod
 from optimus import __version__
 from optimus import config as cfg
 from optimus.agent import mensagens_para_historico
@@ -92,8 +93,26 @@ class Estado:
         self.downloads: dict[str, dict[str, Any]] = {}
         self._falantes: dict[str, tts.Falante] = {}
         self._ouvinte = None
+        self._motor_cache: tuple[float, bool, list[str]] | None = None
         optimus.iniciar_lembretes(lambda l: self.avisos.append(
-            {"tipo": "lembrete", "texto": l["texto"], "quando": time.time()}))
+            {"tipo": l.get("tipo", "lembrete"), "texto": l["texto"], "quando": time.time()}))
+        optimus.iniciar_copiados()
+
+    def motor_status(self) -> tuple[bool, list[str]]:
+        """Disponibilidade e lista de modelos do motor, com cache de ~4 s.
+
+        A tela chama /api/estado a cada poucos segundos; sem o cache, cada poll bate no Ollama
+        (/api/version + /api/tags) mesmo durante uma geração, o que num PC fraco deixa o status
+        lento e faz a interface mostrar "Sem conexão" à toa. O cache evita esse peso.
+        """
+        agora = time.monotonic()
+        if self._motor_cache and agora - self._motor_cache[0] < 4.0:
+            return self._motor_cache[1], self._motor_cache[2]
+        motor = self.optimus.motor
+        disponivel = motor.disponivel()
+        modelos = motor.modelos() if disponivel else []
+        self._motor_cache = (agora, disponivel, modelos)
+        return disponivel, modelos
 
     def falante(self, voz: str) -> tts.Falante:
         if voz not in self._falantes:
@@ -307,7 +326,7 @@ class Manipulador(BaseHTTPRequestHandler):
         if recurso == "estado":
             memoria = psutil.virtual_memory()
             motor = optimus.motor
-            disponivel = motor.disponivel()
+            disponivel, lista_modelos = estado.motor_status()
             return self._json({
                 "versao": __version__,
                 "nome": optimus.config.get("geral", "nome"),
@@ -316,7 +335,7 @@ class Manipulador(BaseHTTPRequestHandler):
                 "resumo": resumo(optimus.hardware, optimus.perfil),
                 "motor": {"backend": optimus.config.get("motor", "backend"),
                           "disponivel": disponivel, "modelo": optimus.modelo_atual(),
-                          "modelos": motor.modelos() if disponivel else [],
+                          "modelos": lista_modelos,
                           "destinos": motor.estado() if isinstance(motor, MotorRede) else []},
                 "uso": {"cpu": psutil.cpu_percent(interval=None), "ram": memoria.percent,
                         "ram_livre_gb": round(memoria.available / 1024**3, 1)},
@@ -439,6 +458,15 @@ class Manipulador(BaseHTTPRequestHandler):
             return self._json({"ok": True})
         if recurso == "acoes":
             return self._json({"acoes": optimus.auditoria.ultimas(100)})
+        if recurso == "atualizacao":
+            # Git (clone) ou release do GitHub (instalação sem Git), com SHA-256 e voltar.
+            from optimus import autoatualizar
+
+            if metodo == "POST" and ident == "voltar":
+                return self._json(autoatualizar.voltar(optimus.config))
+            if metodo == "POST":
+                return self._json(autoatualizar.baixar(optimus.config))
+            return self._json(autoatualizar.verificar(optimus.config))
         if recurso == "vozes":
             chave = optimus.config.get("voz", "elevenlabs_chave", "")
             return self._json({
@@ -480,6 +508,33 @@ class Manipulador(BaseHTTPRequestHandler):
             from optimus.tools.casa import cameras_configuradas
 
             return self._json({"cameras": cameras_configuradas(optimus.config)})
+        if recurso == "cameras" and metodo == "POST":
+            from optimus.tools.casa import montar_url_camera
+
+            corpo = self._corpo()
+            url = montar_url_camera(corpo.get("url", ""), corpo.get("usuario", ""),
+                                    corpo.get("senha", ""))
+            if not url:
+                return self._json({"erro": "Informe o link da câmera (rtsp://… ou http://…/snapshot)."},
+                                  400)
+            cams = list(optimus.config.dados.get("cameras") or [])
+            cams.append({"nome": corpo.get("nome", "").strip() or f"Câmera {len(cams) + 1}",
+                         "url": url})
+            optimus.config.dados["cameras"] = cams
+            optimus.config.salvar()
+            return self._json({"ok": True})
+        if recurso == "cameras" and metodo == "DELETE" and ident.startswith("ip:"):
+            try:
+                i = int(ident.split(":", 1)[1])
+            except ValueError:
+                return self._json({"erro": "câmera inválida"}, 400)
+            cams = list(optimus.config.dados.get("cameras") or [])
+            if 0 <= i < len(cams):
+                cams.pop(i)
+                optimus.config.dados["cameras"] = cams
+                optimus.config.salvar()
+                return self._json({"ok": True})
+            return self._json({"erro": "câmera não encontrada"}, 404)
         if recurso == "camera" and metodo == "GET":
             from optimus.tools.casa import cameras_configuradas, imagem_da_camera
 

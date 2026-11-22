@@ -589,7 +589,7 @@ async function carregarPersonas() {
   $("#persona").innerHTML = d.personas.map((p) => `<option value="${esc(p.chave)}" ${p.chave === estado.persona ? "selected" : ""}>${esc(p.nome)}</option>`).join("");
   $("#grupo-escolha").innerHTML = d.personas.map((p) => `<label><input type="checkbox" value="${esc(p.chave)}" ${["optimus", "pesquisador"].includes(p.chave) ? "checked" : ""}> ${esc(p.nome)}</label>`).join("");
   $("#lista-personas").innerHTML = d.personas.map((p) => `<div class="cartao item" data-chave="${esc(p.chave)}">
-      <div class="acoes">${p.chave !== "optimus" ? `<button class="icone" data-apagar-persona="${esc(p.chave)}" title="Apagar">🗑️</button>` : ""}</div>
+      <div class="acoes">${!p.embutida ? `<button class="icone" data-apagar-persona="${esc(p.chave)}" title="Apagar">🗑️</button>` : `<span class="selo" title="Persona do sistema: pode editar, não excluir">sistema</span>`}</div>
       <h3>🎭 ${esc(p.nome)}</h3><p>${esc(p.descricao || "")}</p><p>${esc((p.prompt || "usa a personalidade padrão").slice(0, 120))}</p>
       <p>${p.modelo ? "🧠 " + esc(p.modelo) : ""} ${p.voz ? "🔊 " + esc(p.voz) : ""}</p></div>`).join("");
 }
@@ -656,6 +656,29 @@ async function carregarAcoes() {
     || '<tr><td colspan="5" class="sutil">Nenhuma ação ainda.</td></tr>';
 }
 
+// ---------- Atualização pelo GitHub ----------
+$("#verificar-atualizacao").addEventListener("click", async () => {
+  const estadoEl = $("#atualizacao-estado"); const baixar = $("#baixar-atualizacao");
+  estadoEl.textContent = "Verificando no GitHub…"; baixar.classList.add("oculto");
+  try {
+    const d = await api("/api/atualizacao");
+    if (d.erro) { estadoEl.textContent = "⚠️ " + d.erro; return; }
+    if (d.atualizado) { estadoEl.textContent = "✅ " + (d.mensagem || "Você já está na versão mais nova."); return; }
+    estadoEl.textContent = `🚀 ${d.mensagem || "Há atualização disponível."} Clique em "Baixar e aplicar".`;
+    baixar.classList.remove("oculto");
+  } catch (e) { estadoEl.textContent = "⚠️ Não consegui verificar: " + e.message; }
+});
+$("#baixar-atualizacao").addEventListener("click", async (ev) => {
+  const estadoEl = $("#atualizacao-estado"); ev.target.disabled = true;
+  estadoEl.textContent = "Baixando e aplicando (sem perder seus dados)…";
+  try {
+    const d = await api("/api/atualizacao", { method: "POST", json: {} });
+    if (d.erro || d.ok === false) { estadoEl.textContent = "⚠️ " + (d.erro || d.mensagem); }
+    else { estadoEl.textContent = "✅ " + (d.mensagem || "Atualizado!") + " Reinicie o Optimus para usar a nova versão."; ev.target.classList.add("oculto"); }
+  } catch (e) { estadoEl.textContent = "⚠️ Falha ao atualizar: " + e.message; }
+  finally { ev.target.disabled = false; }
+});
+
 // ---------- Casa ----------
 let vigiaCameras = null;
 async function carregarCasa() {
@@ -663,8 +686,8 @@ async function carregarCasa() {
   $("#casa-url").value = d.config.casa.url || ""; $("#casa-token").value = d.config.casa.token || "";
   try {
     const c = await api("/api/cameras");
-    $("#cameras").innerHTML = c.cameras.map((x) => `<figure class="cartao camera"><img data-camera="${esc(x.id)}" alt="${esc(x.nome)}"><figcaption>${esc(x.nome)} <span class="sutil">ao vivo</span></figcaption></figure>`).join("")
-      || '<p class="sutil">Nenhuma câmera encontrada ainda.</p>';
+    $("#cameras").innerHTML = c.cameras.map((x) => `<figure class="cartao camera"><img data-camera="${esc(x.id)}" alt="${esc(x.nome)}">${String(x.id).startsWith("ip:") ? `<button class="icone" data-apagar-camera="${esc(x.id)}" title="Remover câmera">🗑️</button>` : ""}<figcaption>${esc(x.nome)} <span class="sutil">ao vivo</span></figcaption></figure>`).join("")
+      || '<p class="sutil">Nenhuma câmera adicionada ainda. Adicione uma câmera Wi-Fi acima, ligue uma webcam no cabo USB, ou conecte o Home Assistant.</p>';
   } catch (e) { $("#cameras").innerHTML = `<p class="sutil">⚠️ ${esc(e.message)}</p>`; }
   clearInterval(vigiaCameras);
   const atualizar = () => {
@@ -691,6 +714,24 @@ $("#casa-salvar").onclick = async () => {
 $("#casa-atualizar").onclick = () => executarFerramenta("Liste os aparelhos da minha casa e o estado de cada um");
 $("#casa-bluetooth").onclick = () => executarFerramenta("Procure aparelhos Bluetooth por perto");
 $("#casa-rede").onclick = () => executarFerramenta("Quais aparelhos estão conectados na rede da casa?");
+$("#cam-adicionar").onclick = async () => {
+  const est = $("#cam-estado"); const url = $("#cam-url").value.trim();
+  if (!url) { est.textContent = "⚠️ Informe o endereço ou link da câmera."; return; }
+  est.textContent = "Adicionando…";
+  try {
+    const r = await api("/api/cameras", { method: "POST", json: {
+      nome: $("#cam-nome").value.trim(), url, usuario: $("#cam-usuario").value.trim(), senha: $("#cam-senha").value } });
+    if (r.erro) { est.textContent = "⚠️ " + r.erro; return; }
+    est.textContent = "✅ Câmera adicionada.";
+    $("#cam-nome").value = $("#cam-url").value = $("#cam-usuario").value = $("#cam-senha").value = "";
+    carregarCasa();
+  } catch (e) { est.textContent = "⚠️ " + e.message; }
+};
+$("#cameras").addEventListener("click", async (e) => {
+  const rem = e.target.closest("[data-apagar-camera]"); if (!rem) return;
+  await api("/api/cameras/" + encodeURIComponent(rem.dataset.apagarCamera), { method: "DELETE" });
+  carregarCasa();
+});
 
 // ---------- Configurações ----------
 $$(".abas button").forEach((b) => (b.onclick = () => {

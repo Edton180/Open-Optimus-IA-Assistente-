@@ -148,3 +148,37 @@ def test_modelo_aquecido_ao_iniciar(ollama, tmp_path):
     assert aquecer_modelos(Optimus(config)) == ["qwen3.5:2b"]
     assert Manipulador.pedidos[-1] == {"model": "qwen3.5:2b", "keep_alive": "30m",
                                        "stream": False}
+
+
+def test_personas_do_sistema_nao_sao_apagaveis(tmp_path):
+    from optimus.banco import Banco, PERSONAS_PADRAO
+
+    b = Banco(tmp_path / "db.sqlite")
+    chaves = {p["chave"] for p in b.personas()}
+    assert PERSONAS_PADRAO <= chaves
+    # Tentar apagar qualquer persona embutida não remove nada.
+    for chave in PERSONAS_PADRAO:
+        b.apagar_persona(chave)
+    assert {p["chave"] for p in b.personas()} >= PERSONAS_PADRAO
+    assert all(p["embutida"] for p in b.personas() if p["chave"] in PERSONAS_PADRAO)
+    # Uma persona criada pelo usuário continua apagável.
+    b.salvar_persona("minha", "Minha", "prompt")
+    assert b.persona("minha") is not None
+    assert b.personas()[-1]["embutida"] is False
+    b.apagar_persona("minha")
+    assert b.persona("minha") is None
+
+
+def test_montar_url_camera_injeta_credenciais():
+    from optimus.tools.casa import montar_url_camera
+
+    # IP simples vira rtsp:// com usuário e senha.
+    assert montar_url_camera("192.168.0.30", "admin", "1234") == "rtsp://admin:1234@192.168.0.30"
+    # Link rtsp sem credenciais recebe usuário e senha.
+    assert montar_url_camera("rtsp://192.168.0.30:554/stream", "admin", "p@ss") == \
+        "rtsp://admin:p%40ss@192.168.0.30:554/stream"
+    # Link que já tem credenciais é preservado.
+    assert montar_url_camera("rtsp://u:s@10.0.0.1/x", "admin", "1234") == "rtsp://u:s@10.0.0.1/x"
+    # Link http de snapshot é aceito.
+    assert montar_url_camera("http://10.0.0.1/snap.jpg").startswith("http://")
+    assert montar_url_camera("") == ""

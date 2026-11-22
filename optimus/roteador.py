@@ -31,8 +31,14 @@ INTENCOES: list[tuple[str, list[str]]] = [
       "modelos_catalogo_atualizar"]),
     (r"\bbibliotec", ["biblioteca_indexar", "biblioteca_listar", "biblioteca_esquecer",
                        "consultar_conhecimento"]),
-    (r"\b(lembre(-| )?me|me lembr|lembrete|alarme|despert|timer|cronometro|avise[- ]me|"
-     r"me avis|agend)", ["criar_lembrete", "listar_lembretes", "cancelar_lembretes"]),
+    (r"\b(lembre(-| )?me|me lembr|lembrete|alarme|despert|timer|cronometro|contagem regressiva|"
+     r"avise[- ]me|me avis|agend)",
+     ["criar_lembrete", "listar_lembretes", "cancelar_lembretes",
+      "timer_criar", "timers_listar", "timer_cancelar"]),
+    (r"\b(habito|habitos|meta diaria|sequencia de dias|dias seguidos|streak)",
+     ["habito_criar", "habito_marcar", "habitos_listar", "habito_apagar"]),
+    (r"\b(rotina|rotinas|sequencia de passos|automatiz|quando eu disser|ao dizer)",
+     ["rotina_criar", "rotinas_listar", "rotina_executar", "rotina_apagar"]),
     (r"\b(lembre que|guarde|memoriz|anote que|meu nome e|eu (gosto|moro|trabalho|sou|tenho)|"
      r"o que (voce )?sabe (sobre|de) mim|recorda|esqueca)", ["lembrar", "recordar"]),
     (r"\b(aprend|estud|base de conhecimento)", ["aprender", "consultar_conhecimento"]),
@@ -68,6 +74,8 @@ INTENCOES: list[tuple[str, list[str]]] = [
      ["abrir", "encerrar_processo", "executar_comando"]),
     (r"\b(deslig|reinici|suspend|hibern|bloque(ia|ar) (a tela|o pc))", ["energia"]),
     (r"\b(comando|terminal|powershell|bash|instal)", ["executar_comando"]),
+    (r"\b(historico de copiad|o que (eu )?copiei|copiados|area de transferencia)",
+     ["copiados_listar", "copiado_usar", "copiado_apagar", "copiados_limpar"]),
     (r"\b(digit|tecla|clique|clicar|mouse|print|captura de tela|tela|area de transferencia|"
      r"copiad)", ["captura_tela", "digitar", "teclas", "clicar", "area_transferencia"]),
     (r"(mud|troc|troqu|qua(l|is)|list|usar|use|outra).{0,25}\bvoz", ["trocar_voz", "listar_vozes"]),

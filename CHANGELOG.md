@@ -47,6 +47,25 @@ Correções do primeiro uso real (i3 de 2 núcleos, `qwen3.5:2b`):
 
 Novidades:
 
+- **Hábitos e timers (recursos do painel):** acompanhamento de hábitos com sequência de dias
+  seguidos (streak) — `habito_criar`, `habito_marcar`, `habitos_listar`, `habito_apagar` — e
+  timers de contagem regressiva com nome — `timer_criar`, `timers_listar`, `timer_cancelar`.
+  Tudo guardado no banco local (novas tabelas `habitos`, `habito_marcacoes`, `timers`). Os
+  timers venceram no mesmo laço dos lembretes e tocam o alarme (interface/voz).
+- **Histórico de copiados:** o Optimus guarda o que você copia (Ctrl+C) num histórico local,
+  no seu PC, para você achar e reusar depois. Ferramentas `copiados_listar`, `copiado_usar`
+  (coloca de volta na área de transferência), `copiado_apagar` e `copiados_limpar` (nova
+  tabela `copiados`, preserva espaços/quebras, dedup e só os últimos N). A captura é **opt-in**
+  e vem desligada (`[copiados] ativo = true` liga), porque ler a área de transferência é
+  sensível. As ferramentas devolvem só uma prévia curta (o texto inteiro nunca vai para o
+  modelo); `copiado_usar` restaura o item direto na área de transferência do PC. A aba
+  Copiados no painel vem numa próxima fatia.
+- **Rotinas (sequências que você dispara por um nome):** uma rotina é uma lista de passos em
+  ordem — cada passo um pedido em texto, como você falaria com o Optimus (ex.: "bom dia" →
+  resumo do dia, previsão do tempo, tocar playlist). Ferramentas `rotina_criar`,
+  `rotinas_listar`, `rotina_executar` (devolve os passos em ordem para a interface/voz
+  rodarem um a um) e `rotina_apagar` (novas tabelas `rotinas` e `rotina_passos`). Tudo no
+  banco local. A aba Rotinas no painel vem numa próxima fatia.
 - **Biblioteca de documentos (converse com os seus arquivos, offline):** `optimus biblioteca
   <pasta>` e as ferramentas `biblioteca_indexar`/`biblioteca_listar`/`biblioteca_esquecer`
   apontam o Optimus para uma pasta inteira (txt, md, csv, html, PDF...) e indexam tudo no

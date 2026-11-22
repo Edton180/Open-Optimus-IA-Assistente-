@@ -34,6 +34,7 @@ class Optimus:
         self.auditoria = Auditoria(base / "registros" / "acoes.jsonl")
         self.motor = criar_motor(self.config)
         self._lembretes: threading.Thread | None = None
+        self._copiados: threading.Thread | None = None
         self.aviso_atualizacao: dict | None = None
         if self.config.get("atualizacao", "ao_iniciar", False):
             threading.Thread(target=self._verificar_atualizacao, daemon=True,
@@ -74,6 +75,17 @@ class Optimus:
             return "modo demonstração (sem modelo)"
         return self.config.get("motor", "modelo") or self.perfil.modelo
 
+    def _verificar_avisos(self, avisar: Callable[[dict[str, Any]], None]) -> None:
+        """Uma passada: lembretes vencidos e timers que chegaram ao fim."""
+        for lembrete in self.banco.lembretes_vencidos():
+            avisar(lembrete)
+            self.banco.concluir_lembrete(lembrete)
+        for timer in self.banco.timers_vencidos():
+            nome = (timer.get("nome") or "Timer").strip() or "Timer"
+            avisar({"tipo": "timer", "id": timer["id"], "nome": nome,
+                    "texto": f"Timer '{nome}' terminou."})
+            self.banco.marcar_timer_tocado(timer["id"])
+
     def iniciar_lembretes(self, avisar: Callable[[dict[str, Any]], None]) -> None:
         if self._lembretes and self._lembretes.is_alive():
             return
@@ -81,15 +93,43 @@ class Optimus:
         def ciclo():
             while True:
                 try:
-                    for lembrete in self.banco.lembretes_vencidos():
-                        avisar(lembrete)
-                        self.banco.concluir_lembrete(lembrete)
+                    self._verificar_avisos(avisar)
                 except Exception as erro:  # noqa: BLE001
-                    log.warning("Falha nos lembretes: %s", erro)
+                    log.warning("Falha nos avisos: %s", erro)
                 time.sleep(15)
 
         self._lembretes = threading.Thread(target=ciclo, daemon=True, name="lembretes")
         self._lembretes.start()
+
+    def iniciar_copiados(self) -> None:
+        """Guarda no histórico o que for copiado (Ctrl+C). Opt-in: só roda se
+        [copiados] ativo = true, porque ler a área de transferência é sensível."""
+        if not self.config.get("copiados", "ativo", False):
+            return
+        if self._copiados and self._copiados.is_alive():
+            return
+        try:
+            import pyperclip
+        except ImportError:
+            log.info("Histórico de copiados pedido, mas pyperclip não está instalado.")
+            return
+        limite = int(self.config.get("copiados", "limite", 100) or 100)
+        intervalo = float(self.config.get("copiados", "intervalo_seg", 2) or 2)
+
+        def ciclo():
+            ultimo = None
+            while True:
+                try:
+                    atual = pyperclip.paste()
+                    if atual and atual != ultimo:
+                        ultimo = atual
+                        self.banco.guardar_copiado(atual, limite)
+                except Exception as erro:  # noqa: BLE001
+                    log.debug("Falha ao ler a área de transferência: %s", erro)
+                time.sleep(intervalo)
+
+        self._copiados = threading.Thread(target=ciclo, daemon=True, name="copiados")
+        self._copiados.start()
 
 
 def _baixar_prioridade() -> None:

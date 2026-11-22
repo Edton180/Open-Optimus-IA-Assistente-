@@ -57,6 +57,42 @@ CREATE TABLE IF NOT EXISTS prompts (
     texto TEXT NOT NULL,
     categoria TEXT NOT NULL DEFAULT 'Geral'
 );
+CREATE TABLE IF NOT EXISTS habitos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nome TEXT NOT NULL,
+    criado REAL NOT NULL
+);
+CREATE TABLE IF NOT EXISTS habito_marcacoes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    habito INTEGER NOT NULL REFERENCES habitos(id) ON DELETE CASCADE,
+    dia TEXT NOT NULL,
+    quando REAL NOT NULL,
+    UNIQUE (habito, dia)
+);
+CREATE TABLE IF NOT EXISTS timers (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nome TEXT NOT NULL DEFAULT 'Timer',
+    criado REAL NOT NULL,
+    termina REAL NOT NULL,
+    duracao_seg INTEGER NOT NULL,
+    tocado INTEGER NOT NULL DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS copiados (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    texto TEXT NOT NULL,
+    quando REAL NOT NULL
+);
+CREATE TABLE IF NOT EXISTS rotinas (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nome TEXT NOT NULL,
+    criado REAL NOT NULL
+);
+CREATE TABLE IF NOT EXISTS rotina_passos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    rotina INTEGER NOT NULL REFERENCES rotinas(id) ON DELETE CASCADE,
+    ordem INTEGER NOT NULL,
+    texto TEXT NOT NULL
+);
 """
 
 PERSONAS_INICIAIS = [
@@ -71,6 +107,9 @@ PERSONAS_INICIAIS = [
     ("livre", "Livre", "Sem personalidade definida: só o modelo que você escolheu",
      "Responda ao usuário.", "", ""),
 ]
+
+# Chaves das personas que já vêm no sistema: podem ser editadas, nunca excluídas.
+PERSONAS_PADRAO = frozenset(p[0] for p in PERSONAS_INICIAIS)
 
 PROMPTS_INICIAIS = [
     ("Resumo do dia", "Me dê um resumo do dia: data, hora, lembretes pendentes, estado do PC "
@@ -279,9 +318,166 @@ class Banco:
     def apagar_lembrete(self, lembrete_id: int) -> None:
         self._exec("DELETE FROM lembretes WHERE id=?", (lembrete_id,))
 
+    # Hábitos (acompanhamento diário com sequência/streak)
+    @staticmethod
+    def _hoje() -> str:
+        return time.strftime("%Y-%m-%d", time.localtime())
+
+    def criar_habito(self, nome: str) -> int:
+        nome = nome.strip()
+        existe = self._todos("SELECT id FROM habitos WHERE lower(nome)=?", (nome.lower(),))
+        if existe:
+            return existe[0]["id"]
+        return self._exec("INSERT INTO habitos (nome, criado) VALUES (?,?)",
+                          (nome, time.time())).lastrowid
+
+    def marcar_habito(self, habito_id: int, dia: str | None = None) -> bool:
+        """Marca o hábito como feito num dia (padrão: hoje). Idempotente por dia."""
+        dia = dia or self._hoje()
+        with self._trava:
+            cur = self._con.execute(
+                "INSERT OR IGNORE INTO habito_marcacoes (habito, dia, quando) VALUES (?,?,?)",
+                (habito_id, dia, time.time()))
+            self._con.commit()
+            return cur.rowcount > 0
+
+    def desmarcar_habito(self, habito_id: int, dia: str | None = None) -> None:
+        self._exec("DELETE FROM habito_marcacoes WHERE habito=? AND dia=?",
+                   (habito_id, dia or self._hoje()))
+
+    def _sequencia(self, habito_id: int) -> int:
+        """Dias seguidos até hoje (ou até ontem, se hoje ainda não foi marcado)."""
+        dias = {d["dia"] for d in self._todos(
+            "SELECT dia FROM habito_marcacoes WHERE habito=?", (habito_id,))}
+        if not dias:
+            return 0
+        import datetime as _dt
+        hoje = _dt.date.fromisoformat(self._hoje())
+        inicio = hoje if hoje.isoformat() in dias else hoje - _dt.timedelta(days=1)
+        seq = 0
+        atual = inicio
+        while atual.isoformat() in dias:
+            seq += 1
+            atual -= _dt.timedelta(days=1)
+        return seq
+
+    def listar_habitos(self) -> list[dict[str, Any]]:
+        hoje = self._hoje()
+        saida = []
+        for h in self._todos("SELECT * FROM habitos ORDER BY criado"):
+            total = self._todos("SELECT COUNT(*) AS n FROM habito_marcacoes WHERE habito=?",
+                                (h["id"],))[0]["n"]
+            feito_hoje = bool(self._todos(
+                "SELECT 1 FROM habito_marcacoes WHERE habito=? AND dia=?", (h["id"], hoje)))
+            saida.append({"id": h["id"], "nome": h["nome"], "sequencia": self._sequencia(h["id"]),
+                          "feito_hoje": feito_hoje, "total": total})
+        return saida
+
+    def apagar_habito(self, habito_id: int) -> None:
+        self._exec("DELETE FROM habitos WHERE id=?", (habito_id,))
+
+    # Timers (contagem regressiva com nome)
+    def criar_timer(self, nome: str, segundos: int) -> int:
+        agora = time.time()
+        return self._exec(
+            "INSERT INTO timers (nome, criado, termina, duracao_seg) VALUES (?,?,?,?)",
+            (nome.strip() or "Timer", agora, agora + segundos, int(segundos))).lastrowid
+
+    def listar_timers(self, apenas_ativos: bool = True) -> list[dict[str, Any]]:
+        agora = time.time()
+        sql = "SELECT * FROM timers"
+        if apenas_ativos:
+            sql += " WHERE tocado=0"
+        saida = []
+        for t in self._todos(sql + " ORDER BY termina"):
+            restante = t["termina"] - agora
+            saida.append({**t, "restante_seg": max(0, round(restante)),
+                          "vencido": restante <= 0})
+        return saida
+
+    def timers_vencidos(self) -> list[dict[str, Any]]:
+        """Timers ativos que já chegaram ao fim (para a interface/voz tocar o alarme)."""
+        return self._todos("SELECT * FROM timers WHERE tocado=0 AND termina<=? ORDER BY termina",
+                           (time.time(),))
+
+    def marcar_timer_tocado(self, timer_id: int) -> None:
+        self._exec("UPDATE timers SET tocado=1 WHERE id=?", (timer_id,))
+
+    def cancelar_timer(self, timer_id: int) -> None:
+        self._exec("DELETE FROM timers WHERE id=?", (timer_id,))
+
+    # Copiados (histórico da área de transferência)
+    def guardar_copiado(self, texto: str, limite: int = 100) -> int | None:
+        """Guarda um texto copiado, preservando espaços e quebras de linha. Ignora vazio e
+        repetição do mais recente; uma cópia igual mais antiga sobe para o topo; mantém só
+        os 'limite' últimos."""
+        if not texto or not texto.strip():
+            return None
+        ultimo = self._todos("SELECT texto FROM copiados ORDER BY id DESC LIMIT 1")
+        if ultimo and ultimo[0]["texto"] == texto:
+            return None
+        self._exec("DELETE FROM copiados WHERE texto=?", (texto,))
+        novo = self._exec("INSERT INTO copiados (texto, quando) VALUES (?,?)",
+                          (texto, time.time())).lastrowid
+        self._exec("DELETE FROM copiados WHERE id NOT IN "
+                   "(SELECT id FROM copiados ORDER BY id DESC LIMIT ?)", (max(1, int(limite)),))
+        return novo
+
+    def listar_copiados(self, limite: int = 50) -> list[dict[str, Any]]:
+        return self._todos("SELECT * FROM copiados ORDER BY id DESC LIMIT ?", (max(1, int(limite)),))
+
+    def copiado(self, copiado_id: int) -> dict[str, Any] | None:
+        linhas = self._todos("SELECT * FROM copiados WHERE id=?", (int(copiado_id),))
+        return linhas[0] if linhas else None
+
+    def apagar_copiado(self, copiado_id: int) -> None:
+        self._exec("DELETE FROM copiados WHERE id=?", (int(copiado_id),))
+
+    def limpar_copiados(self) -> None:
+        self._exec("DELETE FROM copiados")
+
+    # Rotinas (sequências de passos disparadas por um nome)
+    def criar_rotina(self, nome: str, passos: list[str]) -> int:
+        """Cria (ou regrava, se já existir pelo mesmo nome) uma rotina com passos em ordem."""
+        nome = (nome or "").strip() or "Rotina"
+        existente = self._todos("SELECT id FROM rotinas WHERE lower(nome)=lower(?)", (nome,))
+        if existente:
+            rid = existente[0]["id"]
+            self._exec("DELETE FROM rotina_passos WHERE rotina=?", (rid,))
+        else:
+            rid = self._exec("INSERT INTO rotinas (nome, criado) VALUES (?,?)",
+                             (nome, time.time())).lastrowid
+        ordem = 0
+        for passo in passos or []:
+            passo = (passo or "").strip()
+            if passo:
+                self._exec("INSERT INTO rotina_passos (rotina, ordem, texto) VALUES (?,?,?)",
+                           (rid, ordem, passo))
+                ordem += 1
+        return rid
+
+    def _com_passos(self, rotina: dict[str, Any]) -> dict[str, Any]:
+        passos = self._todos("SELECT texto FROM rotina_passos WHERE rotina=? ORDER BY ordem",
+                             (rotina["id"],))
+        return {**rotina, "passos": [p["texto"] for p in passos]}
+
+    def listar_rotinas(self) -> list[dict[str, Any]]:
+        return [self._com_passos(r) for r in self._todos("SELECT * FROM rotinas ORDER BY nome")]
+
+    def rotina_por_nome(self, nome: str) -> dict[str, Any] | None:
+        linhas = self._todos("SELECT * FROM rotinas WHERE lower(nome)=lower(?)",
+                            ((nome or "").strip(),))
+        return self._com_passos(linhas[0]) if linhas else None
+
+    def apagar_rotina(self, rotina_id: int) -> None:
+        self._exec("DELETE FROM rotinas WHERE id=?", (int(rotina_id),))
+
     # Personas e prompts
     def personas(self) -> list[dict[str, Any]]:
-        return self._todos("SELECT * FROM personas ORDER BY rowid")
+        linhas = self._todos("SELECT * FROM personas ORDER BY rowid")
+        for linha in linhas:
+            linha["embutida"] = linha.get("chave") in PERSONAS_PADRAO
+        return linhas
 
     def persona(self, chave: str) -> dict[str, Any] | None:
         linhas = self._todos("SELECT * FROM personas WHERE chave=?", (chave,))
@@ -293,7 +489,8 @@ class Banco:
                    (chave, nome, descricao, prompt, modelo, voz))
 
     def apagar_persona(self, chave: str) -> None:
-        if chave != "optimus":
+        # As personas que já vêm no sistema não podem ser excluídas, só editadas.
+        if chave not in PERSONAS_PADRAO:
             self._exec("DELETE FROM personas WHERE chave=?", (chave,))
 
     def prompts(self) -> list[dict[str, Any]]:
