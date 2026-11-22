@@ -79,6 +79,6 @@ def conversar_por_voz(agente, config, ao_texto=print) -> None:
                       {"role": "assistant", "content": resposta}]
         historico = historico[-20:]
         ao_texto(f"[optimus] {resposta}")
-        if voz_cfg.get("falar_respostas", True):
+        if voz_cfg.get("falar_respostas", True) and not voz_cfg.get("so_executar", False):
             falante.falar(resposta)
         ultima_resposta = time.monotonic()

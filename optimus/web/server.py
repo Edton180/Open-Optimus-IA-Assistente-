@@ -34,7 +34,8 @@ from optimus.voice import tts
 
 log = logging.getLogger(__name__)
 ESTATICOS = Path(__file__).parent / "static"
-_SEGREDOS = ("chave_api", "token", "senha", "elevenlabs_chave", "token_comando")
+_SEGREDOS = ("chave_api", "token", "senha", "elevenlabs_chave", "token_comando",
+             "token_agenda")
 
 
 class Tarefa:
@@ -294,6 +295,8 @@ class Manipulador(BaseHTTPRequestHandler):
         if caminho == "/api/entrar" and metodo == "POST":
             ok = not self.senha or hmac.compare_digest(self._corpo().get("senha", ""), self.senha)
             return self._json({"ok": ok}, 200 if ok else 401)
+        if metodo == "GET" and caminho == "/api/agenda.ics":
+            return self._agenda(parse_qs(url.query))
         if not self._autorizado():
             return self._json({"erro": "senha necessária"}, 401)
         try:
@@ -301,6 +304,19 @@ class Manipulador(BaseHTTPRequestHandler):
         except Exception as erro:  # noqa: BLE001
             log.exception("Erro na API")
             self._json({"erro": f"{type(erro).__name__}: {erro}"}, 500)
+
+    def _agenda(self, consulta: dict) -> None:
+        """Calendário dos lembretes. O app de calendário não manda senha: usa a chave do link."""
+        from optimus.web import celular
+
+        optimus = self.estado.optimus
+        chave = (consulta.get("chave") or [""])[0]
+        token = optimus.config.get("web", "token_agenda", "") or ""
+        if not (self._autorizado() or (token and hmac.compare_digest(chave, token))):
+            return self._json({"erro": "chave da agenda inválida"}, 401)
+        ics = celular.agenda_ics(optimus.banco.lembretes(pendentes=True),
+                                 nome=optimus.config.get("geral", "nome") or "Optimus")
+        self._bytes(ics.encode("utf-8"), "text/calendar; charset=utf-8")
 
     def _estatico(self, caminho: str) -> None:
         if caminho in ("/", ""):
@@ -342,6 +358,7 @@ class Manipulador(BaseHTTPRequestHandler):
                 "avisos": estado.avisos[-10:],
                 "aviso_modelo": optimus.aviso_modelo,
                 "aviso_atualizacao": getattr(optimus, "aviso_atualizacao", None),
+                "so_executar": bool(optimus.config.get("voz", "so_executar", False)),
             })
         if recurso == "conversas":
             if metodo == "GET" and not ident:
@@ -457,6 +474,19 @@ class Manipulador(BaseHTTPRequestHandler):
             return self._json({"ok": True})
         if recurso == "acoes":
             return self._json({"acoes": optimus.auditoria.ultimas(100)})
+        if recurso == "celular":
+            from optimus.web import celular
+
+            host, porta = self.server.server_address[:2]
+            rede = host not in ("127.0.0.1", "localhost", "::1")
+            url = celular.endereco_rede(porta, host)
+            if consulta.get("nova_chave"):
+                optimus.config.definir("web", "token_agenda", "")
+            agenda = f"{url}/api/agenda.ics?chave={celular.token_agenda(optimus.config)}"
+            return self._json({"url": url, "rede": rede, "qr": celular.qr_svg(url) if rede else "",
+                               "agenda": agenda, "agenda_qr": celular.qr_svg(agenda) if rede else "",
+                               "dica": "" if rede else "Para usar no celular, abra com "
+                                                       "'optimus gui --rede' (pede uma senha)."})
         if recurso == "atualizacao":
             # Git (clone) ou release do GitHub (instalação sem Git), com SHA-256 e voltar.
             from optimus import autoatualizar
@@ -626,6 +656,12 @@ def iniciar(host: str = "127.0.0.1", porta: int = 8765, abrir_navegador: bool = 
     servidor.daemon_threads = True
     endereco = f"http://{'127.0.0.1' if host in ('0.0.0.0', '') else host}:{porta}"
     print(f"Optimus {__version__} rodando em {endereco}  (Ctrl+C para parar)")
+    if host not in ("127.0.0.1", "localhost"):
+        from optimus.web import celular
+
+        no_celular = celular.endereco_rede(porta, host)
+        print(f"No celular (mesma rede Wi-Fi): {no_celular}")
+        celular.qr_terminal(no_celular)
     if abrir_navegador:
         import webbrowser
 

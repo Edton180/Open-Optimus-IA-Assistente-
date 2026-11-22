@@ -29,6 +29,22 @@ INTENCOES: list[tuple[str, list[str]]] = [
      r"troc|lista|catalogo|novo|novos|recomend)|\b(melhor|qual) (modelo|ia)\b",
      ["modelos_recomendados", "modelo_cabe", "modelo_avaliar", "modelo_baixar", "modelo_usar",
       "modelos_catalogo_atualizar"]),
+    (r"\b(senha|password)\b.{0,20}\b(gera|cri|nova|forte|aleatori)|\b(gera|cri)\w* (uma )?senha",
+     ["gerar_senha"]),
+    (r"\b(cara ou coroa|joga(r)? (uma )?moeda|rola(r)? (um )?dado|sorte(ia|ar|io)|escolhe (um|uma) )",
+     ["sortear"]),
+    (r"\b(quantos dias|faltam? quantos|dias (ate|para|pro|pra)|que dia (da semana )?cai)",
+     ["dias_ate"]),
+    (r"\b(dolar|euro|libra|bitcoin|btc|cotacao|cambio|moeda)\b", ["cotacao"]),
+    (r"\b(pix|copia (meu|minha)|texto rapido|textos rapidos|guarda (meu|minha))",
+     ["texto_rapido_copiar", "texto_rapido_salvar", "textos_rapidos_listar",
+      "texto_rapido_apagar"]),
+    (r"\b(anota|anote|anotac|nota|notas|caderno)\b",
+     ["nota_criar", "notas_listar", "nota_ler", "notas_buscar", "nota_apagar"]),
+    (r"\b(so executar|fica quieto|modo silencioso|sem falar|nao fal[ae] (as respostas|nada)|"
+     r"volta a falar)", ["modo_so_executar"]),
+    (r"\b(desfaz|desfazer|volta como estava).{0,30}(organiz|pasta|area de trabalho)|"
+     r"\borganiz", ["organizar_desfazer"]),
     (r"\bbibliotec", ["biblioteca_indexar", "biblioteca_listar", "biblioteca_esquecer",
                        "consultar_conhecimento"]),
     (r"\b(lembre(-| )?me|me lembr|lembrete|alarme|despert|timer|cronometro|contagem regressiva|"

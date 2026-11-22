@@ -79,9 +79,11 @@ class _MCPHttp(BaseHTTPRequestHandler):
             return
         assert self.headers.get("Authorization") == "Bearer tok"
         if msg["method"] == "initialize":
-            res = {"protocolVersion": "x", "capabilities": {}}
+            assert "MCP-Protocol-Version" not in self.headers
+            res = {"protocolVersion": "2025-03-26", "capabilities": {}}
         elif msg["method"] == "tools/list":
             assert self.headers.get("Mcp-Session-Id") == "sessao-1"
+            assert self.headers.get("MCP-Protocol-Version") == "2025-03-26"
             res = {"tools": [{"name": "hora", "description": "Hora certa"}]}
         else:
             res = {"content": [{"type": "text", "text": "12:00"}]}

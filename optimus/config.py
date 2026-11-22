@@ -102,6 +102,8 @@ PADRAO: dict[str, Any] = {
         "elevenlabs_voz": "",
         "velocidade": 1.0,
         "falar_respostas": True,
+        # Modo "só executar": faz o que foi pedido e fica quieto (não fala as respostas).
+        "so_executar": False,
     },
     "internet": {
         "buscador": "duckduckgo",
@@ -114,6 +116,8 @@ PADRAO: dict[str, Any] = {
         "senha": "",
         # Token para o Home Assistant/Alexa mandarem comandos (POST /api/comando). Vazio = off.
         "token_comando": "",
+        # Chave do link da agenda (calendário do iPhone/Google). Criada sozinha; apague p/ trocar.
+        "token_agenda": "",
     },
     "escuta": {
         # Escuta contínua do serviço (optimus servico): microfone sempre ligado esperando a

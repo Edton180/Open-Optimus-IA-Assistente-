@@ -108,6 +108,7 @@ class _Http:
 
         self.url = url
         self.sessao = ""
+        self.versao = ""  # versão do protocolo negociada no initialize
         self.cabecalhos = {"Accept": "application/json, text/event-stream",
                            "Content-Type": "application/json"}
         if token:
@@ -120,6 +121,8 @@ class _Http:
         cab = dict(self.cabecalhos)
         if self.sessao:
             cab["Mcp-Session-Id"] = self.sessao
+        if self.versao:  # obrigatório depois do initialize (spec Streamable HTTP)
+            cab["MCP-Protocol-Version"] = self.versao
         try:
             r = self.cliente.post(self.url, json=msg, headers=cab, timeout=tempo)
         except httpx.HTTPError as erro:
@@ -178,6 +181,8 @@ class ServidorMCP:
     def iniciar(self) -> ServidorMCP:
         self.info = self._pedir("initialize", {"protocolVersion": VERSAO_PROTOCOLO,
                                                "capabilities": {}, "clientInfo": CLIENTE})
+        if isinstance(self.transporte, _Http):
+            self.transporte.versao = str(self.info.get("protocolVersion") or VERSAO_PROTOCOLO)
         self.transporte.enviar({"jsonrpc": "2.0", "method": "notifications/initialized"},
                                self.tempo)
         return self

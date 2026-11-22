@@ -300,6 +300,7 @@ def organizar_pasta(ctx, pasta: str, modo: str = "tipo", simular: bool = True):
                 "exemplos": {k: v[:5] for k, v in plano.items()},
                 "mensagem": "Plano pronto. Peça para executar com simular=false."}
     movidos = 0
+    registro: list[list[str]] = []
     for grupo, nomes in plano.items():
         destino = base / grupo
         destino.mkdir(exist_ok=True)
@@ -311,8 +312,68 @@ def organizar_pasta(ctx, pasta: str, modo: str = "tipo", simular: bool = True):
                 contador += 1
             shutil.move(str(base / nome), str(alvo))
             movidos += 1
-    return {"mensagem": f"{movidos} arquivos organizados em {len(plano)} pastas.",
+            registro.append([str(base / nome), str(alvo)])
+    _salvar_desfazer(base, registro)
+    return {"mensagem": f"{movidos} arquivos organizados em {len(plano)} pastas. Se quiser, "
+                        "eu desfaço (organizar_desfazer).",
             "pastas": {k: len(v) for k, v in plano.items()}}
+
+
+def _arquivo_desfazer():
+    from optimus.config import pasta_base
+
+    return pasta_base() / "organizar_desfazer.json"
+
+
+def _salvar_desfazer(base: Path, registro: list[list[str]]) -> None:
+    import json
+
+    if not registro:
+        return
+    arq = _arquivo_desfazer()
+    arq.parent.mkdir(parents=True, exist_ok=True)
+    arq.write_text(json.dumps({"pasta": str(base), "movidos": registro}, ensure_ascii=False),
+                   encoding="utf-8")
+
+
+@ferramenta(
+    "organizar_desfazer",
+    "Desfaz a última organização de pasta: devolve cada arquivo para onde estava e apaga as "
+    "subpastas que ficaram vazias.",
+    {}, grupo="arquivos", risco=MODERADO,
+)
+def organizar_desfazer(ctx):
+    import json
+
+    arq = _arquivo_desfazer()
+    if not arq.exists():
+        return {"erro": "Não há organização para desfazer."}
+    dados = json.loads(arq.read_text(encoding="utf-8"))
+    voltaram, faltando = 0, []
+    pastas = set()
+    for origem, destino in reversed(dados.get("movidos", [])):
+        o, d = Path(origem), Path(destino)
+        if not d.exists():
+            faltando.append(d.name)
+            continue
+        alvo = o
+        contador = 1
+        while alvo.exists():  # não sobrescreve um arquivo novo com o mesmo nome
+            alvo = o.with_name(f"{o.stem} ({contador}){o.suffix}")
+            contador += 1
+        shutil.move(str(d), str(alvo))
+        pastas.add(d.parent)
+        voltaram += 1
+    for pasta in pastas:
+        try:
+            pasta.rmdir()  # só apaga se ficou vazia
+        except OSError:
+            pass
+    arq.unlink()
+    msg = f"Desfeito: {voltaram} arquivo(s) voltaram para {dados.get('pasta')}."
+    if faltando:
+        msg += f" {len(faltando)} não estavam mais lá."
+    return {"mensagem": msg, "voltaram": voltaram, "faltando": faltando[:20]}
 
 
 # ---------------------------------------------------------------- outros computadores
