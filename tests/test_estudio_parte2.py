@@ -151,8 +151,9 @@ def test_audiolivro_mp3_por_capitulo_e_m4b_com_capitulos(voz_falsa, tmp_path):
     livro.write_text("# Capítulo 1\n\nOlá.\n\n# Capítulo 2\n\nTchau.", encoding="utf-8")
     r = audiolivro.gerar(livro, autor="Kaik", saida=tmp_path / "saida")
     assert r["capitulos"] == 2 and len(r["arquivos"]) == 2
-    info = subprocess.run([FFMPEG, "-i", r["audiolivro"]], capture_output=True, text=True,
-                          check=False).stderr
+    # o ffmpeg escreve em UTF-8; no Windows o padrão do Python seria cp1252
+    info = subprocess.run([FFMPEG, "-i", r["audiolivro"]], capture_output=True,
+                          check=False).stderr.decode("utf-8", "replace")
     assert "Chapter #0:1" in info and "Capítulo 2" in info and "Kaik" in info
     chamadas = len(voz_falsa)
     audiolivro.gerar(livro, saida=tmp_path / "saida", m4b=False)  # retoma do cache
