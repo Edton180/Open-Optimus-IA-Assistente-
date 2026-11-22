@@ -118,3 +118,25 @@ def test_adicionar_e_remover_camera_ip(tmp_path):
         assert not _req(base + "/api/cameras", cab=cab)["cameras"]
     finally:
         httpd.shutdown()
+
+
+def test_estado_usa_cache_do_motor():
+    # /api/estado é chamado em loop; o status do motor não pode bater no motor a cada poll.
+    from optimus.app import Optimus
+    from optimus.config import Config
+    from optimus.engine.demo import MotorDemo
+    from optimus.web import server
+
+    config = Config(); config.definir("motor", "backend", "demo")
+    optimus = Optimus(config)
+    chamadas = {"n": 0}
+
+    class MotorContado(MotorDemo):
+        def modelos(self):
+            chamadas["n"] += 1
+            return super().modelos()
+
+    optimus.motor = MotorContado()
+    est = server.Estado(optimus)
+    est.motor_status(); est.motor_status(); est.motor_status()
+    assert chamadas["n"] == 1  # as três chamadas seguidas vêm do cache
