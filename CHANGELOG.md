@@ -17,6 +17,20 @@ Fase 1 do plano de novas funções:
 - **Cofre de chaves** (`optimus chaves`): chaves de API no cofre criptografado do sistema.
 - **Cliente MCP** (`[[mcp]]`, `optimus mcp`): outros apps e serviços viram ferramentas.
 
+Estúdio de voz (parte 1):
+
+- **Narração** em português do Brasil com qualquer voz, e em mais 17 idiomas; nova voz original
+  **Mordomo**.
+- **Clonagem de voz** com declaração de consentimento (Chatterbox, MIT), **vozes por descrição**
+  ("masculina grave e calma"), ajustes de tom, ritmo e expressão, exportar/importar `.optimusvoz`
+  e **conversor de voz**.
+- **Transcrição** de áudio e vídeo para TXT/SRT/VTT, **tradução de legendas** com glossário por
+  projeto e **dicionário de pronúncia**.
+- **Legendar e dublar vídeos**: tradução, fala sincronizada, legenda em faixa ou queimada, voz
+  original do vídeo clonada, retomada de onde parou, fila com progresso e cancelamento, lote.
+- `optimus estudio ...`, ferramentas por voz e API compatível com a OpenAI (`/v1/audio`).
+- Todo áudio gerado leva a etiqueta "Voz gerada por IA" nos metadados.
+
 Fase 2 (produtividade):
 
 - **Utilitários do dia a dia:** gerar senha forte, cara ou coroa, dado e sorteio, "quantos dias

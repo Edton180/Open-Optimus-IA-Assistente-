@@ -290,6 +290,8 @@ class Manipulador(BaseHTTPRequestHandler):
     def _rotear(self, metodo: str) -> None:
         url = urlparse(self.path)
         caminho = url.path
+        if caminho.startswith("/v1/"):
+            return self._openai(metodo, caminho)
         if metodo == "GET" and not caminho.startswith("/api/"):
             return self._estatico(caminho)
         if caminho == "/api/entrar" and metodo == "POST":
@@ -304,6 +306,30 @@ class Manipulador(BaseHTTPRequestHandler):
         except Exception as erro:  # noqa: BLE001
             log.exception("Erro na API")
             self._json({"erro": f"{type(erro).__name__}: {erro}"}, 500)
+
+    # API compatível com a da OpenAI (/v1/audio/speech e /v1/audio/transcriptions): outros
+    # programas (editores de vídeo, automações) usam as vozes e a transcrição do Optimus.
+    def _openai(self, metodo: str, caminho: str) -> None:
+        from optimus.web import openai_audio
+
+        bearer = (self.headers.get("Authorization") or "").removeprefix("Bearer ").strip()
+        if self.senha and not (self._autorizado() or hmac.compare_digest(bearer, self.senha)):
+            return self._json({"error": {"message": "senha necessária (Bearer)"}}, 401)
+        tamanho = int(self.headers.get("Content-Length") or 0)
+        if tamanho > 500 * 1024 * 1024:
+            return self._json({"error": {"message": "arquivo grande demais"}}, 413)
+        corpo = self.rfile.read(tamanho) if tamanho else b""
+        status, tipo, dados = openai_audio.atender(
+            metodo, caminho, self.headers.get("Content-Type", ""), corpo,
+            self.estado.optimus.config)
+        self._bytes_status(dados, tipo, status)
+
+    def _bytes_status(self, dados: bytes, tipo: str, status: int) -> None:
+        self.send_response(status)
+        self.send_header("Content-Type", tipo)
+        self.send_header("Content-Length", str(len(dados)))
+        self.end_headers()
+        self.wfile.write(dados)
 
     def _agenda(self, consulta: dict) -> None:
         """Calendário dos lembretes. O app de calendário não manda senha: usa a chave do link."""

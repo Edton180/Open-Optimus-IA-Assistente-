@@ -29,10 +29,16 @@ documentos = ["pypdf>=4.0"]
 desktop = ["pyautogui>=0.9", "mss>=9.0", "pyperclip>=1.8"]
 # Cofre do sistema para as chaves de API (Windows, macOS e Linux)
 seguranca = ["keyring>=25"]
+# Estúdio de voz: transcrever, legendar, traduzir e dublar (ffmpeg incluído), vozes em
+# português do Brasil e em outros 17 idiomas
+estudio = ["numpy>=1.24", "imageio-ffmpeg>=0.4", "faster-whisper>=1.0", "edge-tts>=6.1",
+           "kokoro-onnx>=0.4", "miniaudio>=1.59"]
+# Clonagem e conversor de voz (Chatterbox, MIT). Grande: instala o PyTorch.
+clonagem = ["chatterbox-tts>=0.1"]
 # QR code para abrir o Optimus no celular
 celular = ["segno>=1.6"]
-completo = ["optimus-assistente[voz,desktop,casa,documentos,seguranca,celular]"]
-dev = ["pytest>=8", "ruff>=0.4"]
+completo = ["optimus-assistente[voz,desktop,casa,documentos,seguranca,celular,estudio]"]
+dev = ["pytest>=8", "ruff>=0.4", "numpy>=1.24", "imageio-ffmpeg>=0.4"]
 
 [project.scripts]
 optimus = "optimus.cli:main"

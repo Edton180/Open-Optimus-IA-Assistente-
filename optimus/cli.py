@@ -386,6 +386,12 @@ def cmd_aprender(args) -> int:
     return 0
 
 
+def cmd_estudio(args) -> int:
+    from optimus.estudio.cli import executar
+
+    return executar(args, _criar)
+
+
 def cmd_chaves(args) -> int:
     from optimus import chaves
 
@@ -532,6 +538,9 @@ def main(argv: list[str] | None = None) -> int:
     p.set_defaults(func=cmd_biblioteca)
     sub.add_parser("mcp", help="testar os servidores MCP e listar as ferramentas deles"
                    ).set_defaults(func=cmd_mcp)
+    from optimus.estudio.cli import registrar as registrar_estudio
+
+    registrar_estudio(sub, cmd_estudio)
     p = sub.add_parser("chaves", help="guardar chaves de API no cofre do sistema")
     p.add_argument("acao", choices=["listar", "definir", "apagar", "migrar"])
     p.add_argument("nome", nargs="?", help="secao.campo, ex.: provedores.groq_chave")
