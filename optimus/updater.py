@@ -21,12 +21,24 @@ depois de uma revisão limpa.
 from __future__ import annotations
 
 import subprocess
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
 from optimus import privacy_guard
 
 REPO_OFICIAL = "https://github.com/Edton180/Open-Optimus-IA-Assistente-"
+
+
+def raiz_instalada() -> Path:
+    """Pasta onde o pacote optimus está (a raiz do repositório, no modo dev; o site-packages,
+    numa instalação por pip)."""
+    return Path(__file__).resolve().parent.parent
+
+
+def eh_checkout_git(raiz: str | Path) -> bool:
+    """True se a pasta for mesmo um clone do Git (tem .git), não uma instalação por pip."""
+    return (Path(raiz).expanduser() / ".git").is_dir()
 
 
 class ErroGit(RuntimeError):
@@ -177,3 +189,73 @@ class Atualizador:
             return {"ok": False, "erro": (r.stderr or r.stdout).strip()}
         return {"ok": True, "enviado": True,
                 "mensagem": f"{est.frente} commit(s) enviado(s) para {remoto}/{ramo or est.ramo}."}
+
+
+class AtualizadorPip:
+    """Atualização para quem instalou pelo instalador (pip), não por clone do Git.
+
+    Nesse caso o código roda do `site-packages`, então `git pull` não serve: é preciso
+    reinstalar o pacote a partir do GitHub. Os dados do usuário (config, memórias, banco,
+    chaves, modelos) ficam em `OPTIMUS_HOME`, fora do pacote, e são preservados.
+    """
+
+    def __init__(self, repo_url: str = REPO_OFICIAL, ramo: str = "main",
+                 executar=None, buscar_commit=None):
+        self.repo_url = repo_url.rstrip("/")
+        self.ramo = ramo
+        self._executar = executar or self._pip_real
+        self._buscar_commit = buscar_commit or self._commit_remoto_real
+
+    def _commit_remoto_real(self) -> dict | None:
+        import httpx
+
+        api = self.repo_url.replace("https://github.com/", "https://api.github.com/repos/")
+        try:
+            r = httpx.get(f"{api}/commits/{self.ramo}", timeout=10,
+                          headers={"Accept": "application/vnd.github+json"},
+                          follow_redirects=True)
+            r.raise_for_status()
+            return r.json()
+        except (httpx.HTTPError, ValueError):
+            return None
+
+    def _pip_real(self) -> tuple[int, str]:
+        r = subprocess.run(
+            [sys.executable, "-m", "pip", "install", "--upgrade", "--force-reinstall",
+             "--no-deps", f"git+{self.repo_url}@{self.ramo}"],
+            capture_output=True, text=True, timeout=900, check=False)
+        return r.returncode, (r.stderr or r.stdout)
+
+    def verificar(self, remoto: str = "origin") -> dict:  # noqa: ARG002 - assinatura comum
+        info = self._buscar_commit() or {}
+        sha = (info.get("sha") or "")[:7]
+        quando = ((info.get("commit") or {}).get("author") or {}).get("date", "")
+        msg = ("Instalação por pip: dá para baixar a versão mais recente do GitHub"
+               + (f" (commit {sha}" + (f", de {quando[:10]}" if quando else "") + ")" if sha else "")
+               + ". Seus dados (memórias, chaves, config) ficam fora do pacote e serão preservados.")
+        # Sem número de versão confiável, o modo pip sempre oferece baixar o mais recente.
+        return {"atualizado": False, "pip": True, "commit": sha, "mensagem": msg}
+
+    def atualizar(self, remoto: str = "origin") -> dict:  # noqa: ARG002 - assinatura comum
+        codigo, saida = self._executar()
+        if codigo != 0:
+            return {"ok": False, "mudou": False,
+                    "erro": "Não deu para atualizar pelo pip. Verifique a internet e se o Git está "
+                            "instalado. Detalhe: " + (saida or "").strip()[-400:]}
+        return {"ok": True, "mudou": True, "pip": True,
+                "mensagem": "Baixado do GitHub e reinstalado. Reinicie o Optimus para usar a nova "
+                            "versão."}
+
+
+def construir_atualizador(config=None):
+    """Escolhe a forma certa de atualizar: `git pull` no modo dev (clone), `pip` na instalação.
+
+    `[atualizacao].repo` no config permite apontar manualmente para um clone do Git.
+    """
+    raiz = ""
+    if config is not None:
+        raiz = config.get("atualizacao", "repo", "") or ""
+    raiz = Path(raiz).expanduser() if raiz else raiz_instalada()
+    if eh_checkout_git(raiz):
+        return Atualizador(raiz)
+    return AtualizadorPip()

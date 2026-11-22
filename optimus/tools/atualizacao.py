@@ -32,8 +32,10 @@ def _raiz_repo(ctx: Contexto) -> Path:
     {}, grupo="controle", risco=LIVRE,
 )
 def atualizacao_verificar(ctx):
+    from optimus.updater import construir_atualizador
+
     try:
-        return Atualizador(_raiz_repo(ctx)).verificar()
+        return construir_atualizador(getattr(ctx, "config", None)).verificar()
     except ErroGit as erro:
         return {"erro": str(erro)}
 
@@ -45,8 +47,10 @@ def atualizacao_verificar(ctx):
     {}, grupo="controle", risco=CRITICO,
 )
 def atualizacao_baixar(ctx):
+    from optimus.updater import construir_atualizador
+
     try:
-        return Atualizador(_raiz_repo(ctx)).atualizar()
+        return construir_atualizador(getattr(ctx, "config", None)).atualizar()
     except ErroGit as erro:
         return {"erro": str(erro)}
 

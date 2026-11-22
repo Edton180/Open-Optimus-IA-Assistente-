@@ -23,7 +23,6 @@ from urllib.parse import parse_qs, urlparse
 
 import psutil
 
-import optimus as optimus_mod
 from optimus import __version__
 from optimus import config as cfg
 from optimus.agent import mensagens_para_historico
@@ -458,12 +457,10 @@ class Manipulador(BaseHTTPRequestHandler):
         if recurso == "acoes":
             return self._json({"acoes": optimus.auditoria.ultimas(100)})
         if recurso == "atualizacao":
-            from optimus.updater import Atualizador, ErroGit
+            from optimus.updater import ErroGit, construir_atualizador
 
-            raiz = optimus.config.get("atualizacao", "repo", "") or \
-                str(Path(optimus_mod.__file__).resolve().parent.parent)
             try:
-                atual = Atualizador(raiz)
+                atual = construir_atualizador(optimus.config)
                 if metodo == "POST":
                     return self._json(atual.atualizar())
                 return self._json(atual.verificar())

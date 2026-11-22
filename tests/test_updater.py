@@ -144,3 +144,47 @@ def test_atualizar_recusa_com_mudancas_locais(tmp_path):
     r = at.atualizar()
     assert r["ok"] is False
     assert "não salvas" in r["erro"] or "nao salvas" in r["erro"]
+
+
+# --- Instalação por pip (não-checkout): atualiza reinstalando do GitHub ---
+
+def test_construir_atualizador_escolhe_git_ou_pip(tmp_path):
+    from optimus.config import Config
+    from optimus.updater import Atualizador, AtualizadorPip, construir_atualizador
+
+    # Pasta sem .git -> modo pip.
+    cfg = Config(); cfg.definir("atualizacao", "repo", str(tmp_path))
+    assert isinstance(construir_atualizador(cfg), AtualizadorPip)
+    # Pasta com .git -> modo git (clone).
+    (tmp_path / ".git").mkdir()
+    assert isinstance(construir_atualizador(cfg), Atualizador)
+
+
+def test_atualizador_pip_verifica_e_atualiza_sem_rede():
+    from optimus.updater import AtualizadorPip
+
+    chamou = {"pip": 0}
+
+    def pip_falso():
+        chamou["pip"] += 1
+        return 0, "Successfully installed open-optimus"
+
+    def commit_falso():
+        return {"sha": "abcdef1234567890", "commit": {"author": {"date": "2026-11-22T00:00:00Z"}}}
+
+    at = AtualizadorPip(executar=pip_falso, buscar_commit=commit_falso)
+    v = at.verificar()
+    assert v["pip"] is True and v["commit"] == "abcdef1" and "pip" in v["mensagem"].lower()
+    r = at.atualizar()
+    assert r["ok"] is True and r["mudou"] is True and chamou["pip"] == 1
+
+
+def test_atualizador_pip_relata_falha():
+    from optimus.updater import AtualizadorPip
+
+    at = AtualizadorPip(executar=lambda: (1, "ERROR: could not resolve host github.com"),
+                        buscar_commit=lambda: None)
+    r = at.atualizar()
+    assert r["ok"] is False and "github.com" in r["erro"]
+    # Verificar sem rede ainda responde algo útil.
+    assert at.verificar()["pip"] is True
