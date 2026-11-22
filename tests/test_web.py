@@ -100,3 +100,21 @@ def test_rota_de_atualizacao_responde(tmp_path):
             assert erro.code == 503
     finally:
         httpd.shutdown()
+
+
+def test_adicionar_e_remover_camera_ip(tmp_path):
+    httpd, base = _subir()
+    try:
+        cab = {"X-Optimus-Senha": ""}
+        _req(base + "/api/cameras", {"nome": "Portão", "url": "192.168.0.30",
+                                     "usuario": "admin", "senha": "1234"}, cab)
+        cams = _req(base + "/api/cameras", cab=cab)["cameras"]
+        assert any(c["nome"] == "Portão" and c["id"] == "ip:0" for c in cams)
+        # Remover pela id ip:0.
+        pedido = urllib.request.Request(base + "/api/cameras/ip:0", method="DELETE",
+                                        headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(pedido, timeout=10) as r:
+            assert json.load(r)["ok"]
+        assert not _req(base + "/api/cameras", cab=cab)["cameras"]
+    finally:
+        httpd.shutdown()

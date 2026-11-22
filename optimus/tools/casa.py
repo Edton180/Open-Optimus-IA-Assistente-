@@ -132,6 +132,29 @@ def _foto(conteudo: bytes, nome: str) -> dict:
             "arquivo": str(destino)}
 
 
+def montar_url_camera(url: str, usuario: str = "", senha: str = "") -> str:
+    """Monta o link da câmera a partir do que o usuário digitou na tela.
+
+    Aceita um link rtsp/http completo ou um endereço/IP simples (vira rtsp://). Se o usuário e a
+    senha forem informados à parte e o link ainda não os tiver, injeta-os no link — assim a pessoa
+    não precisa saber montar `rtsp://usuario:senha@ip/...` na mão nem mexer no config.toml.
+    """
+    url = (url or "").strip()
+    if not url:
+        return ""
+    if "://" not in url:
+        url = "rtsp://" + url
+    esquema, resto = url.split("://", 1)
+    if usuario and "@" not in resto:
+        from urllib.parse import quote
+
+        cred = quote(usuario, safe="")
+        if senha:
+            cred += ":" + quote(senha, safe="")
+        resto = f"{cred}@{resto}"
+    return f"{esquema}://{resto}"
+
+
 def imagem_da_camera(config, camera: str) -> bytes:
     """Uma imagem atual da câmera (id do Home Assistant, link http ou rtsp). Usado pela tela
     da casa para mostrar a câmera ao vivo (uma imagem nova a cada segundo)."""

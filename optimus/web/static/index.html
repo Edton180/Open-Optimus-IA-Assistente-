@@ -158,18 +158,33 @@
 
     <section id="tela-casa" class="tela">
       <div class="tela-cabecalho"><h2>Casa inteligente</h2>
-        <p>Luzes, tomadas, ar-condicionado, TV, câmeras e sensores por Wi-Fi, Bluetooth, Zigbee e infravermelho, pelo Home Assistant. Fale normalmente: "Optimus, apaga a luz da sala".</p></div>
-      <div class="cartao formulario">
-        <div class="linha"><label>Endereço do Home Assistant<input id="casa-url" class="campo" placeholder="http://192.168.0.10:8123"></label>
+        <p>Luzes, tomadas e câmeras pela rede. Você <b>não precisa</b> do Home Assistant: tomadas TP-Link Kasa e câmeras IP funcionam direto. O Home Assistant é opcional, para quem já usa e quer trazer tudo junto.</p></div>
+      <h3 class="subtitulo">📷 Câmeras ao vivo</h3>
+      <p class="sutil">Uma câmera Wi-Fi (Intelbras e outras) só mostra a imagem para quem tem o <b>login dela</b> — por isso o Optimus acha a câmera na rede, mas precisa do usuário e senha para ver. Adicione abaixo; nada sai do seu PC.</p>
+      <div class="cartao formulario" id="form-camera">
+        <div class="linha">
+          <label>Nome<input id="cam-nome" class="campo" placeholder="Portão"></label>
+          <label>Endereço / link da câmera<input id="cam-url" class="campo" placeholder="192.168.0.30  ou  rtsp://192.168.0.30:554/cam/realmonitor?channel=1&subtype=0"></label></div>
+        <div class="linha">
+          <label>Usuário da câmera<input id="cam-usuario" class="campo" placeholder="admin"></label>
+          <label>Senha da câmera<input id="cam-senha" class="campo" type="password" placeholder="senha da câmera"></label>
+          <button class="botao primario" id="cam-adicionar">Adicionar câmera</button></div>
+        <p class="sutil" id="cam-estado"></p>
+      </div>
+      <div id="cameras" class="grade cameras"></div>
+
+      <h3 class="subtitulo">🏠 Aparelhos</h3>
+      <div class="linha">
+        <button class="botao" id="casa-rede">Procurar aparelhos no Wi-Fi</button>
+        <button class="botao" id="casa-bluetooth">Procurar Bluetooth</button>
+      </div>
+      <details class="cartao">
+        <summary>Home Assistant (opcional)</summary>
+        <div class="linha" style="margin-top:.6rem"><label>Endereço do Home Assistant<input id="casa-url" class="campo" placeholder="http://192.168.0.10:8123"></label>
           <label>Token de acesso<input id="casa-token" class="campo" type="password" placeholder="token de longa duração"></label></div>
         <div class="linha"><button class="botao primario" id="casa-salvar">Salvar e conectar</button>
-          <button class="botao" id="casa-atualizar">Atualizar aparelhos</button>
-          <button class="botao" id="casa-bluetooth">Procurar Bluetooth</button>
-          <button class="botao" id="casa-rede">Aparelhos no Wi-Fi</button></div>
-      </div>
-      <h3 class="subtitulo">📷 Câmeras ao vivo</h3>
-      <p class="sutil" id="cameras-aviso">Câmeras do Home Assistant aparecem aqui sozinhas. Câmeras IP: adicione no config.toml, ex.: <code>[[cameras]]</code> com <code>nome = "Portão"</code> e <code>url = "rtsp://usuario:senha@192.168.0.30/stream"</code>.</p>
-      <div id="cameras" class="grade cameras"></div>
+          <button class="botao" id="casa-atualizar">Atualizar aparelhos</button></div>
+      </details>
       <div id="casa-aparelhos" class="grade"></div>
     </section>
 

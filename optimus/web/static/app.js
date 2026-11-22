@@ -679,8 +679,8 @@ async function carregarCasa() {
   $("#casa-url").value = d.config.casa.url || ""; $("#casa-token").value = d.config.casa.token || "";
   try {
     const c = await api("/api/cameras");
-    $("#cameras").innerHTML = c.cameras.map((x) => `<figure class="cartao camera"><img data-camera="${esc(x.id)}" alt="${esc(x.nome)}"><figcaption>${esc(x.nome)} <span class="sutil">ao vivo</span></figcaption></figure>`).join("")
-      || '<p class="sutil">Nenhuma câmera encontrada ainda.</p>';
+    $("#cameras").innerHTML = c.cameras.map((x) => `<figure class="cartao camera"><img data-camera="${esc(x.id)}" alt="${esc(x.nome)}">${String(x.id).startsWith("ip:") ? `<button class="icone" data-apagar-camera="${esc(x.id)}" title="Remover câmera">🗑️</button>` : ""}<figcaption>${esc(x.nome)} <span class="sutil">ao vivo</span></figcaption></figure>`).join("")
+      || '<p class="sutil">Nenhuma câmera adicionada ainda. Adicione uma câmera Wi-Fi acima, ligue uma webcam no cabo USB, ou conecte o Home Assistant.</p>';
   } catch (e) { $("#cameras").innerHTML = `<p class="sutil">⚠️ ${esc(e.message)}</p>`; }
   clearInterval(vigiaCameras);
   const atualizar = () => {
@@ -707,6 +707,24 @@ $("#casa-salvar").onclick = async () => {
 $("#casa-atualizar").onclick = () => executarFerramenta("Liste os aparelhos da minha casa e o estado de cada um");
 $("#casa-bluetooth").onclick = () => executarFerramenta("Procure aparelhos Bluetooth por perto");
 $("#casa-rede").onclick = () => executarFerramenta("Quais aparelhos estão conectados na rede da casa?");
+$("#cam-adicionar").onclick = async () => {
+  const est = $("#cam-estado"); const url = $("#cam-url").value.trim();
+  if (!url) { est.textContent = "⚠️ Informe o endereço ou link da câmera."; return; }
+  est.textContent = "Adicionando…";
+  try {
+    const r = await api("/api/cameras", { method: "POST", json: {
+      nome: $("#cam-nome").value.trim(), url, usuario: $("#cam-usuario").value.trim(), senha: $("#cam-senha").value } });
+    if (r.erro) { est.textContent = "⚠️ " + r.erro; return; }
+    est.textContent = "✅ Câmera adicionada.";
+    $("#cam-nome").value = $("#cam-url").value = $("#cam-usuario").value = $("#cam-senha").value = "";
+    carregarCasa();
+  } catch (e) { est.textContent = "⚠️ " + e.message; }
+};
+$("#cameras").addEventListener("click", async (e) => {
+  const rem = e.target.closest("[data-apagar-camera]"); if (!rem) return;
+  await api("/api/cameras/" + encodeURIComponent(rem.dataset.apagarCamera), { method: "DELETE" });
+  carregarCasa();
+});
 
 // ---------- Configurações ----------
 $$(".abas button").forEach((b) => (b.onclick = () => {

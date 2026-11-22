@@ -492,6 +492,33 @@ class Manipulador(BaseHTTPRequestHandler):
             from optimus.tools.casa import cameras_configuradas
 
             return self._json({"cameras": cameras_configuradas(optimus.config)})
+        if recurso == "cameras" and metodo == "POST":
+            from optimus.tools.casa import montar_url_camera
+
+            corpo = self._corpo()
+            url = montar_url_camera(corpo.get("url", ""), corpo.get("usuario", ""),
+                                    corpo.get("senha", ""))
+            if not url:
+                return self._json({"erro": "Informe o link da câmera (rtsp://… ou http://…/snapshot)."},
+                                  400)
+            cams = list(optimus.config.dados.get("cameras") or [])
+            cams.append({"nome": corpo.get("nome", "").strip() or f"Câmera {len(cams) + 1}",
+                         "url": url})
+            optimus.config.dados["cameras"] = cams
+            optimus.config.salvar()
+            return self._json({"ok": True})
+        if recurso == "cameras" and metodo == "DELETE" and ident.startswith("ip:"):
+            try:
+                i = int(ident.split(":", 1)[1])
+            except ValueError:
+                return self._json({"erro": "câmera inválida"}, 400)
+            cams = list(optimus.config.dados.get("cameras") or [])
+            if 0 <= i < len(cams):
+                cams.pop(i)
+                optimus.config.dados["cameras"] = cams
+                optimus.config.salvar()
+                return self._json({"ok": True})
+            return self._json({"erro": "câmera não encontrada"}, 404)
         if recurso == "camera" and metodo == "GET":
             from optimus.tools.casa import cameras_configuradas, imagem_da_camera
 
