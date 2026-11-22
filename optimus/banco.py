@@ -282,8 +282,14 @@ class Banco:
 
     def lembretes(self, pendentes: bool = True) -> list[dict[str, Any]]:
         if pendentes:
-            return self._todos("SELECT * FROM lembretes WHERE feito=0 ORDER BY quando")
-        return self._todos("SELECT * FROM lembretes ORDER BY quando DESC")
+            linhas = self._todos("SELECT * FROM lembretes WHERE feito=0 ORDER BY quando")
+        else:
+            linhas = self._todos("SELECT * FROM lembretes ORDER BY quando DESC")
+        agora = time.time()
+        # Marca os atrasados (pendentes cujo horário já passou) para a interface/voz destacarem.
+        return [{**lembrete, "faltam_seg": round(lembrete["quando"] - agora),
+                 "atrasado": lembrete["feito"] == 0 and lembrete["quando"] <= agora}
+                for lembrete in linhas]
 
     def lembretes_vencidos(self) -> list[dict[str, Any]]:
         return self._todos("SELECT * FROM lembretes WHERE feito=0 AND quando<=? ORDER BY quando",

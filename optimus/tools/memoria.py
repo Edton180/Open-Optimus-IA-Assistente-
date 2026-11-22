@@ -43,10 +43,14 @@ def criar_lembrete(ctx, texto: str, minutos: int = 0, horario: str = "",
             dt.datetime.fromtimestamp(quando).strftime("%d/%m às %H:%M") + f": {texto}"}
 
 
-@ferramenta("listar_lembretes", "Mostra os lembretes pendentes.", grupo="lembretes")
+@ferramenta("listar_lembretes", "Mostra os lembretes pendentes, com os atrasados em destaque.",
+            grupo="lembretes")
 def listar_lembretes(ctx):
-    return {"itens": [{"nome": l["texto"], "quando": dt.datetime.fromtimestamp(l["quando"])
-                       .strftime("%d/%m %H:%M")} for l in ctx.banco.lembretes()]}
+    itens = ctx.banco.lembretes()
+    itens.sort(key=lambda l: (not l["atrasado"], l["quando"]))  # atrasados primeiro
+    return {"itens": [{"nome": l["texto"], "atrasado": l["atrasado"],
+                       "quando": dt.datetime.fromtimestamp(l["quando"]).strftime("%d/%m %H:%M")}
+                      for l in itens]}
 
 
 @ferramenta("aprender", "Estuda um site, arquivo ou texto e guarda na base de conhecimento "

@@ -51,6 +51,9 @@ Novidades:
   `rotinas_listar`, `rotina_executar` (devolve os passos em ordem para a interface/voz
   rodarem um a um) e `rotina_apagar` (novas tabelas `rotinas` e `rotina_passos`). Tudo no
   banco local. A aba Rotinas no painel vem numa próxima fatia.
+- **Lembretes atrasados em destaque:** `listar_lembretes` agora marca os lembretes atrasados
+  (pendentes cujo horário já passou) e os coloca no topo da lista; cada lembrete traz
+  `atrasado` e `faltam_seg`, para a interface/voz destacarem o que está em atraso.
 - **Biblioteca de documentos (converse com os seus arquivos, offline):** `optimus biblioteca
   <pasta>` e as ferramentas `biblioteca_indexar`/`biblioteca_listar`/`biblioteca_esquecer`
   apontam o Optimus para uma pasta inteira (txt, md, csv, html, PDF...) e indexam tudo no
