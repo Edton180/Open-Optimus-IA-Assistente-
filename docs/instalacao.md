@@ -105,6 +105,17 @@ optimus gui --rede
 No celular (mesmo Wi-Fi), abra `http://IP-DO-PC:8765` e digite a senha. O microfone do celular funciona
 na interface: segure o botão 🎙️ para falar.
 
+Mais fácil: com `pip install segno` (ou o extra `[celular]`), o `optimus gui --rede` desenha um
+**QR code** no terminal; aponte a câmera do celular e pronto. O mesmo QR aparece na tela **Ações e
+segurança › Celular e agenda**.
+
+### Lembretes no calendário do iPhone (ou Google Agenda, Outlook)
+
+Na tela **Ações e segurança › Celular e agenda**, copie o **link da agenda** (ou leia o segundo QR
+code). No iPhone: Ajustes › Calendário › Contas › Adicionar conta › Outra › **Calendário assinado** e
+cole o link. Os lembretes do Optimus aparecem no calendário, com alerta na hora e repetição. O link
+tem uma chave própria (não é a sua senha); se ele vazar, clique em **Trocar link da agenda**.
+
 ## Instalação manual (qualquer sistema)
 
 ```bash

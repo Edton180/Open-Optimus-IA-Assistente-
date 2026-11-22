@@ -12,6 +12,7 @@ import shutil
 import subprocess
 import time
 import webbrowser
+from typing import Any
 
 import psutil
 
@@ -219,17 +220,58 @@ _ENERGIA = {
 }
 
 
+_AGENDADO: dict[str, Any] = {}  # desligamento com atraso feito por timer (macOS e outros)
+
+
+def _comando_com_atraso(acao: str, minutos: int) -> str | None:
+    """Comando nativo que já espera sozinho (o PC desliga mesmo se o Optimus fechar)."""
+    so = sistema()
+    if so == "windows" and acao in ("desligar", "reiniciar"):
+        return f"shutdown /{'s' if acao == 'desligar' else 'r'} /t {minutos * 60}"
+    if so == "linux" and acao in ("desligar", "reiniciar"):
+        return f"shutdown {'-h' if acao == 'desligar' else '-r'} +{minutos}"
+    return None
+
+
 @ferramenta(
     "energia",
-    "Desliga, reinicia, suspende ou bloqueia o PC. 'cancelar' cancela um desligamento.",
+    "Desliga, reinicia, suspende ou bloqueia o PC, agora ou daqui a alguns minutos "
+    "(ex.: 'desliga o PC em 30 minutos'). 'cancelar' cancela um desligamento agendado.",
     {"acao": {"type": "string", "enum": ["desligar", "reiniciar", "suspender", "bloquear",
-                                         "cancelar"]}},
-    grupo="programas",
+                                         "cancelar"]},
+     "minutos": {"type": "integer", "description": "Esperar estes minutos antes (0 = agora)"}},
+    grupo="programas", obrigatorios=["acao"],
     risco=lambda a, c: Avaliacao(MODERADO if a.get("acao") in ("bloquear", "cancelar")
-                                 else CRITICO, f"{a.get('acao')} o computador"),
+                                 else CRITICO, f"{a.get('acao')} o computador"
+                                 + (f" em {a.get('minutos')} min" if a.get("minutos") else "")),
 )
-def energia(ctx, acao: str):
+def energia(ctx, acao: str, minutos: int = 0):
+    minutos = max(0, int(minutos or 0))
+    if acao == "cancelar":
+        timer = _AGENDADO.pop("timer", None)
+        if timer:
+            timer.cancel()
     comando = _ENERGIA.get(sistema(), {}).get(acao)
+    if minutos and acao != "cancelar":
+        nativo = _comando_com_atraso(acao, minutos)
+        if nativo:
+            subprocess.Popen(nativo, shell=True)
+        elif comando:
+            import threading
+
+            anterior = _AGENDADO.pop("timer", None)
+            if anterior:
+                anterior.cancel()
+            timer = threading.Timer(minutos * 60, subprocess.Popen, args=(comando,),
+                                    kwargs={"shell": True})
+            timer.daemon = True
+            timer.start()
+            _AGENDADO["timer"] = timer
+        else:
+            return {"erro": f"Ação '{acao}' não disponível neste sistema"}
+        quando = (dt.datetime.now() + dt.timedelta(minutes=minutos)).strftime("%H:%M")
+        return {"mensagem": f"Combinado: vou {acao} o PC às {quando} (em {minutos} min). "
+                            "Para cancelar, diga 'cancela o desligamento'.", "hora": quando}
     if not comando:
         return {"erro": f"Ação '{acao}' não disponível neste sistema"}
     subprocess.Popen(comando, shell=True)

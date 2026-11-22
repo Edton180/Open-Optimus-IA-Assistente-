@@ -147,6 +147,7 @@ async function atualizarSistema() {
       aviso.classList.remove("oculto");
     }
     else if (!d.aviso_modelo) aviso.classList.add("oculto");
+    estado.soExecutar = !!d.so_executar;
     const avisoAt = $("#aviso-atualizacao"), at = d.aviso_atualizacao;
     if (at && at.mensagem && !avisoAt.dataset.mostrado) {
       avisoAt.dataset.mostrado = "1";
@@ -324,7 +325,8 @@ $("#parar").onclick = async () => {
   definirEstado("pronto", "Pronto");
 };
 
-function deveFalar(porVoz) { return estado.falar || aoVivo.ligado || porVoz; }
+// Modo "só executar": faz o pedido e não fala a resposta (confirmações continuam faladas).
+function deveFalar(porVoz) { return !estado.soExecutar && (estado.falar || aoVivo.ligado || porVoz); }
 
 async function acompanhar(tarefa, bolha, porVoz) {
   let desde = 0; let pendenteId = ""; let atual = bolha; let usada = false;
@@ -456,7 +458,7 @@ function mostrarConfirmacao(tarefa, p, bolha) {
   $("[data-nao]", div).onclick = () => responder(false);
   confirmacaoAberta = { div, responder, critico };
   if (modoHud) document.body.classList.add("transcricao-aberta");
-  if (deveFalar(false)) Voz.falar(`Atenção. Posso ${p.motivo}? ${critico ? "Diga confirmo para aprovar." : ""}`);
+  if (estado.falar || aoVivo.ligado) Voz.falar(`Atenção. Posso ${p.motivo}? ${critico ? "Diga confirmo para aprovar." : ""}`);
   div.scrollIntoView({ block: "nearest" });
 }
 
@@ -678,6 +680,22 @@ $("#baixar-atualizacao").addEventListener("click", async (ev) => {
   } catch (e) { estadoEl.textContent = "⚠️ Falha ao atualizar: " + e.message; }
   finally { ev.target.disabled = false; }
 });
+
+// ---------- Celular e agenda ----------
+async function mostrarCelular(nova) {
+  const estadoEl = $("#celular-estado"); const qr = $("#celular-qr");
+  estadoEl.textContent = "Carregando…";
+  try {
+    const d = await api("/api/celular" + (nova ? "?nova_chave=1" : ""));
+    const figura = (svg, legenda) => svg ? `<figure class="qr">${svg}<figcaption>${esc(legenda)}</figcaption></figure>` : "";
+    qr.innerHTML = figura(d.qr, "Abrir no celular") + figura(d.agenda_qr, "Assinar a agenda");
+    estadoEl.innerHTML = `${d.dica ? "⚠️ " + esc(d.dica) + "<br>" : ""}Endereço: <code>${esc(d.url)}</code><br>Agenda: <code>${esc(d.agenda)}</code>`
+      + (d.rede && !d.qr ? "<br>Para ver o QR code, instale: <code>pip install segno</code>" : "");
+    $("#trocar-agenda").classList.remove("oculto");
+  } catch (e) { estadoEl.textContent = "⚠️ " + e.message; }
+}
+$("#mostrar-celular").addEventListener("click", () => mostrarCelular(false));
+$("#trocar-agenda").addEventListener("click", () => mostrarCelular(true));
 
 // ---------- Casa ----------
 let vigiaCameras = null;

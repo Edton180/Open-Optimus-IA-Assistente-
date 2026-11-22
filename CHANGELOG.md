@@ -17,6 +17,19 @@ Fase 1 do plano de novas funções:
 - **Cofre de chaves** (`optimus chaves`): chaves de API no cofre criptografado do sistema.
 - **Cliente MCP** (`[[mcp]]`, `optimus mcp`): outros apps e serviços viram ferramentas.
 
+Fase 2 (produtividade):
+
+- **Utilitários do dia a dia:** gerar senha forte, cara ou coroa, dado e sorteio, "quantos dias
+  faltam pro Natal/Carnaval/Páscoa", cotação e conversão de moedas (dólar, euro, bitcoin...).
+- **Textos rápidos:** guarde pix, endereço ou assinatura e diga "copia meu pix".
+- **Caderno de notas** em Markdown: "anota que preciso comprar café", listar, ler, buscar, apagar.
+- **Desfazer a organização de pasta** e **desligar/reiniciar daqui a X minutos** ("desliga o PC em
+  30 minutos"; "cancela o desligamento").
+- **Modo só executar:** o Optimus faz e fica quieto (confirmações de segurança continuam faladas).
+- **Celular:** QR code para abrir o Optimus no telefone e **link de agenda (.ics)** que põe os
+  lembretes no calendário do iPhone, Google Agenda ou Outlook.
+- **MCP remoto:** envia o cabeçalho `MCP-Protocol-Version` depois do `initialize`.
+
 - **Licença:** o Optimus passou para a PolyForm Noncommercial 1.0.0 — livre para uso não
   comercial e com licença comercial à parte com o proprietário (LICENSE-COMMERCIAL.md).
 - **Travamentos:** um modelo que para de responder é interrompido com mensagem clara depois de
