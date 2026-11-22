@@ -45,6 +45,12 @@ Novidades:
   sensível. As ferramentas devolvem só uma prévia curta (o texto inteiro nunca vai para o
   modelo); `copiado_usar` restaura o item direto na área de transferência do PC. A aba
   Copiados no painel vem numa próxima fatia.
+- **Rotinas (sequências que você dispara por um nome):** uma rotina é uma lista de passos em
+  ordem — cada passo um pedido em texto, como você falaria com o Optimus (ex.: "bom dia" →
+  resumo do dia, previsão do tempo, tocar playlist). Ferramentas `rotina_criar`,
+  `rotinas_listar`, `rotina_executar` (devolve os passos em ordem para a interface/voz
+  rodarem um a um) e `rotina_apagar` (novas tabelas `rotinas` e `rotina_passos`). Tudo no
+  banco local. A aba Rotinas no painel vem numa próxima fatia.
 - **Biblioteca de documentos (converse com os seus arquivos, offline):** `optimus biblioteca
   <pasta>` e as ferramentas `biblioteca_indexar`/`biblioteca_listar`/`biblioteca_esquecer`
   apontam o Optimus para uma pasta inteira (txt, md, csv, html, PDF...) e indexam tudo no

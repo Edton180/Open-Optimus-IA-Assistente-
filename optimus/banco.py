@@ -82,6 +82,17 @@ CREATE TABLE IF NOT EXISTS copiados (
     texto TEXT NOT NULL,
     quando REAL NOT NULL
 );
+CREATE TABLE IF NOT EXISTS rotinas (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nome TEXT NOT NULL,
+    criado REAL NOT NULL
+);
+CREATE TABLE IF NOT EXISTS rotina_passos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    rotina INTEGER NOT NULL REFERENCES rotinas(id) ON DELETE CASCADE,
+    ordem INTEGER NOT NULL,
+    texto TEXT NOT NULL
+);
 """
 
 PERSONAS_INICIAIS = [
@@ -421,6 +432,42 @@ class Banco:
 
     def limpar_copiados(self) -> None:
         self._exec("DELETE FROM copiados")
+
+    # Rotinas (sequências de passos disparadas por um nome)
+    def criar_rotina(self, nome: str, passos: list[str]) -> int:
+        """Cria (ou regrava, se já existir pelo mesmo nome) uma rotina com passos em ordem."""
+        nome = (nome or "").strip() or "Rotina"
+        existente = self._todos("SELECT id FROM rotinas WHERE lower(nome)=lower(?)", (nome,))
+        if existente:
+            rid = existente[0]["id"]
+            self._exec("DELETE FROM rotina_passos WHERE rotina=?", (rid,))
+        else:
+            rid = self._exec("INSERT INTO rotinas (nome, criado) VALUES (?,?)",
+                             (nome, time.time())).lastrowid
+        ordem = 0
+        for passo in passos or []:
+            passo = (passo or "").strip()
+            if passo:
+                self._exec("INSERT INTO rotina_passos (rotina, ordem, texto) VALUES (?,?,?)",
+                           (rid, ordem, passo))
+                ordem += 1
+        return rid
+
+    def _com_passos(self, rotina: dict[str, Any]) -> dict[str, Any]:
+        passos = self._todos("SELECT texto FROM rotina_passos WHERE rotina=? ORDER BY ordem",
+                             (rotina["id"],))
+        return {**rotina, "passos": [p["texto"] for p in passos]}
+
+    def listar_rotinas(self) -> list[dict[str, Any]]:
+        return [self._com_passos(r) for r in self._todos("SELECT * FROM rotinas ORDER BY nome")]
+
+    def rotina_por_nome(self, nome: str) -> dict[str, Any] | None:
+        linhas = self._todos("SELECT * FROM rotinas WHERE lower(nome)=lower(?)",
+                            ((nome or "").strip(),))
+        return self._com_passos(linhas[0]) if linhas else None
+
+    def apagar_rotina(self, rotina_id: int) -> None:
+        self._exec("DELETE FROM rotinas WHERE id=?", (int(rotina_id),))
 
     # Personas e prompts
     def personas(self) -> list[dict[str, Any]]:
