@@ -79,6 +79,9 @@ INTENCOES: list[tuple[str, list[str]]] = [
     (r"\b(digit|tecla|clique|clicar|mouse|print|captura de tela|tela|area de transferencia|"
      r"copiad)", ["captura_tela", "digitar", "teclas", "clicar", "area_transferencia"]),
     (r"(mud|troc|troqu|qua(l|is)|list|usar|use|outra).{0,25}\bvoz", ["trocar_voz", "listar_vozes"]),
+    (r"\b(palavra de ativa|palavra-chave|(me|te) cham|como (eu )?(te )?chamo|"
+     r"nome para (te )?chamar|palavra para (te )?chamar)",
+     ["palavra_ativacao_definir", "palavra_ativacao_ver"]),
     (r"(\d\s*[-+*/x^]\s*\d|calcul|quanto (e|da|sao)|porcent|raiz)", ["calcular"]),
     (r"\b(que horas|hora|data de hoje|que dia)", ["data_hora"]),
     (r"\b(imagem|desenh|ilustra|arte de|foto de|logo|wallpaper|papel de parede)",

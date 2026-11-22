@@ -69,6 +69,9 @@ Novidades:
 - **Lembretes atrasados em destaque:** `listar_lembretes` agora marca os lembretes atrasados
   (pendentes cujo horário já passou) e os coloca no topo da lista; cada lembrete traz
   `atrasado` e `faltam_seg`, para a interface/voz destacarem o que está em atraso.
+- **Palavra de ativação configurável:** dá para trocar a palavra que chama o Optimus na
+  conversa por voz (padrão "optimus") — ex.: "me chame de Jarvis". Ferramentas
+  `palavra_ativacao_definir` e `palavra_ativacao_ver` (guardam em `[voz] palavra_ativacao`).
 - **Biblioteca de documentos (converse com os seus arquivos, offline):** `optimus biblioteca
   <pasta>` e as ferramentas `biblioteca_indexar`/`biblioteca_listar`/`biblioteca_esquecer`
   apontam o Optimus para uma pasta inteira (txt, md, csv, html, PDF...) e indexam tudo no

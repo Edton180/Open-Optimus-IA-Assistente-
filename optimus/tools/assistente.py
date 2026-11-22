@@ -35,6 +35,34 @@ def trocar_voz(ctx, voz: str):
             "voz": escolhida.id}
 
 
+@ferramenta(
+    "palavra_ativacao_definir",
+    "Muda a palavra que ativa o Optimus na conversa por voz (padrão 'optimus'). "
+    "Ex.: 'me chame de Jarvis'.",
+    {"palavra": texto("Nova palavra de ativação (uma palavra)")}, grupo="geral",
+)
+def palavra_ativacao_definir(ctx, palavra: str):
+    palavra = (palavra or "").strip().split()[0] if (palavra or "").strip() else ""
+    palavra = re.sub(r"[^\w-]", "", palavra).lower()
+    if sum(c.isalpha() for c in palavra) < 2:
+        return {"erro": "A palavra de ativação precisa ter pelo menos 2 letras."}
+    ctx.config.definir("voz", "palavra_ativacao", palavra)
+    ctx.config.salvar()
+    return {"mensagem": f"Pronto. Agora é só dizer '{palavra.capitalize()}' para me chamar.",
+            "palavra_ativacao": palavra}
+
+
+@ferramenta(
+    "palavra_ativacao_ver",
+    "Mostra a palavra que ativa o Optimus na conversa por voz.",
+    {}, grupo="geral",
+)
+def palavra_ativacao_ver(ctx):
+    palavra = ctx.config.get("voz", "palavra_ativacao", "optimus") or "optimus"
+    return {"palavra_ativacao": palavra,
+            "mensagem": f"A palavra de ativação é '{palavra.capitalize()}'."}
+
+
 @ferramenta("listar_vozes", "Lista as vozes do Optimus e quais funcionam neste PC.",
             grupo="geral")
 def listar_vozes(ctx):
