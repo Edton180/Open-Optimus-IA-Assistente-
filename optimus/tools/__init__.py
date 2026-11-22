@@ -12,8 +12,8 @@ from pathlib import Path
 
 from optimus.config import pasta_base
 from optimus.tools import (  # noqa: F401
-    agentes, arquivos, assistente, atualizacao, biblioteca, casa, codigo, controle, desktop,
-    internet, lan, memoria, modelos, produtividade, sistema,
+    agentes, arquivos, assistente, atualizacao, biblioteca, casa, codigo, controle, copiados,
+    desktop, internet, lan, memoria, modelos, produtividade, sistema,
 )
 from optimus.tools.base import Contexto, Ferramenta, ferramenta, registradas
 
