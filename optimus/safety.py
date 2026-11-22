@@ -163,7 +163,7 @@ def interpretar_confirmacao(resposta: str, nivel: int = MODERADO) -> bool:
 
 _SEGREDO = re.compile(
     r"(sk-[a-z0-9_\-]{10,}|ghp_[a-z0-9]{20,}|xox[abp]-[a-z0-9\-]{10,}|"
-    r"(?:senha|password|token|api[_-]?key|chave)\s*[=:]\s*\S+)",
+    r"(?:senha|password|token|api[_-]?key|chave)[\"']?\s*[=:]\s*\S+)",
     re.IGNORECASE,
 )
 

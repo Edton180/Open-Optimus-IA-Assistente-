@@ -157,19 +157,23 @@ def dias_ate(ctx, data: str, hoje: dt.date | None = None):
 
 
 # --------------------------------------------------------------------------- câmbio
-_MOEDAS = {"dolar": "USD", "dollar": "USD", "euro": "EUR", "libra": "GBP", "iene": "JPY",
-           "peso": "ARS", "bitcoin": "BTC", "btc": "BTC", "ethereum": "ETH", "franco": "CHF",
-           "dolar canadense": "CAD", "yuan": "CNY", "real": "BRL"}
+_MOEDAS = {"dolar": "USD", "dolar americano": "USD", "dollar": "USD", "euro": "EUR",
+           "libra": "GBP", "libra esterlina": "GBP", "iene": "JPY", "yen": "JPY",
+           "peso argentino": "ARS", "peso mexicano": "MXN", "peso chileno": "CLP",
+           "peso colombiano": "COP", "peso uruguaio": "UYU", "guarani": "PYG",
+           "dolar canadense": "CAD", "dolar australiano": "AUD", "franco suico": "CHF",
+           "franco": "CHF", "yuan": "CNY", "renminbi": "CNY", "rupia": "INR", "rublo": "RUB",
+           "bitcoin": "BTC", "ethereum": "ETH", "real": "BRL", "reais": "BRL"}
+_ENCHIMENTO = r"^(?:o|a|os|as|do|da|de|em|para|pra|pro|no|na)\s+"
 
 
-def _codigo(moeda: str) -> str:
-    t = _normal(moeda)
+def _codigo(moeda: str) -> str | None:
+    """Código ISO da moeda, ou None se o nome não for reconhecido (nunca chuta outra)."""
+    t = re.sub(r"\s+", " ", _normal(moeda))
+    t = re.sub(_ENCHIMENTO, "", t)
     if re.fullmatch(r"[a-z]{3}", t):
         return t.upper()
-    for nome in sorted(_MOEDAS, key=len, reverse=True):
-        if nome in t:
-            return _MOEDAS[nome]
-    return "USD"
+    return _MOEDAS.get(t) or _MOEDAS.get(t.rstrip("s"))
 
 
 @ferramenta(
@@ -184,7 +188,11 @@ def _codigo(moeda: str) -> str:
 def cotacao(ctx, moeda: str = "dólar", para: str = "real", valor: float = 0, cliente=None):
     import httpx
 
-    de, ate = _codigo(moeda), _codigo(para or "real")
+    de, ate = _codigo(moeda or "dólar"), _codigo(para or "real")
+    if not de or not ate:
+        desconhecida = moeda if not de else para
+        return {"erro": f"Não conheço a moeda '{desconhecida}'. Use o código de 3 letras "
+                        "(ex.: AUD, MXN, CHF) ou o nome completo (ex.: peso mexicano)."}
     if de == ate:
         return {"erro": "As duas moedas são iguais."}
     par = f"{de}-{ate}"

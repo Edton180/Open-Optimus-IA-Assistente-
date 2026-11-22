@@ -214,3 +214,34 @@ def test_roteador_fase2():
     }
     for pedido, nome in casos.items():
         assert nome in _sel(pedido), pedido
+
+
+# ------------------------------------------------------------------ correções do review
+def test_moeda_desconhecida_nao_vira_outra(tmp_path):
+    assert u._codigo("dólar australiano") == "AUD"
+    assert u._codigo("o peso mexicano") == "MXN"
+    assert u._codigo("euros") == "EUR" and u._codigo("chf") == "CHF"
+    assert u._codigo("dólar neozelandês") is None and u._codigo("peso") is None
+    r = u.cotacao(_ctx(tmp_path), "dólar neozelandês", cliente=_Cliente())
+    assert "Não conheço" in r["erro"]
+
+
+def test_senha_gerada_nao_vai_para_o_registro(tmp_path):
+    import json as _json
+
+    from optimus.safety import LIVRE, Auditoria
+
+    senha = u.gerar_senha(_ctx(tmp_path), tamanho=20)["senha"]
+    aud = Auditoria(tmp_path / "acoes.jsonl")
+    aud.registrar("gerar_senha", {"tamanho": 20}, LIVRE, "automatica",
+                  _json.dumps({"senha": senha, "tamanho": 20}))
+    assert senha not in (tmp_path / "acoes.jsonl").read_text(encoding="utf-8")
+
+
+def test_cancelar_so_timer_responde_sucesso(tmp_path, monkeypatch):
+    monkeypatch.setattr(sistema.subprocess, "Popen", lambda cmd, **k: None)
+    monkeypatch.setattr(sistema, "sistema", lambda: "mac")
+    monkeypatch.setitem(sistema._ENERGIA, "mac", {"suspender": "pmset sleepnow"})
+    sistema.energia(_ctx(tmp_path), "suspender", minutos=10)
+    r = sistema.energia(_ctx(tmp_path), "cancelar")
+    assert "erro" not in r and "Cancelado" in r["mensagem"]

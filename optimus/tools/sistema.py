@@ -247,11 +247,13 @@ def _comando_com_atraso(acao: str, minutos: int) -> str | None:
 )
 def energia(ctx, acao: str, minutos: int = 0):
     minutos = max(0, int(minutos or 0))
+    comando = _ENERGIA.get(sistema(), {}).get(acao)
     if acao == "cancelar":
         timer = _AGENDADO.pop("timer", None)
         if timer:
             timer.cancel()
-    comando = _ENERGIA.get(sistema(), {}).get(acao)
+            if not comando:  # só havia o timer (ex.: macOS): já está cancelado
+                return {"mensagem": "Cancelado. O PC não vai mais desligar."}
     if minutos and acao != "cancelar":
         nativo = _comando_com_atraso(acao, minutos)
         if nativo:
