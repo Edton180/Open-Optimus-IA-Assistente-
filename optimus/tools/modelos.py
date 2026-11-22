@@ -61,6 +61,7 @@ def _recomendados(ctx: Contexto, motor: MotorOllama | None = None) -> dict:
         "recomendado_instalado": perfil.modelo in instalados,
         "por_familia": por_familia,
         "nao_instalados": faltando,
+        "novidades": catalogo.novidades(),
     }
 
 
@@ -86,7 +87,8 @@ def modelo_baixar(ctx, nome: str = ""):
     if not nome or not nome.strip():
         nome = hardware.escolher_perfil(hardware.detectar()).modelo
     nome = nome.strip()
-    conhecido = any(m.nome == nome for m in catalogo.CATALOGO)
+    conhecido = any(m.nome == nome and m.confirmado for m in catalogo.CATALOGO)
+    estimativa = catalogo.cabe_neste_pc(nome, hardware.detectar())
     try:
         ok = motor.baixar(nome)
     except Exception as erro:
@@ -94,8 +96,14 @@ def modelo_baixar(ctx, nome: str = ""):
     if not ok:
         return {"erro": f"Falha ao baixar {nome}. Confira o nome e se o Ollama está aberto.",
                 "conhecido": conhecido}
-    return {"baixado": nome, "conhecido": conhecido,
-            "aviso": "" if conhecido else "Modelo fora do catálogo do Optimus; baixado mesmo assim."}
+    aviso = ""
+    if not conhecido:
+        aviso = "Modelo novo ou fora do catálogo: baixado mesmo assim. "
+        if estimativa.get("memoria_gb") and not estimativa.get("cabe"):
+            aviso += (f"Ele deve precisar de uns {estimativa['memoria_gb']} GB e este PC tem "
+                      f"{estimativa['memoria_util_gb']} GB úteis: pode ficar muito lento. ")
+        aviso += "Use modelo_avaliar para testar."
+    return {"baixado": nome, "conhecido": conhecido, "estimativa": estimativa, "aviso": aviso}
 
 
 @ferramenta(
@@ -114,3 +122,42 @@ def modelo_usar(ctx, nome: str = ""):
     nome = nome.strip()
     catalogo.aceitar_upgrade(ctx.config, hw, nome)
     return {"usando": nome}
+
+
+@ferramenta(
+    "modelo_cabe",
+    "Diz se um modelo qualquer de IA (até lançamentos novos, fora do catálogo e sem avaliação) "
+    "cabe neste PC: estima a memória pelo tamanho e pela quantização e lê as capacidades "
+    "(ferramentas, imagem, raciocínio) no Ollama quando ele já está baixado.",
+    {"nome": texto("Nome do modelo, ex.: qwen3.8:27b ou hf.co/usuario/Modelo-7B-GGUF:Q4_K_M")},
+    grupo="sistema", risco=LIVRE,
+)
+def modelo_cabe(ctx, nome: str):
+    info = _motor_ollama(ctx).info(nome.strip())
+    return catalogo.cabe_neste_pc(nome.strip(), hardware.detectar(), info)
+
+
+@ferramenta(
+    "modelo_avaliar",
+    "Faz um teste rápido de um modelo neste PC (velocidade, português e uma conta) e dá uma "
+    "nota de 0 a 10. Serve para modelos novos que ainda não têm avaliação pública.",
+    {"nome": texto("Nome do modelo instalado. Vazio = o modelo em uso.")},
+    grupo="sistema", risco=LIVRE, obrigatorios=[],
+)
+def modelo_avaliar(ctx, nome: str = ""):
+    if not nome or not nome.strip():
+        nome = (ctx.config.get("motor", "modelo", "") if ctx and getattr(ctx, "config", None)
+                else "") or hardware.escolher_perfil(hardware.detectar()).modelo
+    return catalogo.avaliar(_motor_ollama(ctx), nome.strip())
+
+
+@ferramenta(
+    "modelos_catalogo_atualizar",
+    "Baixa do GitHub a lista mais nova de modelos de IA abertos (novos lançamentos de Google, "
+    "Meta, Alibaba, DeepSeek, NVIDIA, Mistral...), sem precisar atualizar o Optimus.",
+    {}, grupo="sistema", risco=LIVRE,
+)
+def modelos_catalogo_atualizar(ctx):
+    repo = ctx.config.get("atualizacao", "github", "") if ctx and getattr(ctx, "config", None) \
+        else ""
+    return catalogo.atualizar_catalogo(repo)

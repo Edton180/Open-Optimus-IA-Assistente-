@@ -52,6 +52,32 @@ optimus config motor.modelo_rapido llama3.2:3b
 
 Ou na interface: **Configurações > Motor de IA**, campo "Baixar modelo".
 
+### Modelos novos, mesmo sem avaliação
+
+A lista de modelos fica em `optimus/catalogo/modelos.json`, não no código. Quando sai um
+lançamento (Gemma, Qwen, Llama/Muse, DeepSeek, Nemotron, GLM, Mistral...), o catálogo é
+atualizado no GitHub e chega até você sem precisar de versão nova do Optimus:
+
+```bash
+optimus modelos --atualizar          # baixa o catálogo mais novo
+optimus modelos                      # melhor de cada família + novidades em conferência
+optimus modelos --cabe qwen3.8:27b   # qualquer modelo: quanto pede e se cabe neste PC
+optimus modelos --avaliar gemma4:e4b # teste rápido: velocidade, português e uma conta
+```
+
+- **Qualquer modelo funciona**, mesmo fora do catálogo: o Optimus estima a memória pelo
+  tamanho e pela quantização (do nome, como `14b-a3b-q8_0`, ou dos dados do próprio Ollama) e
+  lê as capacidades (ferramentas, imagem, raciocínio).
+- **Sem benchmark público?** O `--avaliar` dá uma nota de 0 a 10 no seu PC e guarda em
+  `OPTIMUS_HOME/avaliacoes.json`.
+- Modelos marcados como **novidade** aparecem na lista, com laboratório e licença, mas não são
+  escolhidos sozinhos até o nome no Ollama ser conferido.
+- Cada modelo mostra a **licença**. Algumas proíbem uso comercial ou exigem acordo para
+  empresas grandes: confira antes de usar em trabalho pago.
+
+Por voz: *"Optimus, o modelo X cabe no meu PC?"*, *"testa o modelo X"*, *"atualiza a lista de
+modelos"*.
+
 ### Modelos sem filtro
 
 O Optimus não adiciona filtros às conversas: o comportamento vem do modelo e do prompt que você escolher.

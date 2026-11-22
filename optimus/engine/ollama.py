@@ -189,6 +189,19 @@ class MotorOllama(Motor):
             return []
         return sorted(m.get("name", "") for m in dados.get("models", []))
 
+    def info(self, modelo: str) -> dict[str, Any]:
+        """Detalhes de um modelo instalado (/api/show): parâmetros, quantização, capacidades
+        (tools, vision, thinking...). Vazio se o Ollama não souber dele."""
+        try:
+            r = httpx.post(f"{self.url}/api/show", json={"model": modelo}, timeout=10)
+            if r.status_code != 200:
+                return {}
+            dados = r.json()
+        except (httpx.HTTPError, ValueError):
+            return {}
+        return {k: dados.get(k) for k in ("details", "model_info", "capabilities")
+                if dados.get(k) is not None}
+
     def baixar(self, modelo: str, progresso=None) -> bool:
         try:
             with httpx.stream("POST", f"{self.url}/api/pull", json={"model": modelo},

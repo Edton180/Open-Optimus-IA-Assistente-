@@ -223,14 +223,37 @@ def cmd_modelos(args) -> int:
     """Mostra, por família, o melhor modelo que cabe neste PC e se já está instalado."""
     from optimus import hardware, modelos
 
+    from optimus.engine.ollama import MotorOllama
+
     config = cfg.carregar()
+    url = config.get("motor", "url", "http://127.0.0.1:11434")
+    if args.atualizar:
+        r = modelos.atualizar_catalogo(config.get("atualizacao", "github", ""))
+        print(r.get("mensagem") or r.get("erro"))
+        return 0 if r.get("ok") else 1
     hw = hardware.detectar()
+    if args.cabe:
+        r = modelos.cabe_neste_pc(args.cabe, hw, MotorOllama(url).info(args.cabe))
+        if args.json:
+            print(json.dumps(r, ensure_ascii=False, indent=2))
+        elif not r.get("memoria_gb"):
+            print(f"{args.cabe}: {r.get('aviso')}")
+        else:
+            veredito = "cabe" if r["cabe"] else "NÃO cabe (vai ficar lento ou não abre)"
+            print(f"{args.cabe}: precisa de ~{r['memoria_gb']} GB; este PC tem "
+                  f"{r['memoria_util_gb']} GB úteis → {veredito}.")
+        return 0
+    if args.avaliar:
+        r = modelos.avaliar(MotorOllama(url), args.avaliar)
+        print(json.dumps(r, ensure_ascii=False, indent=2) if args.json or not r.get("ok") else
+              f"{args.avaliar}: nota {r['nota']}/10 em {r['segundos']} s "
+              f"({r['tokens_por_segundo']} tokens/s). Resposta: {r['resposta']}")
+        return 0 if r.get("ok") else 1
     perfil = hardware.escolher_perfil(hw)
     memoria, usou_ram = hardware.memoria_util_gb(hw)
     try:
-        from optimus.engine.ollama import MotorOllama
 
-        instalados = MotorOllama(config.get("motor", "url", "http://127.0.0.1:11434")).modelos()
+        instalados = MotorOllama(url).modelos()
     except Exception:
         instalados = []
     por_familia = modelos.melhores_por_familia(hw)
@@ -250,6 +273,13 @@ def cmd_modelos(args) -> int:
         marca = "✓ instalado" if rec["nome"] in instalados else "baixar: optimus instalar-modelo "
         marca += "" if rec["nome"] in instalados else rec["nome"]
         print(f"  {item['familia']:20} {rec['nome']:20} {marca}")
+    novos = modelos.novidades()
+    if novos:
+        print("\nNovidades (lançamentos recentes, ainda em conferência):")
+        for m in novos:
+            print(f"  {m['nome']:22} ~{m['memoria_gb']:>6} GB  {m['laboratorio']:14} "
+                  f"{m['licenca']}")
+    print("\nOutro modelo qualquer: optimus modelos --cabe NOME  |  testar: --avaliar NOME")
     return 0
 
 
@@ -418,6 +448,9 @@ def main(argv: list[str] | None = None) -> int:
     p.set_defaults(func=cmd_instalar_modelo)
     p = sub.add_parser("modelos", help="melhor modelo para este PC, por família")
     p.add_argument("--json", action="store_true")
+    p.add_argument("--atualizar", action="store_true", help="baixar o catálogo mais novo")
+    p.add_argument("--cabe", metavar="NOME", help="diz se um modelo qualquer cabe neste PC")
+    p.add_argument("--avaliar", metavar="NOME", help="teste rápido de um modelo instalado")
     p.set_defaults(func=cmd_modelos)
     p = sub.add_parser("vozes", help="vozes disponíveis")
     p.add_argument("--baixar", action="store_true", help="instala as vozes offline")
