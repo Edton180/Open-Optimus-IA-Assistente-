@@ -325,9 +325,12 @@ class Banco:
 
     def criar_habito(self, nome: str) -> int:
         nome = nome.strip()
-        existe = self._todos("SELECT id FROM habitos WHERE lower(nome)=?", (nome.lower(),))
+        # casefold (não o lower() do SQLite, que só dobra ASCII) para "Água" == "água".
+        alvo = nome.casefold()
+        existe = next((h for h in self._todos("SELECT id, nome FROM habitos")
+                       if h["nome"].casefold() == alvo), None)
         if existe:
-            return existe[0]["id"]
+            return existe["id"]
         return self._exec("INSERT INTO habitos (nome, criado) VALUES (?,?)",
                           (nome, time.time())).lastrowid
 
@@ -440,9 +443,12 @@ class Banco:
     def criar_rotina(self, nome: str, passos: list[str]) -> int:
         """Cria (ou regrava, se já existir pelo mesmo nome) uma rotina com passos em ordem."""
         nome = (nome or "").strip() or "Rotina"
-        existente = self._todos("SELECT id FROM rotinas WHERE lower(nome)=lower(?)", (nome,))
+        # casefold (não o lower() do SQLite, que só dobra ASCII) para "CAFÉ" == "café".
+        alvo = nome.casefold()
+        existente = next((r for r in self._todos("SELECT id, nome FROM rotinas")
+                          if r["nome"].casefold() == alvo), None)
         if existente:
-            rid = existente[0]["id"]
+            rid = existente["id"]
             self._exec("DELETE FROM rotina_passos WHERE rotina=?", (rid,))
         else:
             rid = self._exec("INSERT INTO rotinas (nome, criado) VALUES (?,?)",
@@ -465,9 +471,10 @@ class Banco:
         return [self._com_passos(r) for r in self._todos("SELECT * FROM rotinas ORDER BY nome")]
 
     def rotina_por_nome(self, nome: str) -> dict[str, Any] | None:
-        linhas = self._todos("SELECT * FROM rotinas WHERE lower(nome)=lower(?)",
-                            ((nome or "").strip(),))
-        return self._com_passos(linhas[0]) if linhas else None
+        alvo = (nome or "").strip().casefold()
+        achada = next((r for r in self._todos("SELECT * FROM rotinas")
+                       if r["nome"].casefold() == alvo), None)
+        return self._com_passos(achada) if achada else None
 
     def apagar_rotina(self, rotina_id: int) -> None:
         self._exec("DELETE FROM rotinas WHERE id=?", (int(rotina_id),))
