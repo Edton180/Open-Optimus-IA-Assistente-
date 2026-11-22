@@ -23,6 +23,7 @@ from urllib.parse import parse_qs, urlparse
 
 import psutil
 
+import optimus as optimus_mod
 from optimus import __version__
 from optimus import config as cfg
 from optimus.agent import mensagens_para_historico
@@ -438,6 +439,18 @@ class Manipulador(BaseHTTPRequestHandler):
             return self._json({"ok": True})
         if recurso == "acoes":
             return self._json({"acoes": optimus.auditoria.ultimas(100)})
+        if recurso == "atualizacao":
+            from optimus.updater import Atualizador, ErroGit
+
+            raiz = optimus.config.get("atualizacao", "repo", "") or \
+                str(Path(optimus_mod.__file__).resolve().parent.parent)
+            try:
+                atual = Atualizador(raiz)
+                if metodo == "POST":
+                    return self._json(atual.atualizar())
+                return self._json(atual.verificar())
+            except ErroGit as erro:
+                return self._json({"erro": str(erro)}, 503)
         if recurso == "vozes":
             chave = optimus.config.get("voz", "elevenlabs_chave", "")
             return self._json({

@@ -176,6 +176,15 @@
     <section id="tela-acoes" class="tela">
       <div class="tela-cabecalho"><h2>Ações e segurança</h2>
         <p>Tudo que o Optimus executou no seu PC, com o nível de risco e a sua decisão. Senhas e chaves aparecem mascaradas.</p></div>
+      <div class="cartao" id="cartao-atualizacao">
+        <h3>Atualização do Optimus</h3>
+        <p class="sutil">Puxa a versão mais nova direto do GitHub. Suas memórias, chaves e configurações ficam fora do Git e são sempre preservadas.</p>
+        <div class="linha">
+          <button class="botao" id="verificar-atualizacao">🔄 Verificar atualização</button>
+          <button class="botao primario oculto" id="baixar-atualizacao">🚀 Baixar e aplicar</button>
+        </div>
+        <div id="atualizacao-estado" class="sutil" aria-live="polite"></div>
+      </div>
       <div class="cartao"><table class="tabela"><thead><tr><th>Quando</th><th>Ferramenta</th><th>Detalhes</th><th>Risco</th><th>Decisão</th></tr></thead><tbody id="lista-acoes"></tbody></table></div>
     </section>
 

@@ -86,3 +86,17 @@ def test_senha_protege_a_api():
         assert _req(base + "/api/estado", cab={"X-Optimus-Senha": "segredo"})["versao"]
     finally:
         httpd.shutdown()
+
+
+def test_rota_de_atualizacao_responde(tmp_path):
+    # A rota existe e devolve o estado do updater (aqui, fora de um repo Git, um erro tratado).
+    httpd, base = _subir()
+    try:
+        try:
+            d = _req(base + "/api/atualizacao")
+            assert "atualizado" in d or "erro" in d
+        except urllib.error.HTTPError as erro:
+            # Sem repositório Git: a rota responde 503 com {"erro": ...}, não 404.
+            assert erro.code == 503
+    finally:
+        httpd.shutdown()

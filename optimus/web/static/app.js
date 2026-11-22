@@ -582,7 +582,7 @@ async function carregarPersonas() {
   $("#persona").innerHTML = d.personas.map((p) => `<option value="${esc(p.chave)}" ${p.chave === estado.persona ? "selected" : ""}>${esc(p.nome)}</option>`).join("");
   $("#grupo-escolha").innerHTML = d.personas.map((p) => `<label><input type="checkbox" value="${esc(p.chave)}" ${["optimus", "pesquisador"].includes(p.chave) ? "checked" : ""}> ${esc(p.nome)}</label>`).join("");
   $("#lista-personas").innerHTML = d.personas.map((p) => `<div class="cartao item" data-chave="${esc(p.chave)}">
-      <div class="acoes">${p.chave !== "optimus" ? `<button class="icone" data-apagar-persona="${esc(p.chave)}" title="Apagar">🗑️</button>` : ""}</div>
+      <div class="acoes">${!p.embutida ? `<button class="icone" data-apagar-persona="${esc(p.chave)}" title="Apagar">🗑️</button>` : `<span class="selo" title="Persona do sistema: pode editar, não excluir">sistema</span>`}</div>
       <h3>🎭 ${esc(p.nome)}</h3><p>${esc(p.descricao || "")}</p><p>${esc((p.prompt || "usa a personalidade padrão").slice(0, 120))}</p>
       <p>${p.modelo ? "🧠 " + esc(p.modelo) : ""} ${p.voz ? "🔊 " + esc(p.voz) : ""}</p></div>`).join("");
 }
@@ -648,6 +648,29 @@ async function carregarAcoes() {
     <td><span class="nivel ${esc(a.nivel)}">${esc(a.nivel)}</span></td><td>${{ automatica: "✅ automática", aprovada: "👍 aprovada", negada: "❌ negada", bloqueada: "⛔ bloqueada" }[a.decisao] || esc(a.decisao)}</td></tr>`).join("")
     || '<tr><td colspan="5" class="sutil">Nenhuma ação ainda.</td></tr>';
 }
+
+// ---------- Atualização pelo GitHub ----------
+$("#verificar-atualizacao").addEventListener("click", async () => {
+  const estadoEl = $("#atualizacao-estado"); const baixar = $("#baixar-atualizacao");
+  estadoEl.textContent = "Verificando no GitHub…"; baixar.classList.add("oculto");
+  try {
+    const d = await api("/api/atualizacao");
+    if (d.erro) { estadoEl.textContent = "⚠️ " + d.erro; return; }
+    if (d.atualizado) { estadoEl.textContent = "✅ " + (d.mensagem || "Você já está na versão mais nova."); return; }
+    estadoEl.textContent = `🚀 ${d.mensagem || "Há atualização disponível."} Clique em "Baixar e aplicar".`;
+    baixar.classList.remove("oculto");
+  } catch (e) { estadoEl.textContent = "⚠️ Não consegui verificar: " + e.message; }
+});
+$("#baixar-atualizacao").addEventListener("click", async (ev) => {
+  const estadoEl = $("#atualizacao-estado"); ev.target.disabled = true;
+  estadoEl.textContent = "Baixando e aplicando (git pull seguro)…";
+  try {
+    const d = await api("/api/atualizacao", { method: "POST", json: {} });
+    if (d.erro || d.ok === false) { estadoEl.textContent = "⚠️ " + (d.erro || d.mensagem); }
+    else { estadoEl.textContent = "✅ " + (d.mensagem || "Atualizado!") + " Reinicie o Optimus para usar a nova versão."; ev.target.classList.add("oculto"); }
+  } catch (e) { estadoEl.textContent = "⚠️ Falha ao atualizar: " + e.message; }
+  finally { ev.target.disabled = false; }
+});
 
 // ---------- Casa ----------
 let vigiaCameras = null;
