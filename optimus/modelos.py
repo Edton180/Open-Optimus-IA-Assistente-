@@ -180,9 +180,9 @@ _BYTES_POR_PARAMETRO = {  # aproximado, incluindo a sobra de cada formato
     "q2": 0.35, "q3": 0.45, "q4": 0.58, "q5": 0.7, "q6": 0.82, "q8": 1.07,
     "fp16": 2.0, "f16": 2.0, "bf16": 2.0, "fp32": 4.0, "f32": 4.0, "nvfp4": 0.55, "mxfp4": 0.55,
 }
-_PARAMS = re.compile(r"(?<![a-z0-9])(?:e)?(\d+(?:\.\d+)?)\s*([bmt])(?![a-z])", re.I)
-_ATIVOS = re.compile(r"[-_:]a(\d+(?:\.\d+)?)b", re.I)
-_QUANT = re.compile(r"(nvfp4|mxfp4|bf16|fp16|f16|fp32|f32|q[2-8])", re.I)
+_PARAMS = re.compile(r"(?<![a-z0-9])(?:e)?(\d+(?:\.\d+)?)\s*([bmt])(?![a-z])", re.IGNORECASE)
+_ATIVOS = re.compile(r"[-_:]a(\d+(?:\.\d+)?)b", re.IGNORECASE)
+_QUANT = re.compile(r"(nvfp4|mxfp4|bf16|fp16|f16|fp32|f32|q[2-8])", re.IGNORECASE)
 
 
 def _bilhoes(valor: str, unidade: str) -> float:
