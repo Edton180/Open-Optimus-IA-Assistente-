@@ -108,7 +108,7 @@ function irPara(tela) {
   $$(".tela").forEach((t) => t.classList.toggle("ativa", t.id === "tela-" + tela));
   document.body.classList.toggle("fora-do-chat", tela !== "chat");
   app.classList.remove("lateral-aberta");
-  const carregar = { personas: carregarPersonas, prompts: carregarPrompts, memoria: carregarMemoria, acoes: carregarAcoes, config: carregarConfig, casa: carregarCasa }[tela];
+  const carregar = { personas: carregarPersonas, prompts: carregarPrompts, memoria: carregarMemoria, acoes: carregarAcoes, config: carregarConfig, casa: carregarCasa, estudio: () => window.carregarEstudio && window.carregarEstudio() }[tela];
   if (carregar) carregar();
 }
 $$(".menu button").forEach((b) => b.addEventListener("click", () => irPara(b.dataset.tela)));

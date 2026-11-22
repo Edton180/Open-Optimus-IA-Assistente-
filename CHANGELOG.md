@@ -31,6 +31,20 @@ Estúdio de voz (parte 1):
 - `optimus estudio ...`, ferramentas por voz e API compatível com a OpenAI (`/v1/audio`).
 - Todo áudio gerado leva a etiqueta "Voz gerada por IA" nos metadados.
 
+Estúdio de voz (parte 2):
+
+- **Tela Estúdio de voz** no `optimus gui`: narrar, legendar e dublar, vozes (criar, clonar,
+  apagar), audiolivro, história, ferramentas, pronúncia, histórico e tarefas com progresso.
+- **Dublagem com várias pessoas:** quem fala quando (diarização offline), uma voz para cada
+  pessoa ou elenco escolhido, clonagem de cada pessoa, e **só a música por baixo** da voz nova.
+- **Audiolivros** de EPUB, PDF, DOCX, TXT e Markdown: MP3 por capítulo e M4B com capítulos e capa.
+- **Histórias e podcasts com várias vozes** a partir de um roteiro "Nome: fala", com legenda.
+- **Separar voz da música** (Demucs) e **legenda com o nome de quem fala**.
+- **Marca d'água inaudível** em todo áudio gerado, que sobrevive a MP3/AAC, e
+  `optimus estudio verificar-ia`.
+- **Ditado em qualquer programa** (`optimus ditado`), com pontuação falada.
+- Transcrição reserva com sherpa-onnx (modelos do GitHub) quando o faster-whisper não abre.
+
 Fase 2 (produtividade):
 
 - **Utilitários do dia a dia:** gerar senha forte, cara ou coroa, dado e sorteio, "quantos dias

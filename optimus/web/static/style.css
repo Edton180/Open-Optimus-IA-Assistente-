@@ -403,3 +403,14 @@ body.modo-hud #lateral { background: rgba(4,11,20,.96); border-right-color: rgba
 .qr svg { width: 180px; height: 180px; background: #fff; border-radius: 8px; }
 .qr figcaption { font-size: 13px; margin-top: 4px; }
 #celular-estado code { word-break: break-all; }
+
+/* Estúdio de voz */
+#tela-estudio textarea.campo { resize: vertical; }
+.est-tarefa { border-top: 1px solid var(--borda); padding: 10px 0; }
+.est-barra { height: 6px; background: var(--fundo); border-radius: 99px; overflow: hidden; margin: 6px 0; }
+.est-barra span { display: block; height: 100%; background: linear-gradient(90deg, var(--primaria), var(--primaria2)); transition: width .4s; }
+.est-midia { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; align-items: flex-start; }
+.est-midia audio { width: min(100%, 480px); }
+.est-midia video { width: min(100%, 720px); border-radius: 10px; }
+.est-player { width: 100%; }
+#tela-estudio .erro { color: var(--vermelho); }

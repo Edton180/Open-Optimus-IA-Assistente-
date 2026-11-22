@@ -30,6 +30,7 @@
       <button data-tela="personas"><span>🎭</span>Personas</button>
       <button data-tela="prompts"><span>📚</span>Biblioteca de prompts</button>
       <button data-tela="memoria"><span>🧠</span>Memória e lembretes</button>
+      <button data-tela="estudio"><span>🎙️</span>Estúdio de voz</button>
       <button data-tela="casa"><span>🏠</span>Casa inteligente</button>
       <button data-tela="acoes"><span>🛡️</span>Ações e segurança</button>
       <button data-tela="config"><span>⚙️</span>Configurações</button>
@@ -154,6 +155,127 @@
       <div class="cartao"><h3>📖 Base de conhecimento</h3>
         <p class="sutil">Conteúdos que o Optimus estudou e consulta sozinho, mesmo offline. Peça no chat: "aprenda este site: https://…" ou "estude o arquivo ~/Documentos/manual.pdf".</p>
         <ul id="lista-conhecimento" class="lista"></ul></div>
+    </section>
+
+    <section id="tela-estudio" class="tela">
+      <div class="tela-cabecalho"><h2>Estúdio de voz</h2>
+        <p>Narre textos, crie e clone vozes, legende, traduza e duble vídeos, faça audiolivros e histórias com várias vozes. Tudo em português do Brasil por padrão e no seu PC. Todo áudio gerado leva a etiqueta e uma marca d'água inaudível de voz de IA.</p></div>
+      <div class="abas" id="estudio-abas">
+        <button data-aba-estudio="narrar" class="ativo">Narrar</button>
+        <button data-aba-estudio="video">Legendar e dublar</button>
+        <button data-aba-estudio="vozes">Vozes</button>
+        <button data-aba-estudio="livro">Audiolivro</button>
+        <button data-aba-estudio="historia">História e podcast</button>
+        <button data-aba-estudio="ferramentas">Ferramentas</button>
+        <button data-aba-estudio="pronuncia">Pronúncia</button>
+        <button data-aba-estudio="historico">Histórico</button>
+      </div>
+
+      <div class="cartao estudio-aba" data-aba="narrar">
+        <h3>Texto para voz</h3>
+        <textarea id="est-texto" class="campo" rows="6" placeholder="Escreva o texto da narração…"></textarea>
+        <div class="linha" style="margin-top:.6rem">
+          <label>Voz<select id="est-voz" class="campo est-vozes"></select></label>
+          <label>Idioma<select id="est-idioma" class="campo est-idiomas"></select></label>
+          <label>Ritmo <span id="est-vel-valor">1.0</span><input id="est-velocidade" type="range" min="0.7" max="1.5" step="0.05" value="1"></label>
+        </div>
+        <div class="linha fim"><button class="botao primario" id="est-falar">🎙️ Gerar áudio</button></div>
+        <div id="est-falar-saida" aria-live="polite"></div>
+      </div>
+
+      <div class="cartao estudio-aba oculto" data-aba="video">
+        <h3>Legendar ou dublar um vídeo</h3>
+        <p class="sutil">Envie o vídeo (ou áudio) ou cole o caminho dele no PC.</p>
+        <div class="linha"><input type="file" id="est-video-arquivo" accept="video/*,audio/*"><input id="est-video-caminho" class="campo" placeholder="ou o caminho: C:\Videos\aula.mp4" style="flex:1"></div>
+        <div class="linha" style="margin-top:.6rem">
+          <label>O que fazer<select id="est-video-acao" class="campo"><option value="dublar">Dublar</option><option value="legendar">Só legendar</option></select></label>
+          <label>Idioma de destino<select id="est-video-idioma" class="campo est-idiomas"></select></label>
+          <label>Voz<select id="est-video-voz" class="campo est-vozes"></select></label>
+        </div>
+        <div class="linha">
+          <label>Legenda<select id="est-video-legenda" class="campo"><option value="faixa">Faixa (liga e desliga)</option><option value="queimada">Queimada na imagem</option><option value="nenhuma">Sem legenda no vídeo</option></select></label>
+          <label class="so-dublar">Por baixo da voz nova<select id="est-video-fundo" class="campo"><option value="original">Áudio original baixinho</option><option value="musica">Só a música e os efeitos</option><option value="nenhum">Nada</option></select></label>
+          <label class="so-dublar">Elenco (opcional)<input id="est-video-elenco" class="campo" placeholder="Pessoa 1=Nexus; Pessoa 2=Aurora"></label>
+        </div>
+        <div class="linha">
+          <label><input type="checkbox" id="est-video-falantes"> Uma voz (ou nome na legenda) para cada pessoa que fala</label>
+          <label class="so-dublar"><input type="checkbox" id="est-video-original"> Usar a voz de quem fala no vídeo (clonagem)</label>
+        </div>
+        <label class="so-dublar oculto" id="est-video-consent-linha"><input type="checkbox" id="est-video-consent"> <span class="est-declaracao"></span></label>
+        <div class="linha fim"><button class="botao primario" id="est-video-ir">▶️ Começar</button></div>
+      </div>
+
+      <div class="estudio-aba oculto" data-aba="vozes">
+        <div class="grade">
+          <div class="cartao"><h3>Criar voz pela descrição</h3>
+            <input id="est-criar-nome" class="campo" placeholder="Nome (ex.: Narradora)">
+            <input id="est-criar-desc" class="campo" style="margin-top:.5rem" placeholder="feminina, calma, grave, lenta…">
+            <div class="linha fim"><button class="botao" id="est-criar">Criar voz</button></div></div>
+          <div class="cartao"><h3>Clonar uma voz</h3>
+            <p class="sutil">De 5 a 90 segundos de fala limpa, sem música.</p>
+            <input id="est-clonar-nome" class="campo" placeholder="Nome (ex.: Minha voz)">
+            <input type="file" id="est-clonar-arquivo" accept="audio/*,video/*" style="margin-top:.5rem">
+            <label style="display:block;margin-top:.5rem"><input type="checkbox" id="est-clonar-consent"> <span class="est-declaracao"></span></label>
+            <div class="linha fim"><button class="botao primario" id="est-clonar">Clonar</button></div></div>
+        </div>
+        <div class="cartao"><table class="tabela"><thead><tr><th>Voz</th><th>Tipo</th><th>Descrição</th><th></th></tr></thead><tbody id="est-lista-vozes"></tbody></table></div>
+      </div>
+
+      <div class="cartao estudio-aba oculto" data-aba="livro">
+        <h3>Audiolivro</h3>
+        <p class="sutil">EPUB, PDF, DOCX, TXT ou Markdown. Sai um MP3 por capítulo e um M4B com capítulos e capa. Se parar, continua de onde parou.</p>
+        <div class="linha"><input type="file" id="est-livro-arquivo" accept=".epub,.pdf,.docx,.txt,.md,.html"><input id="est-livro-caminho" class="campo" placeholder="ou o caminho do livro" style="flex:1"></div>
+        <div class="linha" style="margin-top:.6rem">
+          <label>Voz<select id="est-livro-voz" class="campo est-vozes"></select></label>
+          <label>Título<input id="est-livro-titulo" class="campo"></label>
+          <label>Autor<input id="est-livro-autor" class="campo"></label>
+          <label>Capa (opcional)<input type="file" id="est-livro-capa" accept="image/*"></label>
+        </div>
+        <div class="linha fim"><button class="botao primario" id="est-livro-ir">📚 Gerar audiolivro</button></div>
+      </div>
+
+      <div class="cartao estudio-aba oculto" data-aba="historia">
+        <h3>História, podcast ou diálogo</h3>
+        <p class="sutil">Uma fala por linha: <code>Ana: Oi!</code>, <code>[Bruno] Tudo bem?</code>, <code>(pausa 2)</code>. Linhas sem nome ficam com o Narrador.</p>
+        <textarea id="est-roteiro" class="campo" rows="8" placeholder="Narrador: Era uma noite fria em São Paulo.&#10;Ana: Você ouviu isso?&#10;Bruno: Foi só o vento."></textarea>
+        <div class="linha" style="margin-top:.6rem">
+          <label>Elenco (opcional)<input id="est-elenco" class="campo" placeholder="Ana=Valkyrie; Bruno=Nexus"></label>
+          <label>Narrador<select id="est-narrador" class="campo est-vozes"></select></label>
+          <label>Título<input id="est-hist-titulo" class="campo" placeholder="historia"></label>
+        </div>
+        <div class="linha fim"><button class="botao primario" id="est-hist-ir">🎭 Gerar história</button></div>
+      </div>
+
+      <div class="cartao estudio-aba oculto" data-aba="ferramentas">
+        <h3>Ferramentas de áudio</h3>
+        <div class="linha"><input type="file" id="est-ferr-arquivo" accept="audio/*,video/*"><input id="est-ferr-caminho" class="campo" placeholder="ou o caminho do arquivo" style="flex:1"></div>
+        <div class="linha" style="margin-top:.6rem">
+          <button class="botao" data-ferr="transcrever">📝 Transcrever (SRT)</button>
+          <button class="botao" data-ferr="separar">🎚️ Separar voz da música</button>
+          <button class="botao" data-ferr="quem-fala">👥 Quem fala quando</button>
+          <button class="botao" data-ferr="verificar">🔎 É voz de IA do Optimus?</button>
+        </div>
+        <div id="est-ferr-saida" aria-live="polite"></div>
+        <h3 style="margin-top:1rem">O que está instalado</h3>
+        <ul id="est-diagnostico" class="sutil"></ul>
+      </div>
+
+      <div class="cartao estudio-aba oculto" data-aba="pronuncia">
+        <h3>Dicionário de pronúncia</h3>
+        <p class="sutil">Como cada palavra deve ser falada em todas as vozes (nomes, siglas, marcas).</p>
+        <div class="linha"><input id="est-pron-escrito" class="campo" placeholder="Escrito (ex.: Kaik)"><input id="est-pron-falado" class="campo" placeholder="Falado (ex.: Káique)"><button class="botao" id="est-pron-add">Adicionar</button></div>
+        <table class="tabela" style="margin-top:.6rem"><tbody id="est-pron-lista"></tbody></table>
+      </div>
+
+      <div class="cartao estudio-aba oculto" data-aba="historico">
+        <div class="linha entre"><h3>Histórico</h3><input id="est-hist-busca" class="campo" placeholder="Buscar…" style="max-width:260px"></div>
+        <table class="tabela"><tbody id="est-historico"></tbody></table>
+      </div>
+
+      <div class="cartao">
+        <div class="linha entre"><h3>Tarefas</h3><span class="sutil">Pode fechar esta tela: as tarefas continuam.</span></div>
+        <div id="est-tarefas"></div>
+      </div>
     </section>
 
     <section id="tela-casa" class="tela">
@@ -332,5 +454,6 @@
 <script src="/gestos.js"></script>
 <script src="/hud.js"></script>
 <script src="/app.js"></script>
+<script src="/estudio.js"></script>
 </body>
 </html>

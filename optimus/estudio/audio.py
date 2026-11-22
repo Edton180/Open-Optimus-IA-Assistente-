@@ -88,6 +88,10 @@ def salvar(amostras, taxa: int, caminho: str | Path, marca_ia: bool = True,
     """Salva no formato da extensão. Áudio gerado leva a etiqueta 'gerado por IA'."""
     caminho = Path(caminho)
     caminho.parent.mkdir(parents=True, exist_ok=True)
+    if marca_ia:  # marca d'água inaudível de "voz de IA" (veja estudio/marca.py)
+        from optimus.estudio import marca
+
+        amostras = marca.marcar(amostras, taxa)
     wav = wav_bytes(amostras, taxa)
     ext = caminho.suffix.lower()
     if ext == ".wav" and not (marca_ia or titulo):
