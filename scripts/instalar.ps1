@@ -28,6 +28,10 @@ $Optimus = Join-Path $Dados "venv\Scripts\optimus.exe"
 & $Py -m pip install --upgrade pip | Out-Null
 & $Py -m pip install "$Pasta[completo]"
 if ($LASTEXITCODE -ne 0) { & $Py -m pip install "$Pasta" }
+# Guarda qual commit foi instalado, para a atualização pelo GitHub saber comparar.
+$Commit = ""
+try { $Commit = (& git -C "$Pasta" rev-parse HEAD 2>$null) } catch {}
+if ($Commit) { & $Py -c "from optimus import autoatualizar; autoatualizar.registrar_commit('$Commit')" }
 Ok "Optimus instalado"
 
 # Comando 'optimus' disponível em qualquer terminal
