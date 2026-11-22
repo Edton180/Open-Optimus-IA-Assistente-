@@ -26,8 +26,10 @@ INTENCOES: list[tuple[str, list[str]]] = [
      r"avise[- ]me|me avis|agend)",
      ["criar_lembrete", "listar_lembretes", "cancelar_lembretes",
       "timer_criar", "timers_listar", "timer_cancelar"]),
-    (r"\b(habito|habitos|meta diaria|rotina diaria|sequencia de dias|dias seguidos|streak)",
+    (r"\b(habito|habitos|meta diaria|sequencia de dias|dias seguidos|streak)",
      ["habito_criar", "habito_marcar", "habitos_listar", "habito_apagar"]),
+    (r"\b(rotina|rotinas|sequencia de passos|automatiz|quando eu disser|ao dizer)",
+     ["rotina_criar", "rotinas_listar", "rotina_executar", "rotina_apagar"]),
     (r"\b(lembre que|guarde|memoriz|anote que|meu nome e|eu (gosto|moro|trabalho|sou|tenho)|"
      r"o que (voce )?sabe (sobre|de) mim|recorda|esqueca)", ["lembrar", "recordar"]),
     (r"\b(aprend|estud|base de conhecimento)", ["aprender", "consultar_conhecimento"]),
