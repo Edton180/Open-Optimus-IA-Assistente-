@@ -37,11 +37,13 @@ e **"confirmo"** nas críticas. Qualquer "não", "espera" ou "cancela" nega, mes
 | **Cyber** | masculina robótica | offline, com efeito de rádio | idem + numpy |
 | **Stealth** | feminina, baixa e abafada | offline, com efeito | idem + numpy |
 | **Elite** | masculina, cinematográfica | ElevenLabs (online) | chave da ElevenLabs em `voz.elevenlabs_chave` |
+| **Edton Braz** | masculina | brasileira, jovem, simpática e animada (ElevenLabs) | chave da ElevenLabs em `voz.elevenlabs_chave` |
 | Aurora, Lyra, Titan | fem., fem., masc. | neural, online (Edge) | internet |
 | Sistema (feminina/masculina) | ambos | voz do Windows (Maria, Daniel), espeak-ng no Linux, voz do Android | nada |
 
-Troque falando: *"Optimus, mude para a voz Nexus"*. Se a voz escolhida não estiver disponível, ele usa a
-reserva mais parecida e avisa.
+A voz **Edton Braz** (também chamada de Matheus) é a voz masculina brasileira jovem e energética da biblioteca da ElevenLabs. Ela já vem cadastrada por padrão no sistema e no Estúdio de voz.
+
+Troque falando: *"Optimus, mude para a voz Edton Braz"* ou *"mude para a voz Matheus"*. Se a voz escolhida não estiver disponível, ele usa a reserva mais parecida e avisa.
 
 Escolha em **Configurações > Voz** (botão ▶ Ouvir para testar) ou:
 
@@ -49,6 +51,7 @@ Escolha em **Configurações > Voz** (botão ▶ Ouvir para testar) ou:
 optimus vozes                      # lista e mostra quais estão prontas
 optimus config voz.voz masculina   # melhor voz masculina disponível
 optimus config voz.voz feminina
+optimus config voz.voz edton-braz
 optimus config voz.voz edge:pt-BR-AntonioNeural
 optimus config voz.velocidade 1.15
 optimus vozes --testar
