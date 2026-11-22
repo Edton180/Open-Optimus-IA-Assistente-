@@ -36,6 +36,8 @@ ARQUIVOS_KOKORO = ("kokoro-v1.0.int8.onnx", "voices-v1.0.bin")
 URL_ELEVENLABS = "https://api.elevenlabs.io/v1/text-to-speech/"
 # "Daniel": voz masculina madura e elegante da biblioteca padrão da ElevenLabs.
 VOZ_ELEVENLABS_PADRAO = "onwK4e9ZLuTAKqWW03F9"
+# "Matheus - Friendly and Energetic" (pt-BR) da biblioteca da ElevenLabs, cadastrada como Edton Braz.
+VOZ_EDTON_BRAZ = "36rVQA1AOIPwpA3Hg1tC"
 
 
 @dataclass(frozen=True)
@@ -66,6 +68,9 @@ VOZES: list[Voz] = [
     Voz("elite", "Elite", "masculina", "elevenlabs", False,
         "Ultrarrealista pela ElevenLabs (precisa de chave)", VOZ_ELEVENLABS_PADRAO,
         reservas=("prime", "titan", "sistema-masculina")),
+    Voz("edton-braz", "Edton Braz", "masculina", "elevenlabs", False,
+        "Brasileira, jovem, simpática e animada (ElevenLabs; sem chave usa a Titan)",
+        VOZ_EDTON_BRAZ, reservas=("titan", "prime", "sistema-masculina")),
     Voz("aurora", "Aurora", "feminina", "edge", False, "Feminina neural, online",
         "pt-BR-FranciscaNeural", reservas=("valkyrie", "sistema-feminina")),
     Voz("lyra", "Lyra", "feminina", "edge", False, "Feminina neural multilíngue, online",
@@ -86,6 +91,7 @@ APELIDOS = {
     "edge:pt-BR-AntonioNeural": "titan", "sistema:feminina": "sistema-feminina",
     "sistema:masculina": "sistema-masculina", "valquiria": "valkyrie", "valquíria": "valkyrie",
     "eleven": "elite", "elevenlabs": "elite", "sistema": "sistema-feminina",
+    "edton": "edton-braz", "edton braz": "edton-braz", "matheus": "edton-braz",
 }
 
 POR_ID = {v.id: v for v in VOZES}
@@ -302,11 +308,17 @@ class Falante:
                                              lang="pt-br")
         return _wav_bytes(amostras, taxa)
 
+    def _id_elevenlabs(self) -> str:
+        # A Elite usa a voz escolhida na configuração; as outras têm a própria voz fixa.
+        if self.voz.id == "elite" or not self.voz.base:
+            return self.voz_elevenlabs
+        return self.voz.base
+
     def _elevenlabs_mp3(self, texto: str) -> bytes:
         import httpx
 
         resposta = httpx.post(
-            URL_ELEVENLABS + self.voz_elevenlabs, params={"output_format": "mp3_44100_128"},
+            URL_ELEVENLABS + self._id_elevenlabs(), params={"output_format": "mp3_44100_128"},
             headers={"xi-api-key": self.chave_elevenlabs, "Content-Type": "application/json"},
             json={"text": texto, "model_id": "eleven_multilingual_v2",
                   "voice_settings": {"stability": 0.5, "similarity_boost": 0.8,
