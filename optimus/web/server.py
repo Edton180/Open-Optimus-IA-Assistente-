@@ -568,14 +568,47 @@ class Manipulador(BaseHTTPRequestHandler):
 
             host, porta = self.server.server_address[:2]
             rede = host not in ("127.0.0.1", "localhost", "::1")
-            url = celular.endereco_rede(porta, host)
+            config = optimus.config
+            if metodo == "POST" and ident == "desligar":
+                desligar_celular()
+                config.definir("web", "celular", False)
+                config.salvar()
+            elif metodo == "POST":
+                senha = str(self._corpo().get("senha", "") or "").strip()
+                if senha:
+                    if len(senha) < 4:
+                        return self._json({"erro": "A senha precisa ter pelo menos 4 "
+                                                   "caracteres."}, 400)
+                    config.definir("web", "senha", senha)
+                if not config.get("web", "senha", ""):
+                    return self._json({"erro": "Crie uma senha para o celular (ela protege o "
+                                               "Optimus de outras pessoas da rede)."}, 400)
+                try:
+                    ligar_celular(optimus, porta_celular(config, porta))
+                except OSError as erro:
+                    return self._json({"erro": "Não consegui abrir a porta "
+                                               f"{porta_celular(config, porta)} na rede: {erro}. "
+                                               "Feche outro programa que use essa porta ou mude "
+                                               "web.porta_celular."}, 500)
+                config.definir("web", "celular", True)
+                config.salvar()
             if consulta.get("nova_chave"):
-                optimus.config.definir("web", "token_agenda", "")
-            agenda = f"{url}/api/agenda.ics?chave={celular.token_agenda(optimus.config)}"
-            return self._json({"url": url, "rede": rede, "qr": celular.qr_svg(url) if rede else "",
-                               "agenda": agenda, "agenda_qr": celular.qr_svg(agenda) if rede else "",
-                               "dica": "" if rede else "Para usar no celular, abra com "
-                                                       "'optimus gui --rede' (pede uma senha)."})
+                config.definir("web", "token_agenda", "")
+            if rede:
+                url = celular.endereco_rede(porta, host)
+            elif _servidor_celular is not None:
+                url = celular.endereco_rede(_servidor_celular.server_address[1])
+            else:
+                url = celular.endereco_rede(porta, host)
+            ligado = rede or _servidor_celular is not None
+            agenda = f"{url}/api/agenda.ics?chave={celular.token_agenda(config)}"
+            return self._json({
+                "url": url, "rede": ligado, "ligado": ligado,
+                "tem_senha": bool(config.get("web", "senha", "")),
+                "qr": celular.qr_svg(url) if ligado else "",
+                "agenda": agenda, "agenda_qr": celular.qr_svg(agenda) if ligado else "",
+                "dica": "" if ligado else "O acesso pelo celular está desligado. Crie uma senha "
+                                          "e clique em \"Ligar acesso pelo celular\"."})
         if recurso == "atualizacao":
             # Git (clone) ou release do GitHub (instalação sem Git), com SHA-256 e voltar.
             from optimus import autoatualizar
@@ -731,6 +764,44 @@ def aquecer_modelos(optimus: Optimus) -> list[str]:
     return aquecidos
 
 
+# ---------------------------------------------------------------------- acesso pelo celular
+# Quando a interface roda só neste PC (127.0.0.1), o celular entra por uma segunda porta,
+# aberta na rede de casa e sempre protegida pela senha de [web] senha.
+_servidor_celular: ThreadingHTTPServer | None = None
+_trava_celular = threading.Lock()
+
+
+def porta_celular(config, porta_principal: int) -> int:
+    return int(config.get("web", "porta_celular", 0) or (int(porta_principal) + 1))
+
+
+def ligar_celular(optimus: Optimus, porta: int) -> ThreadingHTTPServer:
+    global _servidor_celular
+    senha = optimus.config.get("web", "senha", "") or ""
+    if not senha:
+        raise ValueError("defina uma senha antes de abrir para a rede")
+    with _trava_celular:
+        if _servidor_celular is not None:
+            _servidor_celular.RequestHandlerClass.senha = senha  # senha nova vale na hora
+            return _servidor_celular
+        manipulador = type("ManipuladorCelular", (Manipulador,), {"senha": senha})
+        servidor = ThreadingHTTPServer(("0.0.0.0", porta), manipulador)
+        servidor.daemon_threads = True
+        threading.Thread(target=servidor.serve_forever, daemon=True,
+                         name="optimus-celular").start()
+        _servidor_celular = servidor
+        return servidor
+
+
+def desligar_celular() -> None:
+    global _servidor_celular
+    with _trava_celular:
+        if _servidor_celular is not None:
+            _servidor_celular.shutdown()
+            _servidor_celular.server_close()
+            _servidor_celular = None
+
+
 def iniciar(host: str = "127.0.0.1", porta: int = 8765, abrir_navegador: bool = True,
             optimus: Optimus | None = None) -> None:
     optimus = optimus or Optimus()
@@ -740,7 +811,8 @@ def iniciar(host: str = "127.0.0.1", porta: int = 8765, abrir_navegador: bool = 
                          "optimus config web.senha SUA_SENHA")
     Manipulador.estado = Estado(optimus)
     threading.Thread(target=aquecer_modelos, args=(optimus,), daemon=True).start()
-    Manipulador.senha = senha
+    # A senha protege o acesso de outros aparelhos; só neste PC (127.0.0.1) não é pedida.
+    Manipulador.senha = senha if host not in ("127.0.0.1", "localhost") else ""
     servidor = ThreadingHTTPServer((host, porta), Manipulador)
     servidor.daemon_threads = True
     endereco = f"http://{'127.0.0.1' if host in ('0.0.0.0', '') else host}:{porta}"
@@ -751,6 +823,15 @@ def iniciar(host: str = "127.0.0.1", porta: int = 8765, abrir_navegador: bool = 
         no_celular = celular.endereco_rede(porta, host)
         print(f"No celular (mesma rede Wi-Fi): {no_celular}")
         celular.qr_terminal(no_celular)
+    elif optimus.config.get("web", "celular", False) and senha:
+        try:
+            ligar_celular(optimus, porta_celular(optimus.config, porta))
+            from optimus.web import celular
+
+            print("No celular (mesma rede Wi-Fi): "
+                  + celular.endereco_rede(porta_celular(optimus.config, porta)))
+        except OSError as erro:
+            print(f"Acesso pelo celular não abriu: {erro}")
     if abrir_navegador:
         import webbrowser
 
