@@ -84,18 +84,40 @@ def modelos_recomendados(ctx):
 )
 def modelo_baixar(ctx, nome: str = ""):
     motor = _motor_ollama(ctx)
+    if not motor.disponivel():
+        return {"erro": "Ollama não está respondendo em " + motor.url +
+                ". Abra o Ollama e tente de novo."}
     if not nome or not nome.strip():
         nome = hardware.escolher_perfil(hardware.detectar()).modelo
     nome = nome.strip()
     conhecido = any(m.nome == nome and m.confirmado for m in catalogo.CATALOGO)
     estimativa = catalogo.cabe_neste_pc(nome, hardware.detectar())
+    ja_tinha = nome in _instalados(motor)
+    if ja_tinha:
+        return {"baixado": nome, "ja_estava": True, "conhecido": conhecido,
+                "mensagem": f"O modelo {nome} já estava instalado no Ollama."}
     try:
         ok = motor.baixar(nome)
     except Exception as erro:
         return {"erro": f"Não consegui falar com o Ollama para baixar {nome}: {erro}"}
     if not ok:
-        return {"erro": f"Falha ao baixar {nome}. Confira o nome e se o Ollama está aberto.",
+        return {"erro": f"Falha ao baixar {nome}. Confira o nome exato (ollama list / ollama pull), "
+                        "espaço em disco e se o Ollama está aberto.",
                 "conhecido": conhecido}
+    # Verifica se realmente apareceu na lista (evita falso positivo de "baixou")
+    instalados = _instalados(motor)
+    reconhecido = nome in instalados or any(
+        n == nome or n.startswith(nome + ":") or nome.startswith(n.split(":")[0])
+        for n in instalados
+    )
+    if not reconhecido:
+        return {
+            "erro": f"O Ollama reportou sucesso, mas o modelo '{nome}' ainda não aparece em "
+                    f"ollama list. Possíveis causas: download incompleto, falta de disco, "
+                    f"ou nome diferente do esperado. Modelos atuais: {instalados[:15]}",
+            "baixado_reportado": True,
+            "reconhecido": False,
+        }
     aviso = ""
     if not conhecido:
         aviso = "Modelo novo ou fora do catálogo: baixado mesmo assim. "
@@ -103,7 +125,14 @@ def modelo_baixar(ctx, nome: str = ""):
             aviso += (f"Ele deve precisar de uns {estimativa['memoria_gb']} GB e este PC tem "
                       f"{estimativa['memoria_util_gb']} GB úteis: pode ficar muito lento. ")
         aviso += "Use modelo_avaliar para testar."
-    return {"baixado": nome, "conhecido": conhecido, "estimativa": estimativa, "aviso": aviso}
+    return {
+        "baixado": nome,
+        "reconhecido": True,
+        "conhecido": conhecido,
+        "estimativa": estimativa,
+        "aviso": aviso,
+        "mensagem": f"Modelo {nome} baixado e reconhecido pelo Ollama.",
+    }
 
 
 @ferramenta(
