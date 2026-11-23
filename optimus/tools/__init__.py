@@ -58,7 +58,7 @@ def ferramentas_ativas(config) -> dict[str, Ferramenta]:
         from optimus.mcp_cliente import ferramentas_mcp
 
         for nome, item in ferramentas_mcp(config).items():
-            ativas.setdefault(nome, item)  # uma ferramenta nativa nunca é substituída
+            ativas.setdefault(nome, item)
     return ativas
 
 
