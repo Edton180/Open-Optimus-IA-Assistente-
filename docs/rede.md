@@ -63,3 +63,33 @@ ativo = true
 
 Também dá para trocar o motor principal inteiro para a nuvem: `optimus config motor.backend groq` e
 `optimus config motor.chave_api SUA_CHAVE`.
+
+## Acessar o Optimus pelo celular de fora da casa (outra rede)
+
+O `optimus gui --rede` libera o painel só na rede local (Wi-Fi da casa). Para acessar de qualquer
+lugar (dados móveis, outro Wi-Fi), use um **túnel reverso**:
+
+1. Defina uma senha forte (obrigatório):
+   ```bash
+   optimus config web.senha "sua-senha-forte-aqui"
+   ```
+2. Inicie com o modo túnel (já liga o `--rede` e mostra as instruções):
+   ```bash
+   optimus gui --tunel
+   ```
+3. Em outro terminal, rode um destes comandos (substitua a porta se mudou):
+   ```bash
+   # Cloudflare Tunnel (gratuito e recomendado)
+   cloudflared tunnel --url http://127.0.0.1:8765
+
+   # ou ngrok
+   ngrok http 8765
+   ```
+4. Abra no celular a URL `https://...` que o túnel mostrar. A senha configurada será pedida.
+
+**Segurança:** sem senha o painel fica aberto para quem tiver a URL. Nunca exponha a porta 8765
+diretamente na internet (port-forward no roteador) sem autenticação e HTTPS. Cloudflare Tunnel e
+ngrok já entregam HTTPS.
+
+Instalação rápida do cloudflared:  
+https://developers.cloudflare.com/cloudflare-one/connections/connect-apps/install-and-setup/installation/
