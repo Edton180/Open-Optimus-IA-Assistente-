@@ -457,12 +457,12 @@ def pdf_desbloquear(ctx, arquivo: str, senha: str, destino: str = ""):
 
 @ferramenta(
     "pdf_comprimir",
-    "Tenta reduzir o tamanho de um PDF.",
-    {"arquivo": texto("PDF"),
-     "destino": texto("Arquivo de saída")},
+    "Comprime PDF com Ghostscript (recompressão de imagens) ou otimização estrutural via pypdf.",
+    {"arquivo": texto("PDF"), "destino": texto("Arquivo de saída"),
+     "nivel": texto("extrema|recomendada|qualidade")},
     grupo="pdf", risco=MODERADO, obrigatorios=["arquivo"],
 )
-def pdf_comprimir(ctx, arquivo: str, destino: str = ""):
+def pdf_comprimir(ctx, arquivo: str, destino: str = "", nivel: str = "recomendada"):
     err = _precisa_pypdf()
     if err:
         return err
@@ -473,23 +473,48 @@ def pdf_comprimir(ctx, arquivo: str, destino: str = ""):
     leitor = PdfReader(str(caminho), strict=False)
     if leitor.is_encrypted:
         return {"erro": "PDF protegido. Desbloqueie antes."}
-    writer = PdfWriter()
-    for p in leitor.pages:
-        writer.add_page(p)
-    try:
-        writer.compress_identical_objects(remove_identicals=True, remove_orphans=True)
-    except Exception:
-        pass
+    presets = {"extrema": "/screen", "recomendada": "/ebook", "qualidade": "/printer"}
+    nivel = (nivel or "recomendada").lower()
+    if nivel not in presets:
+        return {"erro": "Nível deve ser extrema, recomendada ou qualidade."}
     out = _caminho(ctx, destino or f"{caminho.stem}_menor.pdf")
-    with open(out, "wb") as f:
-        writer.write(f)
-    antes = caminho.stat().st_size
-    depois = out.stat().st_size
+    out.parent.mkdir(parents=True, exist_ok=True)
+    gs = shutil.which("gs") or shutil.which("gswin64c") or shutil.which("gswin32c")
+    motor = "pypdf"
+    if gs:
+        temp = out.with_name(f"{out.stem}.tmp.pdf")
+        try:
+            subprocess.run([
+                gs, "-sDEVICE=pdfwrite", "-dCompatibilityLevel=1.4",
+                f"-dPDFSETTINGS={presets[nivel]}", "-dNOPAUSE", "-dQUIET", "-dBATCH",
+                f"-sOutputFile={temp}", str(caminho),
+            ], check=True, timeout=300, capture_output=True)
+            validado = PdfReader(str(temp), strict=True)
+            if len(validado.pages) != len(leitor.pages):
+                temp.unlink(missing_ok=True)
+                return {"erro": "A compressão alterou a quantidade de páginas; original preservado."}
+            temp.replace(out)
+            motor = "Ghostscript"
+        except Exception as exc:
+            temp.unlink(missing_ok=True)
+            return {"erro": f"Falha na compressão Ghostscript: {exc}. Original preservado."}
+    else:
+        writer = PdfWriter()
+        for pagina in leitor.pages:
+            writer.add_page(pagina)
+        try:
+            writer.compress_identical_objects(remove_identicals=True, remove_orphans=True)
+        except Exception:
+            pass
+        with out.open("wb") as arquivo_saida:
+            writer.write(arquivo_saida)
+    antes, depois = caminho.stat().st_size, out.stat().st_size
+    reducao = (1 - depois / max(antes, 1)) * 100
     return {
-        "mensagem": f"Tamanho: {antes} → {depois} bytes ({100*depois/max(antes,1):.0f}%).",
-        "destino": str(out),
-        "antes_bytes": antes,
-        "depois_bytes": depois,
+        "mensagem": f"Tamanho: {antes} → {depois} bytes ({100*depois/max(antes,1):.0f}% do original).",
+        "destino": str(out), "antes_bytes": antes, "depois_bytes": depois,
+        "reducao_percentual": round(reducao, 1), "motor": motor, "nivel": nivel,
+        "observacao": "Ghostscript pode reduzir qualidade de imagens. Sem Ghostscript, apenas objetos duplicados são removidos."
     }
 
 
