@@ -602,7 +602,7 @@
         <div id="zim-busca-resultados" class="lista" aria-live="polite"></div>
         <div class="linha entre" style="margin-top:1rem">
           <div><b>🧠 Indexação incremental e RAG local</b>
-            <p class="sutil">Leia artigos diretamente do ZIM, gere trechos rastreáveis e habilite recuperação híbrida. O Optimus prepara libzim em pasta privada e, se necessário, baixa o modelo leve granite-embedding:278m (563 MB, multilíngue e compatível com português) no Ollama local. Retoma o processo em lotes.</p></div>
+            <p class="sutil">Quando houver arquivos ZIM, leia artigos, gere trechos rastreáveis e habilite busca lexical ou híbrida. A busca só fica disponível depois da indexação. O Optimus prepara libzim em pasta privada e, somente após sua solicitação de indexação, pode baixar o modelo granite-embedding:278m no Ollama local. O processo é retomável em lotes.</p></div>
           <button type="button" class="botao primario" id="zim-indexar">Indexar / continuar</button>
         </div>
         <p id="zim-index-status" class="sutil" role="status" aria-live="polite">A indexação usa libzim local. Nenhum artigo é enviado à nuvem.</p>
@@ -619,7 +619,7 @@
     </section>
     <section id="tela-modulos" class="tela">
       <div class="tela-cabecalho"><h2>🧩 Central de módulos</h2>
-        <p>Inventário real das integrações locais relacionadas ao Project NOMAD. O Optimus apenas detecta serviços e ferramentas; não instala nada nem inicia containers sem sua autorização.</p></div>
+        <p>Inventário local inicial de integrações relacionadas ao Project NOMAD; ainda não representa todos os módulos do projeto. O Optimus apenas detecta serviços e ferramentas; não instala nada nem inicia containers sem sua autorização.</p></div>
       <div class="cartao">
         <div class="linha entre"><div><h3>Estado do ambiente</h3><p class="sutil">Detecção local, sem enviar dados para serviços externos.</p></div>
           <button type="button" class="botao primario" id="modulos-atualizar">↻ Atualizar inventário</button></div>
@@ -635,8 +635,8 @@
       </div>
       <div class="cartao">
         <h3>Como interpretar</h3>
-        <p><b>Disponível:</b> executável ou serviço detectado e respondendo.</p>
-        <p><b>Instalado / parado:</b> executável existe, mas o serviço não respondeu ao teste.</p>
+        <p><b>Disponível:</b> serviço ou daemon testado e respondendo.</p>
+        <p><b>Instalado / parado:</b> executável existe, mas o serviço ou daemon não respondeu ao teste.</p>
         <p><b>Não instalado:</b> não foi encontrado no sistema. O Optimus não finge que o recurso está pronto.</p>
         <p class="sutil">Esta é a primeira etapa do Command Center. Instalação, configuração e gerenciamento individual serão liberados somente com adaptadores, permissões e testes específicos.</p>
       </div>
