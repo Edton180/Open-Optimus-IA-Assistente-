@@ -187,6 +187,7 @@ function mensagemErroZim(erro) {
   }
   return mensagem;
 }
+let tentativaAutomaticaConteudoNomad = false;
 async function carregarZim() {
   const status = $("#zim-status");
   const lista = $("#zim-lista");
@@ -195,8 +196,26 @@ async function carregarZim() {
   status.textContent = "Consultando arquivos ZIM locais…";
   try {
     await verificarCompatibilidadeApi();
-    const dados = await api("/api/zim");
-    const arquivos = Array.isArray(dados.arquivos) ? dados.arquivos : [];
+    let dados = await api("/api/zim");
+    let avisoConteudoNomad = "";
+    let arquivos = Array.isArray(dados.arquivos) ? dados.arquivos : [];
+    // O NOMAD provisiona uma mini-Wikipédia quando prepara o Kiwix. Reproduzimos
+    // esse primeiro uso uma única vez, somente quando a biblioteca está vazia.
+    if (!arquivos.length && !tentativaAutomaticaConteudoNomad) {
+      tentativaAutomaticaConteudoNomad = true;
+      status.textContent = "Biblioteca vazia. Obtendo o conteúdo inicial do Project NOMAD (4,5 MB)…";
+      try {
+        const inicial = await api("/api/zim/nomad-inicial", {
+          method: "POST", json: {}, tempo: 240000
+        });
+        dados = await api("/api/zim");
+        arquivos = Array.isArray(dados.arquivos) ? dados.arquivos : [];
+        avisoConteudoNomad = inicial.mensagem || "Conteúdo inicial do NOMAD verificado.";
+      } catch (erroInicial) {
+        avisoConteudoNomad = "Não foi possível obter o conteúdo inicial do NOMAD: " +
+          mensagemErroZim(erroInicial) + ". Você pode tentar novamente pelo botão abaixo.";
+      }
+    }
     resumo.innerHTML = [
       ["Arquivos", String(dados.total ?? arquivos.length)],
       ["Espaço ocupado", formatarBytes(dados.tamanho_total_bytes ?? 0)]
@@ -209,7 +228,8 @@ async function carregarZim() {
     ).join("") : '<li class="sutil">Nenhum arquivo ZIM encontrado. Adicione arquivos à pasta biblioteca_zim.</li>';
     status.textContent = dados.pasta_configurada === false
       ? "Não foi possível acessar a pasta da biblioteca: " + (dados.erro || "erro desconhecido")
-      : "Catálogo atualizado · " + new Date().toLocaleTimeString("pt-BR");
+      : (avisoConteudoNomad ? avisoConteudoNomad + " · " : "") +
+        "Catálogo atualizado · " + new Date().toLocaleTimeString("pt-BR");
     const seletor = $("#zim-arquivo");
     if (seletor) {
       const selecionado = seletor.value;
@@ -250,6 +270,23 @@ function atualizarEstadoKiwix(dados) {
   if (dados.executando && $("#zim-arquivo")) $("#zim-arquivo").value = dados.arquivo || "";
 }
 $("#zim-atualizar")?.addEventListener("click", carregarZim);
+$("#zim-nomad-inicial")?.addEventListener("click", async () => {
+  const botao = $("#zim-nomad-inicial");
+  const status = $("#zim-status");
+  botao.disabled = true;
+  status.textContent = "Baixando a mini-Wikipédia inicial do Project NOMAD (aprox. 4,4 MB) e verificando sua integridade…";
+  try {
+    const dados = await api("/api/zim/nomad-inicial", { method: "POST", json: {}, tempo: 240000 });
+    status.textContent = dados.mensagem || "Conteúdo inicial do NOMAD disponível.";
+    await carregarZim();
+    await atualizarStatusIndiceZim();
+  } catch (erro) {
+    status.textContent = "Não foi possível adicionar o conteúdo inicial: " + mensagemErroZim(erro);
+  } finally {
+    botao.disabled = false;
+  }
+});
+
 $("#zim-arquivo")?.addEventListener("change", () => {
   const badge = $("#zim-kiwix-status");
   $("#zim-abrir").disabled = !$("#zim-arquivo").value ||

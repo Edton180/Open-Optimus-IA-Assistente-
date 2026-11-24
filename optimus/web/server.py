@@ -545,6 +545,14 @@ class Manipulador(BaseHTTPRequestHandler):
                     return self._json(resultado)
                 except (ValueError, RuntimeError, OSError) as erro:
                     return self._json({"erro": str(erro)}, 400)
+            if metodo == "POST" and ident == "nomad-inicial":
+                try:
+                    return self._json(zim.importar_conteudo_inicial_nomad())
+                except (RuntimeError, OSError) as erro:
+                    return self._json({
+                        "ok": False,
+                        "erro": f"Não foi possível obter a mini-Wikipédia inicial do Project NOMAD: {erro}",
+                    }, 502)
             if metodo == "POST" and ident == "instalar":
                 try:
                     return self._json(kiwix.instalar())
