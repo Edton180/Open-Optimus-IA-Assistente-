@@ -45,7 +45,8 @@ identifica que não há vetores.
 
 Antes de responder, o agente consulta o índice local para a pergunta atual e injeta
 até cinco evidências no contexto. Cada trecho contém título, arquivo ZIM, caminho do
-artigo e URI `zim://arquivo.zim/caminho`. O prompt exige citações `[Fonte ZIM N]`
+artigo e URI `zim://arquivo.zim/caminho`. Cada chunk mantém SHA-256, exibido nos resultados
+e incluído na seção Fontes das respostas do agente. O prompt exige citações `[Fonte ZIM N]`
 e proíbe inventar referências. Conteúdo recuperado é tratado como dado não confiável,
 nunca como instrução.
 
