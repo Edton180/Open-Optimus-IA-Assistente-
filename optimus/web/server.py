@@ -38,7 +38,7 @@ from optimus.network import cloudflare_tunnel
 
 log = logging.getLogger(__name__)
 _reinicio_solicitado = threading.Event()
-API_CONTRATO = 2
+API_CONTRATO = 3
 ESTATICOS = Path(__file__).parent / "static"
 _SEGREDOS = ("chave_api", "token", "senha", "elevenlabs_chave", "token_comando",
              "token_agenda")
