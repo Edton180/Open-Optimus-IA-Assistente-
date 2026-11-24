@@ -45,7 +45,7 @@ async function api(caminho, opcoes = {}) {
   }
 }
 
-const API_CONTRATO_MINIMO = 2;
+const API_CONTRATO_MINIMO = 3;
 async function verificarCompatibilidadeApi() {
   try {
     const versao = await api("/api/versao");
@@ -1252,7 +1252,7 @@ $("#verificar-atualizacao").addEventListener("click", async () => {
   const estadoEl = $("#atualizacao-estado"); const baixar = $("#baixar-atualizacao");
   estadoEl.textContent = "Verificando no GitHub…"; baixar.classList.add("oculto");
   try {
-    const d = await api("/api/atualizacao");
+    const d = await api("/api/atualizacao", { tempo: 60000 });
     if (d.erro) { estadoEl.textContent = "⚠️ " + d.erro; return; }
     if (d.atualizado) { estadoEl.textContent = "✅ " + (d.mensagem || "Você já está na versão mais nova."); return; }
     estadoEl.textContent = `🚀 ${d.mensagem || "Há atualização disponível."} Clique em "Baixar e aplicar".`;
@@ -1284,7 +1284,7 @@ $("#baixar-atualizacao").addEventListener("click", async (ev) => {
   const estadoEl = $("#atualizacao-estado"); ev.target.disabled = true;
   estadoEl.textContent = "Baixando e aplicando (sem perder seus dados)…";
   try {
-    const d = await api("/api/atualizacao", { method: "POST", json: {} });
+    const d = await api("/api/atualizacao", { method: "POST", json: {}, tempo: 1500000 });
     if (d.erro || d.ok === false) {
       estadoEl.textContent = "⚠️ " + (d.erro || d.mensagem);
     } else if (d.reiniciando) {
