@@ -782,3 +782,75 @@ def censurar_por_rasterizacao(ctx, arquivo: str, texto: str, destino: str = "",
     except Exception as exc:
         temp.unlink(missing_ok=True)
         return {"erro": f"Falha na censura OCR: {exc}. O arquivo original foi preservado."}
+
+
+@ferramenta(
+    "pdf_pdfa",
+    "Converte PDF para PDF/A-1b, PDF/A-2b ou PDF/A-3b usando Ghostscript e perfil ICC fornecido.",
+    {"arquivo": texto("PDF de origem"), "perfil_icc": texto("Caminho de perfil ICC RGB válido"),
+     "versao": texto("1|2|3"), "destino": texto("PDF/A de saída")},
+    grupo="pdf", risco=MODERADO, obrigatorios=["arquivo", "perfil_icc"],
+)
+def pdf_pdfa(ctx, arquivo: str, perfil_icc: str, versao: str = "2", destino: str = ""):
+    origem, perfil = _path(ctx, arquivo), _path(ctx, perfil_icc)
+    if not origem.is_file():
+        return {"erro": f"PDF não encontrado: {origem}"}
+    if not perfil.is_file() or perfil.suffix.lower() not in (".icc", ".icm"):
+        return {"erro": "Informe um perfil ICC RGB válido (.icc/.icm)."}
+    versao = str(versao or "2")
+    if versao not in ("1", "2", "3"):
+        return {"erro": "Ghostscript suporta PDF/A-1b, PDF/A-2b ou PDF/A-3b (versao 1, 2 ou 3)."}
+    gs = shutil.which("gs") or shutil.which("gswin64c") or shutil.which("gswin32c")
+    if not gs:
+        return {"erro": "Ghostscript não encontrado. Instale-o no sistema para converter PDF/A."}
+    out = _path(ctx, destino or f"{origem.stem}_pdfa{versao}.pdf")
+    out.parent.mkdir(parents=True, exist_ok=True)
+    temp = out.with_name(out.name + ".tmp")
+    definicao = out.with_name(f".{out.stem}_pdfa_def.ps")
+    caminho_icc = str(perfil).replace("\\\\", "/").replace("(", "\\\\(").replace(")", "\\\\)")
+    ps = f"""/ICCProfile ({caminho_icc}) def
+[/_objdef {{icc_PDFA}} /type /stream /OBJ pdfmark
+[{{icc_PDFA}} << /N 3 >> /PUT pdfmark
+[{{icc_PDFA}} ICCProfile (r) file /PUT pdfmark
+[/_objdef {{OutputIntent_PDFA}} /type /dict /OBJ pdfmark
+[{{OutputIntent_PDFA}} << /Type /OutputIntent /S /GTS_PDFA1
+  /DestOutputProfile {{icc_PDFA}} /OutputConditionIdentifier (sRGB) >> /PUT pdfmark
+[{{Catalog}} << /OutputIntents [ {{OutputIntent_PDFA}} ] >> /PUT pdfmark
+"""
+    try:
+        definicao.write_text(ps, encoding="ascii")
+        comando = [
+            gs, f"-dPDFA={versao}", "-dBATCH", "-dNOPAUSE",
+            "-sColorConversionStrategy=RGB", "-sProcessColorModel=DeviceRGB",
+            "-sDEVICE=pdfwrite", "-dPDFACompatibilityPolicy=2",
+            f"--permit-file-read={perfil}", f"-sOutputFile={temp}",
+            str(definicao), str(origem),
+        ]
+        proc = subprocess.run(comando, check=True, timeout=300, capture_output=True, text=True)
+        from pypdf import PdfReader
+        leitor = PdfReader(str(temp), strict=True)
+        if not leitor.pages or len(leitor.pages) < 1:
+            temp.unlink(missing_ok=True)
+            return {"erro": "Ghostscript não gerou um PDF válido."}
+        temp.replace(out)
+        verapdf = shutil.which("verapdf")
+        validacao = "não executada; instale veraPDF para validação formal"
+        if verapdf:
+            resultado = subprocess.run([verapdf, "--format", "text", str(out)],
+                                       capture_output=True, text=True, timeout=180)
+            saida = (resultado.stdout or "") + (resultado.stderr or "")
+            validacao = "aprovado pelo veraPDF" if resultado.returncode == 0 and "PASS" in saida.upper() else "veraPDF não confirmou conformidade"
+        return {
+            "mensagem": f"Conversão para PDF/A-{versao}b concluída pelo Ghostscript.",
+            "destino": str(out), "paginas": len(leitor.pages),
+            "validacao_formal": validacao,
+            "avisos_ghostscript": (proc.stderr or "")[:3000],
+        }
+    except subprocess.CalledProcessError as exc:
+        temp.unlink(missing_ok=True)
+        return {"erro": f"Ghostscript recusou a conversão para PDF/A: {(exc.stderr or str(exc))[-3000:]}. Original preservado."}
+    except Exception as exc:
+        temp.unlink(missing_ok=True)
+        return {"erro": f"Falha na conversão PDF/A: {exc}. Original preservado."}
+    finally:
+        definicao.unlink(missing_ok=True)
