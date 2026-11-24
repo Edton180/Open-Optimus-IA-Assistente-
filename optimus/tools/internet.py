@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import base64
 import html
 import re
 import unicodedata
-from urllib.parse import urlsplit, urlunsplit
+from urllib.parse import parse_qs, unquote, urlsplit, urlunsplit
 
 import httpx
 
@@ -52,13 +53,35 @@ def ler_duckduckgo_html(pagina: str, limite: int = 8) -> list[dict]:
     return itens
 
 
+def _desembrulhar_url_busca(url: str) -> str:
+    """Converte links de redirecionamento do Bing no endereço real do resultado."""
+    try:
+        partes = urlsplit(url)
+        if "bing.com" not in partes.netloc.lower():
+            return url
+        valores = parse_qs(partes.query)
+        destino = (valores.get("url") or valores.get("u") or [""])[0]
+        destino = unquote(destino)
+        if destino.startswith("a1"):
+            codificado = destino[2:]
+            try:
+                destino = base64.urlsafe_b64decode(
+                    codificado + "=" * (-len(codificado) % 4)).decode("utf-8")
+            except (ValueError, UnicodeDecodeError):
+                return url
+        return destino if destino.startswith(("http://", "https://")) else url
+    except (ValueError, TypeError):
+        return url
+
+
 def ler_bing_html(pagina: str, limite: int = 8) -> list[dict]:
     itens = []
     for bloco in re.findall(r'(?s)<li class="b_algo".*?</li>', pagina):
         link = re.search(r'<h2[^>]*>\s*<a[^>]+href="([^"]+)"[^>]*>(.*?)</a>', bloco, re.S)
         trecho = re.search(r"<p[^>]*>(.*?)</p>", bloco, re.S)
         if link:
-            itens.append({"nome": _limpo(link.group(2)), "link": html.unescape(link.group(1)),
+            destino = _desembrulhar_url_busca(html.unescape(link.group(1)))
+            itens.append({"nome": _limpo(link.group(2)), "link": destino,
                           "trecho": _limpo(trecho.group(1)) if trecho else ""})
         if len(itens) >= limite:
             break
