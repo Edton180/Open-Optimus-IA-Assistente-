@@ -1102,7 +1102,7 @@ async function atualizarHomeAssistantGerenciado() {
 }
 async function executarAcaoHomeAssistant(acao) {
   const status = $("#ha-gerenciado-status");
-  const botoes = $("#ha-gerenciado button");
+  const botoes = $$("#ha-gerenciado button");
   if (acao === "desinstalar" && !window.confirm("Remover o container Home Assistant? Os dados e backups serão preservados.")) return;
   botoes.forEach((b) => { b.disabled = true; });
   status.textContent = "Solicitando operação ao Optimus…";
@@ -1128,7 +1128,7 @@ $("#ha-gerenciado-abrir").addEventListener("click", () => {
   const url = $("#ha-gerenciado-abrir").dataset.url;
   if (url) window.open(url, "_blank", "noopener,noreferrer");
 });
-$("[data-ha-acao]").forEach((b) => b.addEventListener("click", () => executarAcaoHomeAssistant(b.dataset.haAcao)));
+$$("[data-ha-acao]").forEach((b) => b.addEventListener("click", () => executarAcaoHomeAssistant(b.dataset.haAcao)));
 
 async function carregarCasa() {
   await atualizarHomeAssistantGerenciado();
