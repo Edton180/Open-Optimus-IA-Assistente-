@@ -442,6 +442,35 @@
     <section id="tela-casa" class="tela">
       <div class="tela-cabecalho"><h2>Casa inteligente</h2>
         <p>Controle de dispositivos pelo Home Assistant, descoberta de câmeras ONVIF e prévias de câmeras IP cadastradas. O Home Assistant é opcional, mas necessário para a integração ampla de luzes, tomadas, sensores e outros aparelhos. A integração direta TP-Link Kasa ainda não está disponível nesta versão.</p></div>
+      <div class="cartao" id="ha-gerenciado">
+        <div class="linha entre"><h3>⚙️ Home Assistant gerenciado pelo Optimus</h3>
+          <span id="ha-gerenciado-badge" class="selo">Verificando…</span></div>
+        <p>Configure o Home Assistant sem sair do Optimus. O assistente detecta o sistema, instala o ambiente Docker quando suportado e provisiona o Home Assistant automaticamente. No Linux, a instalação do serviço solicita autorização administrativa do sistema; no Windows, o Docker Desktop pode exigir reinicialização e uma primeira abertura para concluir a inicialização.</p>
+        <p class="sutil">O modo provisionado é Home Assistant Container: controle de dispositivos e integrações pela interface oficial. Ele não inclui o Supervisor nem a loja de add-ons do Home Assistant OS. O Optimus preserva a pasta de dados ao atualizar ou remover o container.</p>
+        <div id="ha-gerenciado-diagnostico" class="sutil" role="status" aria-live="polite">Detectando compatibilidade e serviço…</div>
+        <div class="linha">
+          <button class="botao primario" id="ha-gerenciado-instalar">Instalar / configurar automaticamente</button>
+          <button class="botao" id="ha-gerenciado-atualizar">Atualizar status</button>
+          <button class="botao" id="ha-gerenciado-abrir" disabled>Abrir Home Assistant</button>
+        </div>
+        <div class="linha">
+          <button class="botao" data-ha-acao="iniciar">Iniciar</button>
+          <button class="botao" data-ha-acao="parar">Parar</button>
+          <button class="botao" data-ha-acao="reiniciar">Reiniciar</button>
+          <button class="botao" data-ha-acao="atualizar">Atualizar Home Assistant</button>
+          <button class="botao" data-ha-acao="backup">Criar backup</button>
+          <button class="botao perigo" data-ha-acao="desinstalar">Remover serviço (preservar dados)</button>
+        </div>
+        <p id="ha-gerenciado-status" class="sutil" role="status" aria-live="polite">Nenhuma operação em andamento.</p>
+        <details><summary>O que será instalado e o que ainda exige participação?</summary>
+          <ul>
+            <li>O Optimus instala e administra o container e mantém a configuração em uma pasta local.</li>
+            <li>A primeira abertura do Home Assistant exige criar a conta local e concluir o onboarding na interface dele.</li>
+            <li>Pareamento físico de Zigbee, Matter, Bluetooth e credenciais de serviços/fabricantes pode exigir hardware ou login do usuário.</li>
+            <li>Descoberta automática depende da rede e do suporte do dispositivo. Acesso remoto seguro deve usar VPN ou HTTPS autenticado.</li>
+          </ul>
+        </details>
+      </div>
       <h3 class="subtitulo">📷 Prévia das câmeras</h3>
       <p class="sutil">A prévia é uma imagem JPEG atualizada periodicamente, não vídeo contínuo. Use a busca ONVIF para localizar câmeras compatíveis na rede; depois informe o endereço RTSP ou snapshot e as credenciais no cadastro. A descoberta identifica endpoints, mas não adivinha a senha nem o endereço RTSP.</p>
       <div class="linha"><button class="botao" id="casa-onvif-descobrir">🔎 Descobrir câmeras ONVIF na rede</button></div>
