@@ -217,6 +217,7 @@ def indexar(arquivos: list[dict] | None = None, limite: int = 150,
                         con.execute("INSERT INTO arquivos(nome,caminho,tamanho,mtime_ns,cursor,total,concluido,atualizado) VALUES(?,?,?,?,0,?,0,?)",
                                     (nome, str(caminho), *assinatura, total, time.time()))
                         con.commit()
+                    proximo = cursor
                     for indice, entrada in enumerate(arquivo):
                         if indice < cursor:
                             continue
@@ -270,9 +271,9 @@ def indexar(arquivos: list[dict] | None = None, limite: int = 150,
                         con.execute("UPDATE arquivos SET cursor=?,atualizado=? WHERE nome=?",
                                     (proximo, time.time(), nome))
                         con.commit()
-                    concluido = processados < limite and proximo >= total if 'proximo' in locals() else cursor >= total
-                    # Quando não há mais entradas elegíveis, a próxima varredura confirma conclusão.
-                    if processados < limite:
+                    # Se o último item foi processado no limite do lote, concluir já.
+                    # Caso contrário, manter o cursor para a próxima execução.
+                    if proximo >= total:
                         con.execute("UPDATE arquivos SET concluido=1,cursor=?,atualizado=? WHERE nome=?",
                                     (total, time.time(), nome))
                     con.commit()
@@ -309,8 +310,8 @@ def buscar(consulta: str, limite: int = 6, modelo_embedding: str = "",
         expressao = " OR ".join('"' + t.replace('"', '""') + '"' for t in termos)
         try:
             lexicais = con.execute(
-                "SELECT t.*,bm25(trechos_fts) AS rank FROM trechos_fts f "
-                "JOIN trechos t ON t.id=f.rowid WHERE trechos_fts MATCH ? "
+                "SELECT t.*,bm25(trechos_fts) AS rank FROM trechos_fts "
+                "JOIN trechos t ON t.id=trechos_fts.rowid WHERE trechos_fts MATCH ? "
                 "ORDER BY rank LIMIT 80", (expressao,)).fetchall()
         except sqlite3.OperationalError:
             lexicais = []
