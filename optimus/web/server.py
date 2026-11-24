@@ -275,7 +275,9 @@ class Manipulador(BaseHTTPRequestHandler):
     # Respostas
     def _responder_atualizacao(self, resultado: dict[str, Any]) -> None:
         """Responde primeiro e reinicia o processo somente após uma atualização real."""
-        if resultado.get("ok") and resultado.get("mudou"):
+        houve_troca = bool(resultado.get("mudou") or resultado.get("commit")
+                           or resultado.get("versao"))
+        if resultado.get("ok") and houve_troca:
             resultado = {**resultado, "reiniciando": True}
             self._json(resultado)
             _reinicio_solicitado.set()
