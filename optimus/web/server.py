@@ -12,6 +12,8 @@ import logging
 import mimetypes
 import queue
 import re
+import shutil
+import subprocess
 import threading
 import time
 import uuid
@@ -563,6 +565,33 @@ class Manipulador(BaseHTTPRequestHandler):
             return self._json({"ok": True})
         if recurso == "acoes":
             return self._json({"acoes": optimus.auditoria.ultimas(100)})
+        if recurso == "tunel":
+            from optimus.web import celular
+
+            config = optimus.config
+            if metodo == "POST" and ident == "desligar":
+                parar_tunel()
+            elif metodo == "POST":
+                senha = str(self._corpo().get("senha", "") or config.get("web", "senha", "")).strip()
+                if len(senha) < 12:
+                    return self._json({"erro": "Para acesso externo, use uma senha com pelo menos 12 caracteres."}, 400)
+                config.definir("web", "senha", senha)
+                config.salvar()
+                Manipulador.senha = senha
+                if _servidor_celular is not None:
+                    _servidor_celular.RequestHandlerClass.senha = senha
+                resultado = iniciar_tunel(_porta_principal or self.server.server_address[1], senha)
+                if resultado.get("erro"):
+                    return self._json(resultado, 503)
+            url_externa = estado_tunel().get("url", "")
+            agenda_externa = (f"{url_externa}/api/agenda.ics?chave={celular.token_agenda(config)}"
+                              if url_externa else "")
+            return self._json({
+                **estado_tunel(),
+                "qr": celular.qr_svg(url_externa) if url_externa else "",
+                "agenda": agenda_externa,
+                "agenda_qr": celular.qr_svg(agenda_externa) if agenda_externa else "",
+            })
         if recurso == "celular":
             from optimus.web import celular
 
@@ -767,8 +796,92 @@ def aquecer_modelos(optimus: Optimus) -> list[str]:
 # ---------------------------------------------------------------------- acesso pelo celular
 # Quando a interface roda só neste PC (127.0.0.1), o celular entra por uma segunda porta,
 # aberta na rede de casa e sempre protegida pela senha de [web] senha.
+
 _servidor_celular: ThreadingHTTPServer | None = None
 _trava_celular = threading.Lock()
+_trava_tunel = threading.RLock()
+_processo_tunel: subprocess.Popen | None = None
+_porta_principal: int | None = None
+_url_tunel = ""
+_erro_tunel = ""
+
+
+def estado_tunel() -> dict[str, str | bool]:
+    with _trava_tunel:
+        processo = _processo_tunel
+        if processo is not None and processo.poll() is not None:
+            return {"ligado": False, "url": "", "erro": _erro_tunel or
+                    f"cloudflared encerrou com código {processo.returncode}."}
+        return {"ligado": bool(processo and processo.poll() is None and _url_tunel),
+                "iniciando": bool(processo and processo.poll() is None and not _url_tunel),
+                "url": _url_tunel, "erro": _erro_tunel}
+
+
+def iniciar_tunel(porta: int, senha: str) -> dict[str, str | bool]:
+    """Inicia Cloudflare Quick Tunnel sem expor a porta local diretamente."""
+    global _processo_tunel, _url_tunel, _erro_tunel
+    if len(senha or "") < 12:
+        return {"erro": "Acesso externo exige senha com pelo menos 12 caracteres."}
+    executavel = shutil.which("cloudflared")
+    if not executavel:
+        return {"erro": "cloudflared não foi encontrado. Instale-o e tente novamente."}
+    with _trava_tunel:
+        if _processo_tunel is not None and _processo_tunel.poll() is None:
+            return estado_tunel()
+        _url_tunel = ""
+        _erro_tunel = ""
+        try:
+            processo = subprocess.Popen(
+                [executavel, "tunnel", "--no-autoupdate", "--url",
+                 f"http://127.0.0.1:{int(porta)}"],
+                stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                text=True, encoding="utf-8", errors="replace", bufsize=1)
+        except OSError as erro:
+            _processo_tunel = None
+            _erro_tunel = str(erro)
+            return {"erro": f"Não foi possível iniciar o Cloudflare Tunnel: {erro}"}
+        _processo_tunel = processo
+
+    def ler_saida():
+        global _url_tunel
+        try:
+            for linha in processo.stdout or ():
+                achado = re.search(r"https://[a-z0-9-]+[.]trycloudflare[.]com", linha, re.I)
+                if achado:
+                    with _trava_tunel:
+                        _url_tunel = achado.group(0)
+        except (OSError, ValueError):
+            pass
+
+    threading.Thread(target=ler_saida, daemon=True, name="optimus-cloudflare-log").start()
+    limite = time.monotonic() + 10
+    while time.monotonic() < limite:
+        if processo.poll() is not None:
+            with _trava_tunel:
+                _erro_tunel = f"cloudflared encerrou com código {processo.returncode}."
+            break
+        if estado_tunel().get("url"):
+            return estado_tunel()
+        time.sleep(0.1)
+    if estado_tunel().get("url"):
+        return estado_tunel()
+    return {"ligado": False, "iniciando": processo.poll() is None, "url": "",
+            "erro": _erro_tunel if processo.poll() is not None else ""}
+
+def parar_tunel() -> None:
+    global _processo_tunel, _url_tunel, _erro_tunel
+    with _trava_tunel:
+        processo = _processo_tunel
+        _processo_tunel = None
+        _url_tunel = ""
+        _erro_tunel = ""
+    if processo is not None and processo.poll() is None:
+        processo.terminate()
+        try:
+            processo.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            processo.kill()
+            processo.wait(timeout=2)
 
 
 def porta_celular(config, porta_principal: int) -> int:
@@ -803,18 +916,30 @@ def desligar_celular() -> None:
 
 
 def iniciar(host: str = "127.0.0.1", porta: int = 8765, abrir_navegador: bool = True,
-            optimus: Optimus | None = None) -> None:
+            optimus: Optimus | None = None, tunel: bool = False) -> None:
+    global _porta_principal
     optimus = optimus or Optimus()
     senha = optimus.config.get("web", "senha") or ""
+    if tunel and len(senha) < 12:
+        raise SystemExit("Para usar --tunel, defina uma senha forte com pelo menos 12 caracteres: "
+                         "optimus config web.senha SUA_SENHA_FORTE")
     if host not in ("127.0.0.1", "localhost") and not senha:
         raise SystemExit("Para abrir a interface na rede (celular), defina uma senha: "
                          "optimus config web.senha SUA_SENHA")
     Manipulador.estado = Estado(optimus)
     threading.Thread(target=aquecer_modelos, args=(optimus,), daemon=True).start()
     # A senha protege o acesso de outros aparelhos; só neste PC (127.0.0.1) não é pedida.
-    Manipulador.senha = senha if host not in ("127.0.0.1", "localhost") else ""
+    Manipulador.senha = senha if (tunel or host not in ("127.0.0.1", "localhost")) else ""
     servidor = ThreadingHTTPServer((host, porta), Manipulador)
+    _porta_principal = servidor.server_address[1]
     servidor.daemon_threads = True
+    if tunel:
+        resultado = iniciar_tunel(servidor.server_address[1], senha)
+        if resultado.get("erro"):
+            parar_tunel()
+            servidor.server_close()
+            raise SystemExit(str(resultado["erro"]))
+        print(f"Acesso externo: {resultado.get('url') or 'túnel iniciando; consulte o painel'}")
     try:  # pastas observadas do estúdio passam a rodar enquanto a interface estiver aberta
         from optimus.estudio import automacao
 
@@ -847,7 +972,9 @@ def iniciar(host: str = "127.0.0.1", porta: int = 8765, abrir_navegador: bool = 
     except KeyboardInterrupt:
         print("\nAté logo!")
     finally:
+        parar_tunel()
         servidor.server_close()
+        _porta_principal = None
 
 
-__all__ = ["iniciar", "cfg"]
+__all__ = ["iniciar", "cfg", "iniciar_tunel", "parar_tunel", "estado_tunel"]

@@ -47,7 +47,7 @@ def qr_svg(texto: str) -> str:
     if qr is None:
         return ""
     saida = io.BytesIO()
-    qr.save(saida, kind="svg", scale=6, border=2, dark="#000", light="#fff", xmldecl=False)
+    qr.save(saida, kind="svg", scale=8, border=4, dark="#000", light="#fff", xmldecl=False)
     return saida.getvalue().decode("utf-8")
 
 

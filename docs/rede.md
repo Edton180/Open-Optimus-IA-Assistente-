@@ -64,35 +64,47 @@ ativo = true
 Também dá para trocar o motor principal inteiro para a nuvem: `optimus config motor.backend groq` e
 `optimus config motor.chave_api SUA_CHAVE`.
 
-## Acessar o Optimus pelo celular de fora da casa (outra rede)
+## Acessar o Optimus pelo celular fora da rede (4G/5G ou outro Wi-Fi)
 
-O `optimus gui --rede` libera o painel só na rede local (Wi-Fi da casa). Para acessar de qualquer
-lugar (dados móveis, outro Wi-Fi), use um **túnel reverso**:
+O acesso remoto usa **Cloudflare Quick Tunnel**: o Optimus continua escutando apenas em
+`127.0.0.1`, enquanto o processo `cloudflared` cria uma URL HTTPS temporária. Não é necessário
+abrir portas no roteador nem colocar o computador diretamente na internet.
 
-1. Defina uma senha forte (obrigatório):
-   ```bash
-   optimus config web.senha "sua-senha-forte-aqui"
-   ```
-2. Inicie com o modo túnel (já liga o `--rede` e mostra as instruções):
-   ```bash
-   optimus gui --tunel
-   ```
-3. Em outro terminal, rode um destes comandos (substitua a porta se mudou):
-   ```bash
-   # Cloudflare Tunnel (gratuito e recomendado)
-   cloudflared tunnel --url http://127.0.0.1:8765
+### Pela interface
 
-   # ou ngrok
-   ngrok http 8765
-   ```
-4. Abra no celular a URL `https://...` que o túnel mostrar. A senha configurada será pedida.
+1. Instale o `cloudflared` no computador:
+   https://developers.cloudflare.com/cloudflare-one/connections/connect-apps/install-and-setup/installation/
+2. Abra **Configurações > Celular e agenda** no Optimus.
+3. Em **Acesso externo**, informe uma senha exclusiva com pelo menos 12 caracteres e toque em
+   **Ativar acesso externo**.
+4. Leia o QR code com o celular usando dados móveis (4G/5G) ou outro Wi-Fi. O segundo QR code
+   assina a agenda no endereço externo.
+5. Para encerrar, toque em **Encerrar acesso externo**. O túnel também é encerrado quando o
+   servidor Optimus é desligado normalmente.
 
-**Segurança:** sem senha o painel fica aberto para quem tiver a URL. Nunca exponha a porta 8765
-diretamente na internet (port-forward no roteador) sem autenticação e HTTPS. Cloudflare Tunnel e
-ngrok já entregam HTTPS.
+### Pelo terminal
 
-Instalação rápida do cloudflared:  
-https://developers.cloudflare.com/cloudflare-one/connections/connect-apps/install-and-setup/installation/
+Defina uma senha forte e inicie:
+
+```bash
+optimus config web.senha "uma-senha-exclusiva-com-mais-de-12-caracteres"
+optimus gui --tunel
+```
+
+O comando requer o executável `cloudflared` instalado e cria o túnel enquanto o Optimus estiver
+em execução. Use `Ctrl+C` para encerrar o servidor e o túnel.
+
+### Limites e segurança
+
+- O endereço Quick Tunnel é temporário e pode mudar ao reiniciar; gere um QR novo após reconectar.
+- O computador precisa ficar ligado, sem suspensão, e conectado à internet.
+- A senha protege o painel e as APIs. Use senha exclusiva, não a reutilize em outros serviços.
+- A URL da agenda contém um token de acesso próprio: trate-a como privada e use **Trocar link da
+  agenda** se ela for compartilhada por engano.
+- Não configure encaminhamento de portas (port forwarding) no roteador para a porta do Optimus.
+- O Cloudflare Tunnel é um serviço de terceiros e a conexão depende da disponibilidade da Cloudflare.
+- Para um endereço permanente, configure um túnel nomeado na sua conta Cloudflare; o Quick Tunnel
+  é destinado a testes e uso temporário.
 
 ## Descobrir dispositivos na rede local
 
