@@ -478,6 +478,9 @@ class Manipulador(BaseHTTPRequestHandler):
         recurso = partes[0] if partes else ""
         ident = partes[1] if len(partes) > 1 else ""
 
+        if recurso == "zim" and metodo == "GET":
+            from optimus import zim
+            return self._json(zim.listar_zim())
         if recurso == "modulos" and ident == "recursos" and metodo == "GET":
             from optimus import modulos
             return self._json({"recursos": modulos.recursos()})

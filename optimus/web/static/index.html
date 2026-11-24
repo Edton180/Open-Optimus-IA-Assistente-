@@ -73,6 +73,7 @@
       <button data-tela="casa"><span>🏠</span>Casa inteligente</button>
       <button data-tela="modulos"><span>🧩</span>Central de módulos</button>
       <button data-tela="laboratorio"><span>🧪</span>Laboratório de dados</button>
+      <button data-tela="zim"><span>🌐</span>Conhecimento offline (ZIM)</button>
       <button data-tela="acoes"><span>🛡️</span>Ações e segurança</button>
       <button data-tela="config"><span>⚙️</span>Configurações</button>
     </nav>
@@ -549,6 +550,26 @@
       <div class="cartao">
         <div class="linha entre"><h3>Resultado</h3><button type="button" class="botao" id="lab-copiar" disabled>Copiar resultado</button></div>
         <textarea id="lab-resultado" class="campo" rows="8" readonly placeholder="O resultado aparecerá aqui…"></textarea>
+      </div>
+    </section>
+    <section id="tela-zim" class="tela">
+      <div class="tela-cabecalho"><h2>🌐 Conhecimento offline</h2>
+        <p>Biblioteca local de conteúdos no formato ZIM, usado por enciclopédias e materiais de consulta offline. Os arquivos permanecem no computador e não são enviados para a nuvem.</p></div>
+      <div class="cartao">
+        <div class="linha entre"><div><h3>Arquivos disponíveis</h3><p class="sutil">O Optimus identifica arquivos ZIM na pasta gerenciada da biblioteca.</p></div>
+          <button type="button" class="botao primario" id="zim-atualizar">↻ Atualizar biblioteca</button></div>
+        <p id="zim-status" class="sutil" role="status" aria-live="polite">Carregando biblioteca…</p>
+        <div id="zim-resumo" class="grade"></div>
+        <ul id="zim-lista" class="lista" aria-live="polite"><li class="sutil">Consultando arquivos…</li></ul>
+      </div>
+      <div class="cartao">
+        <h3>Como adicionar conteúdo</h3>
+        <ol>
+          <li>Coloque seus arquivos <code>.zim</code> na pasta <code>biblioteca_zim</code> dentro da pasta de dados do Optimus.</li>
+          <li>Use “Atualizar biblioteca” para reler o catálogo.</li>
+          <li>Somente arquivos locais regulares são listados; links simbólicos e outros formatos são ignorados.</li>
+        </ol>
+        <p class="sutil">Esta versão cataloga os arquivos, mas ainda não abre nem pesquisa seu conteúdo. A próxima etapa é integrar o leitor Kiwix com inicialização manual, validação do executável e encerramento controlado.</p>
       </div>
     </section>
     <section id="tela-modulos" class="tela">

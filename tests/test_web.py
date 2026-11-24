@@ -66,11 +66,18 @@ def test_confirmacao_pela_interface(tmp_path):
     httpd, base = _subir()
     try:
         tarefa = _req(base + "/api/enviar", {"texto": f"apague o arquivo {alvo}"})["tarefa"]
-        for _ in range(50):
+        # No Windows, a primeira inicialização do agente/ferramentas pode levar
+        # mais que 5 s. Aguarda até 30 s e mantém o estado final no erro para
+        # diferenciar atraso de execução de uma falha real no fluxo.
+        for _ in range(300):
             dados = _req(f"{base}/api/tarefa/{tarefa}")
-            if dados["pendente"]:
+            if dados["pendente"] or dados["terminou"]:
                 break
             time.sleep(0.1)
+        assert dados["pendente"] is not None, (
+            f"A confirmação não foi publicada; estado={dados['estado']}, "
+            f"eventos={dados['eventos']}"
+        )
         assert dados["pendente"]["nome"] == "apagar"
         _req(base + "/api/confirmar", {"tarefa": tarefa, "aprovar": True})
         for _ in range(50):
@@ -477,6 +484,27 @@ def test_laboratorio_visual_e_api_executam_transformacao_local():
             assert erro.code == 400
         else:
             raise AssertionError("Operação desconhecida deveria ser rejeitada")
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+
+
+
+def test_api_biblioteca_zim_lista_arquivos_locais(tmp_path, monkeypatch):
+    from optimus import zim
+
+    pasta = tmp_path / "zim"
+    pasta.mkdir()
+    (pasta / "wikipedia_pt.zim").write_bytes(b"zim")
+    (pasta / "ignorar.txt").write_text("nao", encoding="utf-8")
+    monkeypatch.setattr(zim, "pasta_biblioteca", lambda: pasta)
+    httpd, base = _subir()
+    try:
+        dados = _req(base + "/api/zim")
+        assert dados["total"] == 1
+        assert dados["arquivos"][0]["nome"] == "wikipedia_pt.zim"
+        assert dados["tamanho_total_bytes"] == 3
+        assert str(tmp_path) not in str(dados)
     finally:
         httpd.shutdown()
         httpd.server_close()

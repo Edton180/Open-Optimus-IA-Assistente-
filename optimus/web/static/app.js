@@ -151,9 +151,41 @@ function irPara(tela) {
   $$(".tela").forEach((t) => t.classList.toggle("ativa", t.id === "tela-" + tela));
   document.body.classList.toggle("fora-do-chat", tela !== "chat");
   app.classList.remove("lateral-aberta");
-  const carregar = { personas: carregarPersonas, prompts: carregarPrompts, memoria: carregarMemoria, biblioteca: carregarBiblioteca, acoes: carregarAcoes, config: carregarConfig, casa: carregarCasa, estudio: () => window.carregarEstudio && window.carregarEstudio(), pdf: carregarPDF, modulos: carregarModulos, laboratorio: () => {} }[tela];
+  const carregar = { zim: carregarZim, personas: carregarPersonas, prompts: carregarPrompts, memoria: carregarMemoria, biblioteca: carregarBiblioteca, acoes: carregarAcoes, config: carregarConfig, casa: carregarCasa, estudio: () => window.carregarEstudio && window.carregarEstudio(), pdf: carregarPDF, modulos: carregarModulos, laboratorio: () => {} }[tela];
   if (carregar) carregar();
 }
+
+// ---------- Biblioteca local ZIM ----------
+async function carregarZim() {
+  const status = $("#zim-status");
+  const lista = $("#zim-lista");
+  const resumo = $("#zim-resumo");
+  if (!status || !lista || !resumo) return;
+  status.textContent = "Consultando arquivos ZIM locais…";
+  try {
+    const dados = await api("/api/zim");
+    const arquivos = Array.isArray(dados.arquivos) ? dados.arquivos : [];
+    resumo.innerHTML = [
+      ["Arquivos", String(dados.total ?? arquivos.length)],
+      ["Espaço ocupado", formatarBytes(dados.tamanho_total_bytes ?? 0)]
+    ].map(([nome, valor]) => '<article class="cartao"><small class="sutil">' + esc(nome) +
+      '</small><h3>' + esc(valor) + '</h3></article>').join("");
+    lista.innerHTML = arquivos.length ? arquivos.map((arquivo) =>
+      '<li><div><b>' + esc(arquivo.nome) + '</b><small class="sutil"> ' +
+      esc(formatarBytes(arquivo.tamanho_bytes)) + ' · modificado em ' +
+      esc(quando(arquivo.modificado_em)) + '</small></div></li>'
+    ).join("") : '<li class="sutil">Nenhum arquivo ZIM encontrado. Adicione arquivos à pasta biblioteca_zim.</li>';
+    status.textContent = dados.pasta_configurada === false
+      ? "Não foi possível acessar a pasta da biblioteca: " + (dados.erro || "erro desconhecido")
+      : "Catálogo atualizado · " + new Date().toLocaleTimeString("pt-BR");
+  } catch (erro) {
+    status.textContent = "Falha ao consultar a biblioteca: " + erro.message;
+    lista.innerHTML = "";
+    resumo.innerHTML = "";
+  }
+}
+$("#zim-atualizar")?.addEventListener("click", carregarZim);
+
 // ---------- Command Center: inventário local de integrações ----------
 async function carregarModulos() {
   const estadoEl = $("#modulos-estado");
