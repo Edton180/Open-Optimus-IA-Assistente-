@@ -191,3 +191,27 @@ def test_real_zim_roundtrip_and_article_index(tmp_path, monkeypatch):
     assert encontrados[0]["arquivo"] == "fixture.zim"
     assert encontrados[0]["artigo"]
     assert encontrados[0]["url"].startswith("zim://fixture.zim/")
+
+
+
+def test_embedding_discovery_never_probes_remote_endpoint(monkeypatch):
+    import httpx
+
+    def nao_deve_chamar(*_args, **_kwargs):
+        raise AssertionError("não deve consultar endpoints remotos")
+
+    monkeypatch.setattr(httpx, "get", nao_deve_chamar)
+    assert zim_rag._modelo_auto("https://api.exemplo.com", "all-minilm") == ""
+    resultado = zim_rag.preparar_embedding("https://api.exemplo.com")
+    assert resultado["instalado"] is False
+    assert "modo lexical" in resultado["erro"]
+
+
+def test_embedding_uses_existing_local_model_without_download(monkeypatch):
+    monkeypatch.setattr(zim_rag, "_modelo_auto", lambda *_args: "nomic-embed-text:latest")
+    resultado = zim_rag.preparar_embedding("http://127.0.0.1:11434")
+    assert resultado == {
+        "instalado": True,
+        "modelo": "nomic-embed-text:latest",
+        "origem": "existente",
+    }
