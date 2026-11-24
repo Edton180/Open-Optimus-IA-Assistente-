@@ -856,6 +856,29 @@ $("#form-fato").addEventListener("submit", async (e) => {
 });
 
 // ---------- Biblioteca de documentos ----------
+async function buscarBiblioteca(consulta) {
+  const status = $("#biblioteca-busca-status"), saida = $("#biblioteca-resultados");
+  status.textContent = "Pesquisando nos documentos locais…";
+  saida.innerHTML = "";
+  try {
+    const d = await api("/api/biblioteca?q=" + encodeURIComponent(consulta));
+    status.textContent = d.total ? d.total + " trecho(s) encontrado(s)." : "Nenhum trecho encontrado. Tente outros termos ou confira se a pasta foi indexada.";
+    saida.innerHTML = (d.resultados || []).map((r) => {
+      const citacao = String(r.citacao || "");
+      return `<article class="cartao"><b>${esc(r.titulo || "Documento")}</b>
+        <p class="sutil">${esc(r.fonte || "")}</p>
+        <p>${esc(r.trecho || "")}</p>
+        <small class="sutil">Fonte para citação: ${esc(citacao)}</small></article>`;
+    }).join("");
+  } catch (erro) {
+    status.textContent = "Falha na pesquisa: " + erro.message;
+  }
+}
+$("#form-biblioteca-busca").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const consulta = e.currentTarget.elements.q.value.trim();
+  if (consulta) await buscarBiblioteca(consulta);
+});
 async function carregarBiblioteca() {
   const lista = $("#biblioteca-lista");
   try {
