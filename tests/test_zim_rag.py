@@ -46,6 +46,7 @@ def test_sqlite_fts_and_source_citation(tmp_path, monkeypatch):
     assert resultados[0]["arquivo"] == "wikipedia_pt.zim"
     assert resultados[0]["artigo"] == "Seguranca_do_trabalho"
     assert resultados[0]["url"].startswith("zim://")
+    assert len(resultados[0]["hash_trecho"]) == 64
     assert "Segurança do trabalho" in resultados[0]["citacao"]
 
 
