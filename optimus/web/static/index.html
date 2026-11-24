@@ -158,23 +158,30 @@
       <div class="cartao pdf-upload">
         <h3>1. Adicionar documentos</h3>
         <div class="linha">
-          <input id="pdf-arquivos" type="file" accept=".pdf,.jpg,.jpeg,.png,.tif,.tiff,.bmp,.html,.htm,.p12,.pfx,.icc,application/pdf,image/*" multiple>
+          <input id="pdf-arquivos" type="file" accept=".pdf,.jpg,.jpeg,.png,.tif,.tiff,.bmp,.html,.htm,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.odt,.ods,.odp,.rtf,.txt,.csv,.p12,.pfx,.icc,application/pdf,image/*" multiple>
           <button type="button" class="botao primario" id="pdf-enviar">Adicionar arquivos</button>
         </div>
-        <p class="sutil">PDFs, imagens e arquivos auxiliares de até 200 MB. Os arquivos ficam na pasta local de documentos do Optimus.</p>
+        <p class="sutil">PDFs, imagens, Word, Excel, PowerPoint, LibreOffice e arquivos auxiliares de até 200 MB. Os arquivos ficam na pasta local de documentos do Optimus.</p>
         <div id="pdf-lista-arquivos" class="pdf-arquivos"></div>
       </div>
       <div class="cartao">
-        <h3>2. Escolher operação</h3>
-        <label>Ferramenta PDF
-          <select id="pdf-ferramenta" class="campo"><option value="">Carregando ferramentas…</option></select>
-        </label>
-        <p id="pdf-descricao" class="sutil"></p>
-        <div id="pdf-parametros" class="grade pdf-parametros"></div>
-        <div class="linha fim">
-          <button type="button" class="botao primario" id="pdf-executar" disabled>▶ Executar operação</button>
-          <span id="pdf-estado" class="sutil" role="status" aria-live="polite"></span>
+        <h3>2. Central de ferramentas</h3>
+        <p class="sutil">Escolha uma categoria ou pesquise pelo que deseja fazer. As ferramentas disponíveis são executadas no próprio computador.</p>
+        <input id="pdf-busca" class="campo" type="search" placeholder="Buscar: unir, assinar, comprimir, Word, OCR…" aria-label="Buscar ferramenta PDF">
+        <div id="pdf-filtros" class="pdf-filtros" aria-label="Categorias de PDF"></div>
+        <div id="pdf-ferramentas-grid" class="pdf-ferramentas-grid" aria-live="polite"></div>
+        <input id="pdf-ferramenta" type="hidden" value="">
+        <div id="pdf-operacao-selecionada" class="pdf-operacao-selecionada oculto">
+          <div class="pdf-operacao-topo"><div><small>OPERAÇÃO SELECIONADA</small><h3 id="pdf-titulo-operacao"></h3></div>
+            <button type="button" class="botao pequeno" id="pdf-limpar-operacao">Trocar ferramenta</button></div>
+          <p id="pdf-descricao" class="sutil"></p>
+          <div id="pdf-parametros" class="grade pdf-parametros"></div>
+          <div class="linha fim">
+            <button type="button" class="botao primario" id="pdf-executar" disabled>▶ Executar operação</button>
+            <span id="pdf-estado" class="sutil" role="status" aria-live="polite"></span>
+          </div>
         </div>
+        <p id="pdf-estado-inicial" class="sutil" role="status" aria-live="polite">Carregando catálogo de ferramentas…</p>
       </div>
       <div class="cartao">
         <h3>3. Resultado</h3>
