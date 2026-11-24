@@ -107,3 +107,25 @@ def test_voltar_desfaz_a_mais_recente_mesmo_com_backup_antigo_de_release(ambient
     assert autoatualizar.baixar(config)["ok"]
     v = autoatualizar.voltar(config)
     assert v.get("via") != "release" and chamadas[-1].endswith(SHA_VELHO)
+
+def test_falha_na_atualizacao_restaura_commit_anterior(ambiente, monkeypatch):
+    config, _ = ambiente
+    autoatualizar.registrar_commit(SHA_VELHO)
+    chamadas = []
+
+    def pip_com_falha_na_nova_versao(url):
+        chamadas.append(url)
+        if url.endswith(SHA_NOVO):
+            return 1, "falha ao resolver dependências"
+        return 0, "versão anterior restaurada"
+
+    monkeypatch.setattr(autoatualizar, "_pip", pip_com_falha_na_nova_versao)
+    resultado = autoatualizar.baixar(config)
+
+    assert resultado["ok"] is False
+    assert resultado["restaurado"] is True
+    assert "restaurada" in resultado["erro"]
+    assert chamadas[0].endswith(SHA_NOVO)
+    assert chamadas[1].endswith(SHA_VELHO)
+    assert autoatualizar.commit_instalado() == SHA_VELHO
+

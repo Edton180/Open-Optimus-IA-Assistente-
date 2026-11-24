@@ -260,18 +260,33 @@ def baixar_github(config) -> dict:
                                      f"atualização. Confira a internet. ({type(erro).__name__})"}
     if not sha:
         return {"ok": False, "erro": "O GitHub não informou a versão mais recente."}
-    if sha == commit_instalado():
+    anterior = commit_instalado()
+    if sha == anterior:
         return {"ok": True, "mudou": False, "mensagem": "Já estava na versão mais recente."}
     codigo, saida = _pip(_url_zip(repo, sha))
     if codigo != 0:
-        return {"ok": False, "erro": "A atualização falhou. Tente de novo; se continuar, "
-                                     "use \"Voltar versão\". Detalhe: " + saida.strip()[-500:]}
+        detalhe = saida.strip()[-500:]
+        # A primeira etapa do pip pode já ter substituído os arquivos do pacote antes de
+        # falhar na instalação das dependências. Quando há um commit anterior registrado,
+        # tenta restaurá-lo automaticamente para não deixar uma instalação parcial.
+        if anterior and anterior != sha:
+            codigo_volta, saida_volta = _pip(_url_zip(repo, anterior))
+            if codigo_volta == 0:
+                return {"ok": False, "restaurado": True,
+                        "erro": "A atualização falhou e a versão anterior foi restaurada "
+                                "automaticamente. Detalhe: " + detalhe}
+            return {"ok": False, "restaurado": False,
+                    "erro": "A atualização falhou e a restauração automática também falhou. "
+                            "Não abra o Optimus até reparar a instalação. Atualização: "
+                            + detalhe + " | Restauração: " + saida_volta.strip()[-500:]}
+        return {"ok": False, "erro": "A atualização falhou. Não havia commit anterior "
+                                     "registrado para restauração automática. Detalhe: "
+                                     + detalhe}
     registrar_commit(sha)
     _marcar_modo("github")
     return {"ok": True, "mudou": True, "modo": "github", "commit": sha[:7],
             "mensagem": f"Optimus atualizado para o commit {sha[:7]}. Reinicie o Optimus para "
                         "usar a nova versão. Se algo der errado, use \"Voltar versão\"."}
-
 
 def voltar_github(config) -> dict:
     dados = _ler_registro()
