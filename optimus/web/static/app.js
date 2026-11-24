@@ -277,7 +277,7 @@ $("#zim-busca-form")?.addEventListener("submit", async (evento) => {
   status.textContent = "Pesquisando localmente nos índices disponíveis…";
   lista.innerHTML = "";
   const tarefas = [];
-  if (fonte !== "documentos") tarefas.push(api("/api/zim/buscar?q=" + encodeURIComponent(termo))
+  if (fonte !== "documentos") tarefas.push(api("/api/zim/rag?q=" + encodeURIComponent(termo))
     .then((d) => ({ tipo: "zim", dados: d })).catch((erro) => ({ tipo: "zim", erro })));
   if (fonte !== "zim") tarefas.push(api("/api/biblioteca?q=" + encodeURIComponent(termo))
     .then((d) => ({ tipo: "documentos", dados: d })).catch((erro) => ({ tipo: "documentos", erro })));
@@ -289,8 +289,7 @@ $("#zim-busca-form")?.addEventListener("submit", async (evento) => {
       if (resposta.erro) { avisos.push(resposta.tipo + ": " + resposta.erro.message); continue; }
       if (resposta.tipo === "zim") {
         itens.push(...(resposta.dados.resultados || []));
-        avisos.push(...(resposta.dados.erros || []));
-        if (resposta.dados.aviso) avisos.push(resposta.dados.aviso);
+        if (!resposta.dados.resultados?.length) avisos.push("Indexe os arquivos ZIM para habilitar o RAG local.");
       } else {
         itens.push(...(resposta.dados.resultados || []).map((r) => ({
           titulo: r.titulo || "Documento", trecho: r.trecho || "",
@@ -306,12 +305,42 @@ $("#zim-busca-form")?.addEventListener("submit", async (evento) => {
       (r.url ? '<a href="' + esc(r.url) + '" target="_blank" rel="noopener noreferrer">Abrir fonte local ↗</a>' : "") +
       '</div></li>'
     ).join("") : '<li class="sutil">Nenhum resultado encontrado nas fontes selecionadas.</li>';
-    status.textContent = itens.length + " resultado(s) · busca textual local. " +
+    status.textContent = itens.length + " resultado(s) · recuperação híbrida ZIM + documentos locais. " +
       (avisos.length ? avisos.slice(0, 3).join(" · ") : "As citações indicam a origem do trecho.");
   } catch (erro) {
     status.textContent = "Falha na busca: " + erro.message;
   } finally { botao.disabled = false; }
 });
+
+// ---------- Indexação incremental e RAG ZIM ----------
+async function atualizarStatusIndiceZim() {
+  const alvo = $("#zim-index-status");
+  if (!alvo) return;
+  try {
+    const s = await api("/api/zim/status");
+    alvo.textContent = (s.artigos_indexados || 0) + " artigos · " +
+      (s.trechos || 0) + " trechos · " + (s.com_embeddings || 0) +
+      " vetores locais. A indexação pode ser retomada a qualquer momento.";
+  } catch (erro) { alvo.textContent = "Índice ZIM ainda não disponível: " + erro.message; }
+}
+$("#zim-indexar")?.addEventListener("click", async () => {
+  const botao = $("#zim-indexar"), status = $("#zim-index-status");
+  botao.disabled = true;
+  status.textContent = "Indexando até 150 entradas. Aguarde…";
+  try {
+    const resultado = await api("/api/zim/indexar", { method: "POST", json: { limite: 150 } });
+    if (resultado.erro) throw new Error(resultado.erro);
+    const erros = resultado.erros || [];
+    status.textContent = (resultado.artigos_processados || 0) + " entradas processadas · " +
+      (resultado.indexados || 0) + " artigos indexados · " +
+      (resultado.trechos || 0) + " trechos atualizados." +
+      (erros.length ? " Avisos: " + erros.slice(0, 2).map(e => e.erro).join(" | ") : "");
+    await atualizarStatusIndiceZim();
+  } catch (erro) {
+    status.textContent = "Não foi possível indexar: " + erro.message;
+  } finally { botao.disabled = false; }
+});
+atualizarStatusIndiceZim();
 
 // ---------- Command Center: inventário local de integrações ----------
 async function carregarModulos() {
