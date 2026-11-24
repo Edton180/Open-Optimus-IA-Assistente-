@@ -169,3 +169,35 @@ def test_rota_tunel_retorna_erro_operacional_sem_404(monkeypatch):
             assert json.loads(erro.read())["erro"] == "cloudflared indisponível"
     finally:
         httpd.shutdown()
+
+
+def test_fluxo_pdf_upload_e_execucao_pela_interface():
+    from io import BytesIO
+    from pypdf import PdfWriter
+
+    httpd, base = _subir()
+    try:
+        catalogo = _req(base + "/api/pdf")
+        assert any(f["nome"] == "pdf_info" for f in catalogo["ferramentas"])
+
+        buffer = BytesIO()
+        writer = PdfWriter()
+        writer.add_blank_page(width=300, height=400)
+        writer.write(buffer)
+        pedido = urllib.request.Request(
+            base + "/api/pdf/upload?nome=teste.pdf",
+            data=buffer.getvalue(),
+            headers={"Content-Type": "application/pdf"},
+            method="POST",
+        )
+        with urllib.request.urlopen(pedido, timeout=10) as resposta:
+            enviado = json.loads(resposta.read())
+
+        resultado = _req(base + "/api/pdf/executar", {
+            "ferramenta": "pdf_info",
+            "argumentos": {"arquivo": enviado["arquivo"]},
+        })
+        assert resultado["resultado"]["paginas"] == 1
+    finally:
+        httpd.shutdown()
+
