@@ -1324,6 +1324,7 @@ async function carregarCasa() {
       || '<p class="sutil">Nenhuma câmera adicionada ainda. Adicione uma câmera Wi-Fi acima, ligue uma webcam no cabo USB, ou conecte o Home Assistant.</p>';
   } catch (e) { $("#cameras").innerHTML = `<p class="sutil">⚠️ ${esc(e.message)}</p>`; }
   if (d.config.casa.token) await carregarAparelhosCasa();
+  else await carregarInventarioCasa();
   clearInterval(vigiaCameras);
   const atualizar = () => {
     if (!$("#tela-casa").classList.contains("ativa")) { clearInterval(vigiaCameras); return; }
@@ -1341,6 +1342,37 @@ async function carregarCasa() {
   };
   atualizar(); vigiaCameras = setInterval(atualizar, 1200);
 }
+async function carregarInventarioCasa() {
+  const painel = $("#casa-inventario");
+  if (!painel) return;
+  try {
+    const dados = await api("/api/casa/registro");
+    const itens = dados.dispositivos || [];
+    painel.innerHTML = itens.length ? '<p class="sutil">' + itens.length +
+      ' dispositivo(s) registrados</p>' + itens.map((item) =>
+      '<article class="linha entre cartao"><div><b>' + esc(item.nome) +
+      '</b><p class="sutil">' + esc(item.integracao) + ' · ' + esc(item.id) +
+      (item.comodo ? ' · ' + esc(item.comodo) : '') + '</p><span class="sutil">' +
+      esc(item.disponibilidade) + ' · estado ' + esc(item.confianca_estado) +
+      '</span></div><button type="button" class="botao perigo" data-casa-remover="' +
+      esc(item.id) + '">Remover do inventário</button></article>').join("") :
+      '<p class="sutil">Ainda não há dispositivos registrados. Conecte o Home Assistant e atualize os aparelhos.</p>';
+  } catch (erro) {
+    painel.innerHTML = '<p class="sutil">Não foi possível carregar o inventário: ' + esc(erro.message) + '</p>';
+  }
+}
+$("#casa-inventario")?.addEventListener("click", async (evento) => {
+  const botao = evento.target.closest("[data-casa-remover]");
+  if (!botao) return;
+  botao.disabled = true;
+  try {
+    await api("/api/casa/registro-remover", {method: "POST", json: {id: botao.dataset.casaRemover}});
+    await carregarInventarioCasa();
+  } catch (erro) {
+    botao.disabled = false;
+    $("#casa-conexao-status").textContent = "⚠️ " + erro.message;
+  }
+});
 async function carregarAparelhosCasa() {
   const painel = $("#casa-aparelhos");
   painel.innerHTML = '<p class="sutil">Consultando aparelhos no Home Assistant…</p>';
@@ -1371,6 +1403,7 @@ async function carregarAparelhosCasa() {
     painel.innerHTML = '<p class="sutil">⚠️ ' + esc(erro.message) +
       '. Conclua o onboarding do Home Assistant e salve um token de acesso válido.</p>';
   }
+  await carregarInventarioCasa();
 }
 $("#casa-aparelhos").addEventListener("click", async (evento) => {
   const botao = evento.target.closest("[data-casa-controle]");
