@@ -39,7 +39,21 @@ test("controles Kiwix iniciam e encerram leitor local", async ({ page }) => {
   await page.locator("#zim-arquivo").selectOption("wikipedia_pt.zim");
   await page.locator("#zim-abrir").click();
   await expect(page.locator("#zim-kiwix-status")).toHaveText("Leitor em execução");
-  await expect(page.locator("#zim-leitor-link a")).toHaveAttribute("href", "http://127.0.0.1:8767/");
+  const linkLeitor = page.locator("#zim-leitor-link a");
+  await expect(linkLeitor).toHaveAttribute("href", "/api/zim/leitor/");
+  await expect(linkLeitor).toHaveAttribute("target", "_blank");
+  // A nova guia deve permanecer no mesmo host do Optimus, nunca no localhost
+  // do dispositivo que está lendo (que seria o celular no acesso remoto).
+  await page.context().route("**/api/zim/leitor/", (route) => route.fulfill({
+    status: 200, contentType: "text/html; charset=utf-8",
+    body: "<!doctype html><html><body>Leitor ZIM</body></html>"
+  }));
+  const popupPromise = page.waitForEvent("popup");
+  await linkLeitor.click();
+  const popup = await popupPromise;
+  await expect(popup).toHaveURL(/\/api\/zim\/leitor\/$/);
+  await expect(popup.locator("body")).toContainText("Leitor ZIM");
+  await popup.close();
   await page.locator("#zim-fechar").click();
   await expect(page.locator("#zim-kiwix-status")).toHaveText("Kiwix gerenciado");
   expect(erros).toEqual([]);
