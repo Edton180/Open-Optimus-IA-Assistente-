@@ -147,38 +147,62 @@ def _pip(*argumentos: str) -> str:
     return saida
 
 
-def instalar(ident: str, progresso=None) -> dict:
+class _InstalacaoCancelada(Exception):
+    """Sinal interno para interromper a instalação em lote sem registrar falha."""
+
+
+def instalar(ident: str, progresso=None, cancelado=None) -> dict:
+    def verificar_cancelamento():
+        if cancelado and cancelado():
+            raise _InstalacaoCancelada("Instalação cancelada pelo usuário.")
+
+    def atualizar(pct, msg):
+        verificar_cancelamento()
+        if progresso:
+            progresso(pct, msg)
+
+    verificar_cancelamento()
     item = obter(ident)
     if item.forma == "pacote":
-        (progresso or (lambda *a: None))(0.05, f"Instalando {item.nome} (pip)…")
+        atualizar(0.05, f"Instalando {item.nome} (pip)…")
         _pip("install", item.pacote)
+        verificar_cancelamento()
         importlib.invalidate_caches()
         # Pré-carrega os pesos agora, não apenas na primeira utilização do recurso.
         if item.id in {"omnivoice", "chatterbox", "faster-whisper"}:
-            from huggingface_hub import snapshot_download
+            try:
+                from huggingface_hub import snapshot_download
+            except ImportError:
+                _pip("install", "huggingface_hub>=0.24")
+                from huggingface_hub import snapshot_download
 
+            verificar_cancelamento()
             repositorios = {
                 "omnivoice": "k2-fsa/OmniVoice",
                 "chatterbox": "ResembleAI/chatterbox",
                 "faster-whisper": "Systran/faster-whisper-small",
             }
             snapshot_download(repo_id=repositorios[item.id])
+            verificar_cancelamento()
         elif item.id == "demucs":
             # O Demucs baixa o checkpoint oficial e o deixa no cache do torch hub.
             from demucs.pretrained import get_model
 
+            verificar_cancelamento()
             get_model(name="htdemucs")
+            verificar_cancelamento()
         elif item.id == "kokoro":
             from optimus.voice import tts
 
-            if not tts.baixar_kokoro(progresso):
+            if not tts.baixar_kokoro(atualizar):
                 raise ErroEstudio("Não foi possível baixar os pesos do Kokoro.")
         if item.id in {"omnivoice", "chatterbox", "faster-whisper", "demucs", "kokoro"}:
             marcador = _marcador(item.id)
             marcador.parent.mkdir(parents=True, exist_ok=True)
             marcador.write_text("ok", encoding="utf-8")
     elif item.baixar:
-        item.baixar(progresso)
+        item.baixar(atualizar if progresso or cancelado else None)
+        verificar_cancelamento()
     return item.para_dict()
 
 
@@ -236,6 +260,10 @@ def instalar_todos(progresso=None, ids: list[str] | None = None, cancelado=None)
                                 "detalhes": resultado})
         except _InstalacaoCancelada:
             return retornar_cancelado()
+        except _InstalacaoCancelada:
+            return {"total": len(resultados), "instalados": sum(
+                r["estado"] in {"instalado", "já instalado"} for r in resultados),
+                "cancelado": True, "resultados": resultados}
         except Exception as erro:  # cada falha fica registrada; os outros modelos continuam
             resultados.append({"id": item.id, "nome": item.nome, "estado": "falhou",
                                 "erro": f"{type(erro).__name__}: {erro}"})
