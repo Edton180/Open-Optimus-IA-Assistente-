@@ -1,6 +1,9 @@
 const { test, expect } = require("@playwright/test");
 
 test("painel Casa apresenta estado real e todos os controles chamam a API", async ({ page }) => {
+  const errosPagina = [];
+  page.on("pageerror", (erro) => errosPagina.push(erro.message));
+  page.on("console", (msg) => { if (msg.type() === "error") errosPagina.push(msg.text()); });
   await page.goto("/");
   await page.locator('[data-tela="casa"]').click();
   await expect(page.getByRole("heading", { name: "Casa inteligente" })).toBeVisible();
@@ -23,6 +26,7 @@ test("painel Casa apresenta estado real e todos os controles chamam a API", asyn
     "instalar", "iniciar", "parar", "reiniciar", "atualizar", "backup", "desinstalar"
   ]);
   await expect(page.locator("#ha-gerenciado-status")).toContainText("Operação simulada");
+  expect(errosPagina).toEqual([]);
 });
 
 test("tela Casa explica os requisitos e limites do provisionamento", async ({ page }) => {
