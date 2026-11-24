@@ -301,6 +301,7 @@ $("#zim-busca-form")?.addEventListener("submit", async (evento) => {
     lista.innerHTML = itens.length ? itens.map((r) =>
       '<li><div><b>' + esc(r.titulo || "Resultado") + '</b><small class="sutil"> ' +
       esc(r.tipo_fonte || "Fonte") + ' · ' + esc(r.citacao || r.arquivo_zim || "") +
+      (r.hash_trecho ? ' · SHA-256 ' + esc(r.hash_trecho.slice(0, 12)) : '') +
       '</small><p>' + esc(r.trecho || "Trecho não fornecido pelo índice.") + '</p>' +
       (r.url && r.url.startsWith("http://127.0.0.1") ? '<a href="' + esc(r.url) + '" target="_blank" rel="noopener noreferrer">Abrir fonte local ↗</a>' : "") +
       '</div></li>'
