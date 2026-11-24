@@ -67,3 +67,17 @@ def test_pesquisa_diz_quando_nao_ha_resultados_relevantes(monkeypatch):
     resultado = internet.pesquisar_web(ContextoFake(), "cotação das ações BRB")
     assert "erro" in resultado
     assert "relação suficiente" in resultado["erro"]
+
+
+def test_bing_redireciona_para_url_real():
+    import base64
+
+    destino = "https://ri.brb.com.br/acoes"
+    codificado = base64.urlsafe_b64encode(destino.encode()).decode().rstrip("=")
+    redirecionamento = "https://www.bing.com/ck/a?u=a1" + codificado
+    pagina = (
+        '<li class="b_algo"><h2><a href="' + redirecionamento +
+        '">BRB Banco de Brasília</a></h2><p>Ações BSLI3 e BSLI4</p></li>'
+    )
+    itens = internet.ler_bing_html(pagina)
+    assert itens[0]["link"] == destino
