@@ -31,9 +31,20 @@ test("Casa inteligente usa API real do painel sem chamar instaladores no CI", as
   await page.route("**/api/casa/aparelhos", async (route) => route.fulfill({
     json: { ok: true, total: 2, aparelhos: [
       { entity_id: "light.sala", dominio: "light", nome: "Luz da sala", estado: "on", unidade: "" },
-      { entity_id: "switch.tomada", dominio: "switch", nome: "Tomada", estado: "off", unidade: "" }
+      { entity_id: "switch.tomada", dominio: "switch", nome: "Tomada", estado: "off", unidade: "" },
+      { entity_id: "sensor.temperatura", dominio: "sensor", nome: "Temperatura", estado: "25", unidade: "°C", controlavel: false }
     ]}
   }));
+  await page.route("**/api/casa/registro", async (route) => route.fulfill({
+    json: {ok:true, dispositivos:[
+      {id:"ha:light.sala", nome:"Luz da sala", integracao:"home_assistant",
+       comodo:"Sala", disponibilidade:"online", confianca_estado:"confirmed"},
+      {id:"ha:sensor.temperatura", nome:"Temperatura", integracao:"home_assistant",
+       comodo:"", disponibilidade:"online", confianca_estado:"confirmed"}
+    ]}
+  }));
+  await page.route("**/api/casa/registro-remover", async (route) =>
+    route.fulfill({json:{ok:true}}));
   await page.route("**/api/casa/controle", async (route) => {
     const body = route.request().postDataJSON();
     acoes.push(body.servico + ":" + body.entity_id);
@@ -58,6 +69,9 @@ test("Casa inteligente usa API real do painel sem chamar instaladores no CI", as
 
   await page.locator("#casa-atualizar").click();
   await expect(page.locator("#casa-aparelhos")).toContainText("Luz da sala");
+  await expect(page.locator("#casa-aparelhos")).toContainText("Temperatura");
+  await expect(page.locator('[data-casa-controle="sensor.temperatura"]')).toHaveCount(0);
+  await expect(page.locator("#casa-inventario")).toContainText("Luz da sala");
   await page.locator('[data-casa-controle="light.sala"]').click();
   await expect.poll(() => acoes).toContain("turn_off:light.sala");
 
