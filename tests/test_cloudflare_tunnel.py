@@ -39,3 +39,32 @@ def test_instalador_com_erro_e_reportado_sem_excecao():
                                   tunnel.TunnelError("digest inválido")))
     assert resposta["erro"] == "digest inválido"
     assert resposta["ligado"] is False
+
+
+
+def test_estado_nao_exibe_url_antes_da_verificacao_publica(monkeypatch):
+    class Processo:
+        def poll(self):
+            return None
+
+    monkeypatch.setattr(tunnel, "_PROCESS", Processo())
+    monkeypatch.setattr(tunnel, "_URL", "https://exemplo.trycloudflare.com")
+    monkeypatch.setattr(tunnel, "_VERIFICADO", False)
+    estado = tunnel.estado()
+    assert estado["ligado"] is False
+    assert estado["iniciando"] is True
+    assert estado["url"] == ""
+
+
+def test_estado_so_confirma_depois_de_https_publico_verificado(monkeypatch):
+    class Processo:
+        def poll(self):
+            return None
+
+    monkeypatch.setattr(tunnel, "_PROCESS", Processo())
+    monkeypatch.setattr(tunnel, "_URL", "https://exemplo.trycloudflare.com")
+    monkeypatch.setattr(tunnel, "_VERIFICADO", True)
+    estado = tunnel.estado()
+    assert estado["ligado"] is True
+    assert estado["iniciando"] is False
+    assert estado["url"] == "https://exemplo.trycloudflare.com"
