@@ -32,6 +32,7 @@ uma operação concluída.
 
 - "Junte contrato.pdf e anexo.pdf em um arquivo."
 - "Converta estas fotos JPG em um PDF A4."
+- "Digitalize estas fotos em preto e branco e gere um PDF."
 - "Extraia as páginas 2, 4 e 7 e salve como recortes.pdf."
 - "Converta o PDF para imagens JPG e gere um ZIP."
 - "Corte 20 pontos de cada margem das páginas 1 a 3."
