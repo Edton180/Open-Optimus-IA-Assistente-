@@ -67,6 +67,8 @@ def laboratorio_dados(ctx, operacao: str, texto: str):
             if len(descomprimido) > 8 * 1024 * 1024 or descompactador.unconsumed_tail:
                 return {"erro": "O conteúdo descomprimido excede 8 MiB."}
             descomprimido += descompactador.flush()
+            if not descompactador.eof:
+                raise ValueError("Fluxo gzip incompleto ou truncado.")
             if len(descomprimido) > 8 * 1024 * 1024:
                 return {"erro": "O conteúdo descomprimido excede 8 MiB."}
             resultado = descomprimido.decode("utf-8")

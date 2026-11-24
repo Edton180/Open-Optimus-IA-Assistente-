@@ -452,6 +452,8 @@ def test_rota_modulos_e_tela_da_central(monkeypatch):
         assert 'id="tela-modulos"' in pagina
         dados = _req(base + "/api/modulos")
         assert dados["modulos"] == esperado
+        recursos = _req(base + "/api/modulos/recursos")
+        assert recursos["recursos"]["memoria_total_bytes"] > 0
     finally:
         httpd.shutdown()
         httpd.server_close()

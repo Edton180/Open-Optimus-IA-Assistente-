@@ -161,7 +161,10 @@ async function carregarModulos() {
   if (!estadoEl || !grade) return;
   estadoEl.textContent = "Verificando executáveis e serviços locais…";
   try {
-    const dados = await api("/api/modulos");
+    const [dados, telemetria] = await Promise.all([
+      api("/api/modulos"), api("/api/modulos/recursos")
+    ]);
+    desenharRecursosModulos(telemetria.recursos || {});
     const itens = dados.modulos || [];
     grade.innerHTML = itens.map((m) => {
       const status = m.estado === "disponivel" ? "Disponível" :
@@ -174,6 +177,30 @@ async function carregarModulos() {
   } catch (erro) {
     estadoEl.textContent = "Não foi possível consultar o inventário: " + erro.message;
   }
+}
+function formatarBytes(valor) {
+  if (valor == null) return "Indisponível";
+  const unidades = ["B", "KB", "MB", "GB", "TB"];
+  let n = Number(valor), i = 0;
+  while (n >= 1024 && i < unidades.length - 1) { n /= 1024; i++; }
+  return n.toLocaleString("pt-BR", { maximumFractionDigits: 1 }) + " " + unidades[i];
+}
+function desenharRecursosModulos(r) {
+  const alvo = $("#modulos-recursos");
+  if (!alvo) return;
+  const memoriaUsada = Math.max(0, (r.memoria_total_bytes || 0) - (r.memoria_disponivel_bytes || 0));
+  const discoUsado = Math.max(0, (r.disco_total_bytes || 0) - (r.disco_livre_bytes || 0));
+  const cards = [
+    ["Processador", (r.cpu_percentual ?? 0) + "% em uso", (r.cpu_nucleos_fisicos ?? "—") + " núcleos físicos · " + (r.cpu_nucleos_logicos ?? "—") + " lógicos"],
+    ["Memória RAM", formatarBytes(memoriaUsada) + " / " + formatarBytes(r.memoria_total_bytes), (r.memoria_percentual ?? "—") + "% utilizada"],
+    ["Armazenamento", formatarBytes(discoUsado) + " / " + formatarBytes(r.disco_total_bytes), (r.disco_percentual ?? "—") + "% utilizado"],
+    ["Sistema", (r.processos ?? "—") + " processos", "Ligado há " + Math.floor((r.uptime_segundos || 0) / 3600) + " horas"]
+  ];
+  alvo.innerHTML = cards.map(([titulo, valor, detalhe]) =>
+    '<article class="cartao"><b>' + esc(titulo) + '</b><h3>' + esc(valor) + '</h3><small class="sutil">' + esc(detalhe) + '</small></article>'
+  ).join("");
+  const atualizado = $("#modulos-recursos-atualizado");
+  if (atualizado) atualizado.textContent = "Atualizado às " + new Date().toLocaleTimeString("pt-BR");
 }
 $("#modulos-atualizar")?.addEventListener("click", carregarModulos);
 

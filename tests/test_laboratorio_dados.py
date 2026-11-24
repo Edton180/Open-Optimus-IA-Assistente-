@@ -31,3 +31,10 @@ def test_rejects_invalid_base64_and_unknown_operation():
 
 def test_input_limit():
     assert "erro" in executar("sha256", "x" * (2 * 1024 * 1024 + 1))
+
+
+def test_gzip_truncado_e_rejeitado():
+    import base64
+    import gzip
+    conteudo = base64.b64encode(gzip.compress(b"conteudo de teste")[:-5]).decode("ascii")
+    assert "erro" in executar("gzip_descomprimir", conteudo)

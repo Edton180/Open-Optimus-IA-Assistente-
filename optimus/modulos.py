@@ -66,3 +66,32 @@ def inventario() -> list[dict]:
         _servico("Docker", "Runtime opcional para aplicativos e serviços isolados.",
                  ("docker",), "127.0.0.1", 2375, processos=("dockerd", "com.docker.backend")),
     ]
+
+
+
+def recursos() -> dict:
+    """Métricas locais resumidas; não coleta nomes de usuário nem caminhos pessoais."""
+    memoria = psutil.virtual_memory()
+    try:
+        disco = psutil.disk_usage(str(__import__("pathlib").Path.home().anchor or "/"))
+    except (OSError, ValueError):
+        disco = None
+    try:
+        cpu = psutil.cpu_percent(interval=None)
+        frequencia = psutil.cpu_freq()
+    except (psutil.Error, OSError):
+        cpu, frequencia = 0.0, None
+    return {
+        "cpu_percentual": round(float(cpu), 1),
+        "cpu_nucleos_logicos": psutil.cpu_count(logical=True) or 0,
+        "cpu_nucleos_fisicos": psutil.cpu_count(logical=False) or 0,
+        "memoria_total_bytes": int(memoria.total),
+        "memoria_disponivel_bytes": int(memoria.available),
+        "memoria_percentual": round(float(memoria.percent), 1),
+        "disco_total_bytes": int(disco.total) if disco else None,
+        "disco_livre_bytes": int(disco.free) if disco else None,
+        "disco_percentual": round(float(disco.percent), 1) if disco else None,
+        "processos": len(psutil.pids()),
+        "uptime_segundos": max(0, int(__import__("time").time() - psutil.boot_time())),
+        "cpu_frequencia_mhz": round(float(frequencia.current), 0) if frequencia else None,
+    }
