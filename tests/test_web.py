@@ -35,8 +35,15 @@ def test_fluxo_de_conversa_pela_interface():
     httpd, base = _subir()
     try:
         assert "OPTIMUS" in urllib.request.urlopen(base + "/").read().decode()
+        # O status do motor é consultado em segundo plano para a API não bloquear.
         estado = _req(base + "/api/estado")
-        assert estado["motor"]["disponivel"] and estado["perfil"]["modelo"]
+        assert estado["perfil"]["modelo"]
+        for _ in range(30):
+            if estado["motor"]["disponivel"]:
+                break
+            time.sleep(0.1)
+            estado = _req(base + "/api/estado")
+        assert estado["motor"]["disponivel"]
         tarefa = _req(base + "/api/enviar", {"texto": "que dia é hoje"})["tarefa"]
         for _ in range(50):
             dados = _req(f"{base}/api/tarefa/{tarefa}")
