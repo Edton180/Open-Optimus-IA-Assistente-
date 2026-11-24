@@ -66,11 +66,18 @@ def test_confirmacao_pela_interface(tmp_path):
     httpd, base = _subir()
     try:
         tarefa = _req(base + "/api/enviar", {"texto": f"apague o arquivo {alvo}"})["tarefa"]
-        for _ in range(50):
+        # No Windows, a primeira inicialização do agente/ferramentas pode levar
+        # mais que 5 s. Aguarda até 30 s e mantém o estado final no erro para
+        # diferenciar atraso de execução de uma falha real no fluxo.
+        for _ in range(300):
             dados = _req(f"{base}/api/tarefa/{tarefa}")
-            if dados["pendente"]:
+            if dados["pendente"] or dados["terminou"]:
                 break
             time.sleep(0.1)
+        assert dados["pendente"] is not None, (
+            f"A confirmação não foi publicada; estado={dados['estado']}, "
+            f"eventos={dados['eventos']}"
+        )
         assert dados["pendente"]["nome"] == "apagar"
         _req(base + "/api/confirmar", {"tarefa": tarefa, "aprovar": True})
         for _ in range(50):
