@@ -342,12 +342,19 @@ class Falante:
     def _elevenlabs_mp3(self, texto: str) -> bytes:
         import httpx
 
+        # Edton Braz: locução educativa moderna, clara e energética sem soar publicitária.
+        if self.voz.id == "edton-braz":
+            ajustes_voz = {"stability": 0.36, "similarity_boost": 0.82,
+                           "style": 0.68, "use_speaker_boost": True,
+                           "speed": max(0.9, min(1.2, self.velocidade * 1.08))}
+        else:
+            ajustes_voz = {"stability": 0.5, "similarity_boost": 0.8,
+                           "speed": max(0.7, min(1.2, self.velocidade))}
         resposta = httpx.post(
             URL_ELEVENLABS + self._id_elevenlabs(), params={"output_format": "mp3_44100_128"},
             headers={"xi-api-key": self.chave_elevenlabs, "Content-Type": "application/json"},
             json={"text": texto, "model_id": "eleven_multilingual_v2",
-                  "voice_settings": {"stability": 0.5, "similarity_boost": 0.8,
-                                     "speed": max(0.7, min(1.2, self.velocidade))}},
+                  "voice_settings": ajustes_voz},
             timeout=60)
         resposta.raise_for_status()
         return resposta.content
