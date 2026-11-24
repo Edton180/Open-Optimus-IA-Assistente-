@@ -436,3 +436,21 @@ body.modo-hud #lateral { background: rgba(4,11,20,.96); border-right-color: rgba
 .est-midia video { width: min(100%, 720px); border-radius: 10px; }
 .est-player { width: 100%; }
 #tela-estudio .erro { color: var(--vermelho); }
+
+
+/* Suite de documentos PDF */
+.pdf-upload { margin-bottom: 18px; }
+.pdf-parametros { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); margin-top: 14px; }
+.pdf-parametros label { display: grid; gap: 6px; color: var(--sutil); font-size: 13px; }
+.pdf-arquivos { display: grid; gap: 8px; margin-top: 12px; }
+.pdf-arquivo { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid var(--borda); border-radius: 10px; background: var(--fundo2); }
+.pdf-arquivo span { flex: 1; overflow-wrap: anywhere; }
+.pdf-arquivo small { color: var(--sutil); }
+.pdf-resultado { display: grid; gap: 10px; overflow-wrap: anywhere; }
+.pdf-resultado .sucesso { color: var(--verde); font-weight: 600; }
+.pdf-categorias { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.pdf-categorias > div { display: grid; gap: 5px; padding: 12px; border: 1px solid var(--borda); border-radius: 10px; background: var(--fundo2); }
+.pdf-categorias span { color: var(--sutil); font-size: 13px; }
+#tela-pdf .cartao { margin-bottom: 16px; }
+#tela-pdf input[type="file"] { min-width: 0; max-width: 100%; }
+@media (max-width: 650px) { .pdf-arquivo { flex-wrap: wrap; } .pdf-arquivo span { min-width: 60%; } }
