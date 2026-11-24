@@ -17,6 +17,7 @@ import sys
 import time
 from html.parser import HTMLParser
 from pathlib import Path
+from urllib.parse import urlsplit
 from typing import Any
 
 MAX_ARTIGO = 2 * 1024 * 1024
@@ -161,6 +162,34 @@ def _modelo_auto(url: str, configurado: str = "") -> str:
     return ""
 
 
+def preparar_embedding(url: str, modelo: str = "") -> dict[str, Any]:
+    """Garante um modelo leve local após ação explícita de indexação do usuário."""
+    existente = _modelo_auto(url, modelo)
+    if existente:
+        return {"instalado": True, "modelo": existente, "origem": "existente"}
+    if not url or urlsplit(url).hostname not in {"127.0.0.1", "localhost", "::1"}:
+        return {"instalado": False, "erro": "Ollama local indisponível; a indexação continuará em modo lexical."}
+    try:
+        import httpx
+        with httpx.stream(
+            "POST", url.rstrip("/") + "/api/pull",
+            json={"model": "all-minilm", "stream": True},
+            timeout=httpx.Timeout(600, connect=5),
+        ) as resposta:
+            if resposta.status_code != 200:
+                return {"instalado": False,
+                        "erro": f"Ollama não conseguiu baixar all-minilm (HTTP {resposta.status_code})."}
+            for linha in resposta.iter_lines():
+                if not linha:
+                    continue
+                dados = json.loads(linha)
+                if dados.get("error"):
+                    return {"instalado": False, "erro": str(dados["error"])[:500]}
+        return {"instalado": True, "modelo": "all-minilm", "origem": "baixado"}
+    except Exception as erro:
+        return {"instalado": False, "erro": f"Falha ao preparar modelo de embeddings: {erro}"}
+
+
 def _embeddings(url: str, modelo: str, textos: list[str]) -> list[list[float] | None]:
     """Gera embeddings em lotes pequenos para reduzir round-trips e pico de RAM."""
     if not url or not modelo or not textos:
@@ -268,8 +297,15 @@ def indexar(arquivos: list[dict] | None = None, limite: int = 150,
     lista = arquivos if arquivos is not None else zim.listar_zim().get("arquivos", [])
     limite = max(1, min(int(limite), 1000))
     modelo_embedding = _modelo_auto(url_motor, modelo_embedding)
+    preparo_embedding = None
+    if not modelo_embedding and url_motor:
+        preparo_embedding = preparar_embedding(url_motor)
+        if preparo_embedding.get("instalado"):
+            modelo_embedding = str(preparo_embedding.get("modelo") or "")
     total_novos = total_trechos = processados = vetores_atualizados = 0
     erros: list[dict] = []
+    if preparo_embedding and not preparo_embedding.get("instalado"):
+        erros.append({"arquivo": "embeddings", "erro": preparo_embedding.get("erro", "")})
     con = _db()
     try:
         for item in lista[:20]:
@@ -377,7 +413,8 @@ def indexar(arquivos: list[dict] | None = None, limite: int = 150,
     return {"indexados": total_novos, "trechos": total_trechos,
             "embeddings_atualizados": vetores_atualizados,
             "artigos_processados": processados, "limite": limite,
-            "modelo_embedding": modelo_embedding or None, "erros": erros, "estado": status()}
+            "modelo_embedding": modelo_embedding or None,
+            "preparo_embedding": preparo_embedding, "erros": erros, "estado": status()}
 
 
 def _vetor_norma(v: list[float]) -> float:
