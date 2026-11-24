@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from optimus.smart_home import home_assistant as ha
 
 
