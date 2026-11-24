@@ -606,3 +606,58 @@ def pdf_editar(ctx, arquivo: str, tipo: str, conteudo: str = "", x: int = 72, y:
                 "observacao": "Este editor insere elementos sobre a página; não reescreve o texto original nem oferece editor visual drag-and-drop."}
     except Exception as exc:
         return {"erro": f"Falha ao editar PDF: {exc}"}
+
+
+@ferramenta(
+    "pdf_assinar_digital",
+    "Assina criptograficamente um PDF usando certificado PKCS#12 (.p12/.pfx) e chave privada local.",
+    {"arquivo": texto("PDF de origem"), "certificado": texto("Caminho do certificado .p12 ou .pfx"),
+     "senha": texto("Senha do certificado"), "campo": texto("Nome do campo de assinatura"),
+     "destino": texto("PDF assinado")},
+    grupo="pdf", risco=MODERADO, obrigatorios=["arquivo", "certificado", "senha"],
+)
+def pdf_assinar_digital(ctx, arquivo: str, certificado: str, senha: str,
+                        campo: str = "AssinaturaOptimus", destino: str = ""):
+    try:
+        from pyhanko.pdf_utils.incremental_writer import IncrementalPdfFileWriter
+        from pyhanko.sign import signers
+    except ImportError:
+        return {"erro": 'Assinatura digital requer pyHanko. Instale: pip install "optimus-assistente[pdf]"'}
+    origem, pfx = _path(ctx, arquivo), _path(ctx, certificado)
+    if not origem.is_file():
+        return {"erro": f"PDF não encontrado: {origem}"}
+    if not pfx.is_file() or pfx.suffix.lower() not in (".p12", ".pfx"):
+        return {"erro": "Informe um certificado PKCS#12 .p12 ou .pfx válido."}
+    if not senha:
+        return {"erro": "A senha do certificado é obrigatória."}
+    out = _path(ctx, destino or f"{origem.stem}_assinado.pdf")
+    temp = out.with_name(out.name + ".tmp")
+    try:
+        signer = signers.SimpleSigner.load_pkcs12(str(pfx), passphrase=senha.encode("utf-8"))
+        if signer is None:
+            return {"erro": "Não foi possível carregar a chave e o certificado. Confira arquivo e senha."}
+        out.parent.mkdir(parents=True, exist_ok=True)
+        with origem.open("rb") as entrada, temp.open("wb") as saida:
+            writer = IncrementalPdfFileWriter(entrada)
+            assinatura = signers.PdfSigner(
+                signers.PdfSignatureMetadata(field_name=(campo or "AssinaturaOptimus")[:80]),
+                signer=signer,
+            )
+            assinatura.sign_pdf(writer, output=saida)
+        from pypdf import PdfReader
+        validacao = PdfReader(str(temp), strict=True)
+        campos = validacao.get_fields() or {}
+        assinados = [nome for nome, valor in campos.items()
+                     if str(valor.get("/FT", "")) == "/Sig" and valor.get("/V")]
+        if not assinados:
+            temp.unlink(missing_ok=True)
+            return {"erro": "A saída não contém campo de assinatura preenchido; original preservado."}
+        temp.replace(out)
+        return {
+            "mensagem": "Assinatura criptográfica incorporada ao PDF.",
+            "destino": str(out), "campos_assinados": assinados,
+            "observacao": "A integridade criptográfica foi conferida estruturalmente. A confiança da cadeia, revogação e validade jurídica dependem da autoridade certificadora e da validação do destinatário. Não é garantia automática de conformidade ICP-Brasil."
+        }
+    except Exception as exc:
+        temp.unlink(missing_ok=True)
+        return {"erro": f"Falha na assinatura digital: {exc}. O PDF original foi preservado."}
