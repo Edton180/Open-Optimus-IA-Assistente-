@@ -72,7 +72,7 @@ test("instalador e busca unificada têm ações reais e citações", async ({ pa
     await route.fulfill({ json: { indexados: 1, artigos_processados: 1, trechos: 2,
       embeddings_atualizados: 0, erros: [], estado: { artigos_indexados: 1, trechos: 2 } } });
   });
-  await page.route("**/api/zim/rag?**", async (route) => route.fulfill({ json: {
+  await page.route("**/api/zim/rag**", async (route) => route.fulfill({ json: {
     resultados: [{ titulo: "Segurança", trecho: "Trecho do artigo", arquivo: "wikipedia_pt.zim",
       artigo: "Seguranca", citacao: "Segurança — wikipedia_pt.zim#Seguranca",
       tipo_fonte: "ZIM", url: "zim://wikipedia_pt.zim/Seguranca" }]
