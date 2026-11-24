@@ -580,7 +580,7 @@ class Manipulador(BaseHTTPRequestHandler):
                 Manipulador.senha = senha
                 if _servidor_celular is not None:
                     _servidor_celular.RequestHandlerClass.senha = senha
-                resultado = iniciar_tunel(self.server.server_address[1], senha)
+                resultado = iniciar_tunel(_porta_principal or self.server.server_address[1], senha)
                 if resultado.get("erro"):
                     return self._json(resultado, 503)
             url_externa = estado_tunel().get("url", "")
@@ -801,6 +801,7 @@ _servidor_celular: ThreadingHTTPServer | None = None
 _trava_celular = threading.Lock()
 _trava_tunel = threading.RLock()
 _processo_tunel: subprocess.Popen | None = None
+_porta_principal: int | None = None
 _url_tunel = ""
 _erro_tunel = ""
 
@@ -916,6 +917,7 @@ def desligar_celular() -> None:
 
 def iniciar(host: str = "127.0.0.1", porta: int = 8765, abrir_navegador: bool = True,
             optimus: Optimus | None = None, tunel: bool = False) -> None:
+    global _porta_principal
     optimus = optimus or Optimus()
     senha = optimus.config.get("web", "senha") or ""
     if tunel and len(senha) < 12:
@@ -929,6 +931,7 @@ def iniciar(host: str = "127.0.0.1", porta: int = 8765, abrir_navegador: bool = 
     # A senha protege o acesso de outros aparelhos; só neste PC (127.0.0.1) não é pedida.
     Manipulador.senha = senha if (tunel or host not in ("127.0.0.1", "localhost")) else ""
     servidor = ThreadingHTTPServer((host, porta), Manipulador)
+    _porta_principal = servidor.server_address[1]
     servidor.daemon_threads = True
     if tunel:
         resultado = iniciar_tunel(servidor.server_address[1], senha)
@@ -971,6 +974,7 @@ def iniciar(host: str = "127.0.0.1", porta: int = 8765, abrir_navegador: bool = 
     finally:
         parar_tunel()
         servidor.server_close()
+        _porta_principal = None
 
 
 __all__ = ["iniciar", "cfg", "iniciar_tunel", "parar_tunel", "estado_tunel"]
