@@ -167,7 +167,12 @@ def _pontuar_resultado(item: dict, variantes: list[str]) -> float:
             continue
         no_titulo = len(titulo & expandidos)
         no_texto = len(trecho & expandidos)
-        cobertura = len((titulo | trecho) & expandidos) / len(expandidos)
+        correspondencias = (titulo | trecho) & expandidos
+        # Consultas com várias entidades/termos não podem ser aprovadas por uma palavra
+        # genérica isolada (ex.: "internet" numa pesquisa sobre ações de um banco).
+        if len(expandidos) >= 3 and len(correspondencias) < 2:
+            continue
+        cobertura = len(correspondencias) / len(expandidos)
         # Título pesa mais que snippet: coincidência no corpo não mascara outro assunto.
         score = min(1.0, cobertura * 0.65 + min(no_titulo, 3) * 0.12
                     + min(no_texto, 3) * 0.025)
