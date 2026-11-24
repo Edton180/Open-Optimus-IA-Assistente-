@@ -539,6 +539,8 @@ def test_home_assistant_gerenciado_rota_e_api_dispositivos(tmp_path, monkeypatch
     httpd, base = _subir()
     try:
         estado = server.Manipulador.estado
+        from optimus.smart_home.registry import RegistroDispositivos
+        estado.optimus.registro_casa = RegistroDispositivos(tmp_path / "dispositivos.json")
         # A rota do gerenciador deve existir mesmo quando Docker ainda não está instalado.
         resposta = _req(base + "/api/casa/gerenciado")
         assert "runtime" in resposta and "container" in resposta
