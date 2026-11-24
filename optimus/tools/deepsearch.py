@@ -24,6 +24,9 @@ _STOP = {
 def _dominio(url: str) -> str:
     try:
         host = (urlsplit(url).hostname or "").lower().split(".")
+        if len(host) >= 3 and host[-1] == "br" and host[-2] in {
+                "com", "gov", "edu", "org", "net", "mil"}:
+            return ".".join(host[-3:])
         return ".".join(host[-2:]) if len(host) >= 2 else ".".join(host)
     except ValueError:
         return ""
@@ -112,7 +115,7 @@ def deepsearch(ctx, consulta: str, max_fontes: int = 8, abrir_paginas: bool = Tr
     with ThreadPoolExecutor(max_workers=min(3, len(planos))) as pool:
         futuros = {pool.submit(pesquisar_web, ctx, q, min(10, limite)): (papel, q)
                    for papel, q in planos}
-        for futuro in as_completed(futuros, timeout=35):
+        for futuro in as_completed(futuros):
             papel, q = futuros[futuro]
             try:
                 bruto = futuro.result()
@@ -167,7 +170,7 @@ def deepsearch(ctx, consulta: str, max_fontes: int = 8, abrir_paginas: bool = Tr
         selecionadas = fontes[:min(5, len(fontes))]
         with ThreadPoolExecutor(max_workers=4) as pool:
             futuros = {pool.submit(ler_pagina, ctx, f["url"]): f for f in selecionadas}
-            for futuro in as_completed(futuros, timeout=28):
+            for futuro in as_completed(futuros):
                 fonte = futuros[futuro]
                 try:
                     pagina = futuro.result()
