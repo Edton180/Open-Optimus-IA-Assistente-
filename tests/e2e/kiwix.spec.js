@@ -21,14 +21,14 @@ test("controles Kiwix iniciam e encerram leitor local", async ({ page }) => {
   await page.route("**/api/zim/iniciar", async (route) => {
     executando = true;
     await route.fulfill({ json: {
-      instalado: true, executando: true, arquivo: "wikipedia_pt.zim",
+      instalado: true, gerenciado: true, versao: "3.8.2", executando: true, arquivo: "wikipedia_pt.zim",
       url: "http://127.0.0.1:8767/", host: "127.0.0.1", porta: 8767
     }});
   });
   await page.route("**/api/zim/parar", async (route) => {
     executando = false;
     await route.fulfill({ json: {
-      instalado: true, executando: false, arquivo: null, url: null,
+      instalado: true, gerenciado: true, versao: "3.8.2", executando: false, arquivo: null, url: null,
       host: "127.0.0.1", porta: 8767
     }});
   });
