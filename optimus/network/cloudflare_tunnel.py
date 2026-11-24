@@ -147,7 +147,7 @@ def _validar_publicacao(processo: subprocess.Popen, prazo: float = 90.0) -> None
             _ERROR = "O túnel iniciou, mas o endereço público não respondeu à verificação HTTPS."
 
 
-def iniciar(porta: int, senha: str, *, instalador: Callable[[], str] = garantir_instalado,
+def iniciar(porta: int, senha: str, *, instalador: Callable[[], str] | None = None,
             espera: float = 20.0) -> dict[str, str | bool]:
     """Inicia/reutiliza um Quick Tunnel apontando somente para localhost."""
     global _PROCESS, _URL, _ERROR, _VERIFICADO, _READER
@@ -156,7 +156,7 @@ def iniciar(porta: int, senha: str, *, instalador: Callable[[], str] = garantir_
     if not 1 <= int(porta) <= 65535:
         return {"erro": "Porta local inválida."}
     try:
-        executavel = instalador()
+        executavel = (instalador or garantir_instalado)()
     except Exception as exc:  # erro apresentado no painel
         with _LOCK:
             _ERROR = str(exc)
