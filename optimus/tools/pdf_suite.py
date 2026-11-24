@@ -36,13 +36,15 @@ def _pypdf():
     "Converte imagens JPG, JPEG, PNG, TIFF ou BMP em PDF, uma imagem por página.",
     {"arquivos": texto("Caminhos separados por vírgula ou ponto-e-vírgula"),
      "destino": texto("PDF de saída"), "orientacao": texto("auto|retrato|paisagem"),
-     "margem": numero("Margem em pontos (padrão 24)")},
+     "margem": numero("Margem em pontos (padrão 24)"),
+     "modo": texto("original|documento|preto_branco") },
     grupo="pdf", risco=MODERADO, obrigatorios=["arquivos"],
 )
 def pdf_imagens_para_pdf(ctx, arquivos: str, destino: str = "",
-                         orientacao: str = "auto", margem: int = 24):
+                         orientacao: str = "auto", margem: int = 24,
+                         modo: str = "original"):
     try:
-        from PIL import Image
+        from PIL import Image, ImageOps, ImageEnhance
         from reportlab.lib.pagesizes import A4, landscape, portrait
         from reportlab.lib.utils import ImageReader
         from reportlab.pdfgen import canvas
@@ -52,6 +54,9 @@ def pdf_imagens_para_pdf(ctx, arquivos: str, destino: str = "",
     lista = [x.strip().strip('"') for x in re.split(r"[,;]+", arquivos) if x.strip()]
     if not lista:
         return {"erro": "Informe ao menos uma imagem."}
+    modo = (modo or "original").lower()
+    if modo not in ("original", "documento", "preto_branco"):
+        return {"erro": "Modo deve ser original, documento ou preto_branco."}
     imagens = []
     for nome in lista:
         p = _path(ctx, nome)
@@ -59,7 +64,13 @@ def pdf_imagens_para_pdf(ctx, arquivos: str, destino: str = "",
             return {"erro": f"Imagem não encontrada: {p}"}
         try:
             with Image.open(p) as img:
-                imagens.append(img.convert("RGB").copy())
+                preparada = img.convert("RGB").copy()
+                if modo in ("documento", "preto_branco"):
+                    preparada = ImageOps.autocontrast(preparada.convert("L"))
+                    preparada = ImageEnhance.Sharpness(preparada).enhance(1.5)
+                if modo == "preto_branco":
+                    preparada = preparada.point(lambda pixel: 255 if pixel > 170 else 0)
+                imagens.append(preparada.convert("RGB"))
         except Exception as exc:
             return {"erro": f"Não consegui abrir {p.name}: {exc}"}
     out = _path(ctx, destino or f"{_path(ctx, lista[0]).stem}_imagens.pdf")
@@ -85,7 +96,7 @@ def pdf_imagens_para_pdf(ctx, arquivos: str, destino: str = "",
     except Exception as exc:
         return {"erro": f"Falha ao gerar PDF: {exc}"}
     return {"mensagem": f"Criei PDF com {len(imagens)} imagem(ns).", "destino": str(out),
-            "paginas": len(imagens), "tamanho_bytes": out.stat().st_size}
+            "paginas": len(imagens), "tamanho_bytes": out.stat().st_size, "modo": modo}
 
 
 @ferramenta(
