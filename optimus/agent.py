@@ -434,6 +434,8 @@ class Agente:
                                            ensure_ascii=False)
                 else:
                     resultado = self.executar_chamada(chamada, ferramentas)
+                    if chamada.nome in ("pesquisar_web", "noticias", "pesquisar_x"):
+                        resultado_pesquisa = (chamada.nome, resultado)
                 mensagens.append({"role": "tool", "content": resultado[:8000],
                                   "tool_call_id": chamada.id, "name": chamada.nome})
         final = "Cheguei ao limite de passos para este pedido. Quer que eu continue?"
