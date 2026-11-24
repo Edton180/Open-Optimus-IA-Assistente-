@@ -64,7 +64,7 @@ def _ordem_paginas_parse(s: str, total: int) -> list[int]:
     if not s or not s.strip():
         return list(range(total))
     indices = []
-    for parte in re.split(r"[,\\s]+", s.strip()):
+    for parte in re.split(r"[,\s]+", s.strip()):
         if not parte:
             continue
         try:
@@ -494,7 +494,7 @@ def pdf_comprimir(ctx, arquivo: str, destino: str = ""):
 
 @ferramenta(
     "pdf_marca",
-    "Adiciona marca d'água de texto (metadado; visual plena recomenda reportlab).",
+    "Aplica marca d'água de texto visível em todas as páginas.",
     {"arquivo": texto("PDF"),
      "texto": texto("Texto da marca"),
      "destino": texto("Arquivo de saída")},
@@ -527,7 +527,7 @@ def pdf_marca(ctx, arquivo: str, texto: str, destino: str = ""):
 
 @ferramenta(
     "pdf_numeros",
-    "Prepara numeração de páginas.",
+    "Insere números de página visíveis no rodapé.",
     {"arquivo": texto("PDF"),
      "destino": texto("Arquivo de saída")},
     grupo="pdf", risco=MODERADO, obrigatorios=["arquivo"],
@@ -673,7 +673,7 @@ def pdf_ocr(ctx, arquivo: str, idioma: str = "por", destino: str = ""):
 
 @ferramenta(
     "pdf_converter",
-    "Converte PDF para HTML/txt/csv ou Office→PDF via LibreOffice.",
+    "Converte PDF para HTML, TXT, CSV, DOCX e arquivos Office para PDF via LibreOffice.",
     {"arquivo": texto("Arquivo"),
      "formato": texto("html|txt|docx|csv|pdf"),
      "destino": texto("Saída")},
