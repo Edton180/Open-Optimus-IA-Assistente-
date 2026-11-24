@@ -173,10 +173,10 @@ def test_real_zim_roundtrip_and_article_index(tmp_path, monkeypatch):
     if configurar:
         configurar(True, "eng")
     with creator:
-        creator.add_item(Artigo())
         set_main = getattr(creator, "set_mainpath", None) or getattr(creator, "setMainPath", None)
         if set_main:
             set_main("index")
+        creator.add_item(Artigo())
 
     from optimus import zim
     stat = zim_file.stat()
@@ -185,7 +185,7 @@ def test_real_zim_roundtrip_and_article_index(tmp_path, monkeypatch):
                       "modificado_em": int(stat.st_mtime)}]
     })
     resultado = zim_rag.indexar(limite=100)
-    assert resultado["indexados"] == 1
+    assert resultado["indexados"] == 1, resultado
     encontrados = zim_rag.buscar("equipamento proteção individual", limite=3)
     assert encontrados
     assert encontrados[0]["arquivo"] == "fixture.zim"
