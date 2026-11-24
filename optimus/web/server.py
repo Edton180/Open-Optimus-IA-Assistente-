@@ -722,13 +722,13 @@ class Manipulador(BaseHTTPRequestHandler):
             if not alvo.is_absolute():
                 alvo = Path.home() / alvo
             if metodo == "POST":
-                resumo = biblioteca_docs.indexar_pasta(
+                resultado_indexacao = biblioteca_docs.indexar_pasta(
                     banco, alvo, recursivo=bool(corpo.get("recursivo", True)))
-                resumo["mensagem"] = (
-                    f"Indexação: {resumo['indexados']} arquivo(s) novo(s)/alterado(s), "
-                    f"{resumo['trechos']} trecho(s), {resumo['removidos']} removido(s), "
-                    f"{len(resumo['erros'])} erro(s).")
-                return self._json(resumo)
+                resultado_indexacao["mensagem"] = (
+                    f"Indexação: {resultado_indexacao['indexados']} arquivo(s) novo(s)/alterado(s), "
+                    f"{resultado_indexacao['trechos']} trecho(s), {resultado_indexacao['removidos']} removido(s), "
+                    f"{len(resultado_indexacao['erros'])} erro(s).")
+                return self._json(resultado_indexacao)
             removidos = biblioteca_docs.esquecer_pasta(banco, alvo)
             return self._json({"removidos": removidos,
                                "mensagem": f"{removidos} documento(s) removido(s) do conhecimento."})
