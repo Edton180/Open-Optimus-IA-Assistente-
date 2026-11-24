@@ -13,6 +13,7 @@ import mimetypes
 import queue
 import re
 import subprocess
+import sys
 import threading
 import time
 import uuid
@@ -36,6 +37,8 @@ from optimus.voice import tts
 from optimus.network import cloudflare_tunnel
 
 log = logging.getLogger(__name__)
+_reinicio_solicitado = threading.Event()
+API_CONTRATO = 2
 ESTATICOS = Path(__file__).parent / "static"
 _SEGREDOS = ("chave_api", "token", "senha", "elevenlabs_chave", "token_comando",
              "token_agenda")
@@ -270,6 +273,17 @@ class Manipulador(BaseHTTPRequestHandler):
         log.debug(formato, *args)
 
     # Respostas
+    def _responder_atualizacao(self, resultado: dict[str, Any]) -> None:
+        """Responde primeiro e reinicia o processo somente após uma atualização real."""
+        if resultado.get("ok") and resultado.get("mudou"):
+            resultado = {**resultado, "reiniciando": True}
+            self._json(resultado)
+            _reinicio_solicitado.set()
+            # Dá tempo para o cliente receber o JSON antes de encerrar o servidor.
+            threading.Timer(0.8, self.server.shutdown).start()
+            return
+        self._json(resultado)
+
     def _json(self, dados: Any, status: int = 200) -> None:
         corpo = json.dumps(dados, ensure_ascii=False, default=str).encode()
         self.send_response(status)
@@ -479,6 +493,12 @@ class Manipulador(BaseHTTPRequestHandler):
         recurso = partes[0] if partes else ""
         ident = partes[1] if len(partes) > 1 else ""
 
+        if recurso == "versao" and metodo == "GET":
+            from optimus import autoatualizar
+            return self._json({"versao": __version__, "api_contrato": API_CONTRATO,
+                               "commit": autoatualizar.commit_instalado(),
+                               "recursos": {"zim": True, "kiwix": True,
+                                            "modulos": True, "casa_gerenciada": True}})
         if recurso == "zim":
             from optimus import kiwix, zim
             if metodo == "GET" and ident == "kiwix":
@@ -1120,13 +1140,15 @@ class Manipulador(BaseHTTPRequestHandler):
                 "dica": "" if ligado else "O acesso pelo celular está desligado. Crie uma senha "
                                           "e clique em \"Ligar acesso pelo celular\"."})
         if recurso == "atualizacao":
-            # Git (clone) ou release do GitHub (instalação sem Git), com SHA-256 e voltar.
+            # Git (clone) ou pacote do GitHub (instalação sem Git).
             from optimus import autoatualizar
 
             if metodo == "POST" and ident == "voltar":
-                return self._json(autoatualizar.voltar(optimus.config))
+                resultado = autoatualizar.voltar(optimus.config)
+                return self._responder_atualizacao(resultado)
             if metodo == "POST":
-                return self._json(autoatualizar.baixar(optimus.config))
+                resultado = autoatualizar.baixar(optimus.config)
+                return self._responder_atualizacao(resultado)
             return self._json(autoatualizar.verificar(optimus.config))
         if recurso == "vozes":
             chave = optimus.config.get("voz", "elevenlabs_chave", "")
@@ -1351,6 +1373,7 @@ def _senha_para_acesso(senha: str, host: str, tunel: bool) -> str:
 def iniciar(host: str = "127.0.0.1", porta: int = 8765, abrir_navegador: bool = True,
             optimus: Optimus | None = None, tunel: bool = False) -> None:
     global _porta_principal
+    _reinicio_solicitado.clear()
     optimus = optimus or Optimus()
     senha = optimus.config.get("web", "senha") or ""
     if tunel and len(senha) < 12:
@@ -1402,14 +1425,37 @@ def iniciar(host: str = "127.0.0.1", porta: int = 8765, abrir_navegador: bool = 
         import webbrowser
 
         threading.Timer(1.0, lambda: webbrowser.open(endereco)).start()
+    reiniciar = False
     try:
         servidor.serve_forever()
     except KeyboardInterrupt:
         print("\nAté logo!")
     finally:
+        reiniciar = _reinicio_solicitado.is_set()
         parar_tunel()
         servidor.server_close()
         _porta_principal = None
+    if reiniciar:
+        # O código Python carregado em memória não muda quando o pip/Git atualiza
+        # os arquivos no disco. Sobe uma instância limpa depois de liberar a porta.
+        comando = [sys.executable, "-m", "optimus", "gui", "--porta",
+                   str(servidor.server_address[1]), "--sem-navegador"]
+        if tunel:
+            comando.append("--tunel")
+        elif host not in ("127.0.0.1", "localhost", "::1"):
+            comando.append("--rede")
+        opcoes = {"stdin": subprocess.DEVNULL, "stdout": subprocess.DEVNULL,
+                  "stderr": subprocess.DEVNULL, "close_fds": True}
+        if sys.platform == "win32":
+            opcoes["creationflags"] = (getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+                                       | getattr(subprocess, "DETACHED_PROCESS", 0))
+        else:
+            opcoes["start_new_session"] = True
+        try:
+            subprocess.Popen(comando, **opcoes)
+            log.info("Optimus reiniciado após atualização: %s", " ".join(comando))
+        except OSError:
+            log.exception("Atualização aplicada, mas não foi possível iniciar o novo processo")
 
 
 __all__ = ["iniciar", "cfg", "iniciar_tunel", "parar_tunel", "estado_tunel"]
