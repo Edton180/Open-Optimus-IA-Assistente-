@@ -197,8 +197,9 @@ def preparar_dependencia() -> dict[str, Any]:
         pass
     destino = _pasta().parent / "tools" / "python-packages"
     destino.mkdir(parents=True, exist_ok=True)
+    requisito = "libzim>=4.1.0" if sys.version_info >= (3, 11) else "libzim>=3.13.1,<4"
     comando = [sys.executable, "-m", "pip", "install", "--disable-pip-version-check",
-               "--only-binary=:all:", "--upgrade", "--target", str(destino), "libzim>=4.1.0"]
+               "--only-binary=:all:", "--upgrade", "--target", str(destino), requisito]
     try:
         processo = subprocess.run(comando, capture_output=True, text=True,
                                   timeout=300, check=False, shell=False)
@@ -224,6 +225,24 @@ def _archive_class():
         if not resultado.get("instalado"):
             raise RuntimeError(resultado.get("erro") or "Não foi possível preparar libzim.")
         return _carregar_libzim()
+
+
+def _iterar_entradas(arquivo):
+    """Compatibiliza libzim 3.x (Python 3.10) e 4.x (Python >=3.11)."""
+    iterador = getattr(arquivo, "iter_efficient", None)
+    if callable(iterador):
+        return iter(iterador())
+    if hasattr(arquivo, "__iter__"):
+        return iter(arquivo)
+    quantidade = getattr(arquivo, "entry_count", None)
+    if quantidade is None:
+        quantidade = arquivo.all_entry_count
+    getter = getattr(arquivo, "get_entry_by_id", None)
+    if getter is None:
+        getter = getattr(arquivo, "_get_entry_by_id", None)
+    if getter is None:
+        raise RuntimeError("Esta versão de libzim não oferece um iterador de artigos compatível.")
+    return (getter(i) for i in range(int(quantidade)))
 
 
 def indexar(arquivos: list[dict] | None = None, limite: int = 150,
@@ -271,13 +290,13 @@ def indexar(arquivos: list[dict] | None = None, limite: int = 150,
             cursor = int(estado["cursor"]) if estado else 0
             try:
                 with Archive(str(caminho)) as arquivo:
-                    total = int(arquivo.all_entry_count)
+                    total = int(getattr(arquivo, "entry_count", arquivo.all_entry_count))
                     if estado is None:
                         con.execute("INSERT INTO arquivos(nome,caminho,tamanho,mtime_ns,cursor,total,concluido,atualizado) VALUES(?,?,?,?,0,?,0,?)",
                                     (nome, str(caminho), *assinatura, total, time.time()))
                         con.commit()
                     proximo = cursor
-                    for indice, entrada in enumerate(arquivo):
+                    for indice, entrada in enumerate(_iterar_entradas(arquivo)):
                         if indice < cursor:
                             continue
                         if processados >= limite:
