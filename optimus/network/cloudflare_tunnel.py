@@ -7,7 +7,6 @@ a API Cloudflare e credenciais explicitamente autorizadas pelo usuário.
 from __future__ import annotations
 
 import hashlib
-import json
 import logging
 import os
 import platform
@@ -18,7 +17,6 @@ import threading
 import time
 from pathlib import Path
 from typing import Callable
-from urllib.parse import urlparse
 
 import httpx
 
@@ -53,11 +51,6 @@ def _asset_name() -> str:
             return "cloudflared-linux-arm64"
         if machine.startswith("armv7"):
             return "cloudflared-linux-arm"
-    elif system == "darwin":
-        if machine in ("amd64", "x86_64"):
-            return "cloudflared-darwin-amd64.tgz"
-        if machine in ("arm64", "aarch64"):
-            return "cloudflared-darwin-arm64.tgz"
     raise TunnelError(f"Arquitetura não suportada pelo instalador automático: {system}/{machine}.")
 
 
