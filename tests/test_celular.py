@@ -42,6 +42,14 @@ def test_sem_segno_mostra_so_o_link(monkeypatch):
     assert celular.qr_svg("http://x") == "" and not celular.qr_terminal("http://x")
 
 
+def test_tunel_exige_senha_forte_e_cloudflared(monkeypatch):
+    monkeypatch.setattr(server.shutil, "which", lambda nome: None)
+    assert "12 caracteres" in server.iniciar_tunel(8765, "curta")["erro"]
+    resultado = server.iniciar_tunel(8765, "senha-forte-de-teste")
+    assert "cloudflared" in resultado["erro"]
+    assert server.estado_tunel()["ligado"] is False
+
+
 def _subir(senha):
     config = Config()
     config.definir("motor", "backend", "demo")
