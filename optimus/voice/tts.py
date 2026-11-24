@@ -260,6 +260,23 @@ class Falante:
         self.voz_elevenlabs = voz_cfg.get("elevenlabs_voz", "") or VOZ_ELEVENLABS_PADRAO
         self.pedida = voz
         self.voz = escolher_voz(voz, online, self.chave_elevenlabs)
+        self._perfil_edton = None
+        # Quando o proprietário importar a própria amostra no Estúdio com o nome
+        # "Edton Braz", o perfil pessoal substitui a voz pública de mesmo nome
+        # em todas as chamadas do Falante, inclusive na conversa ao vivo.
+        if _normal(voz) in ("edton", "edton braz", "edton-braz"):
+            try:
+                from optimus.estudio import vozes as perfis
+
+                perfil = perfis.obter("edton-braz")
+                amostra = perfil.caminho_amostra()
+                if perfil.tipo == "clonada" and amostra and amostra.is_file():
+                    self._perfil_edton = perfil
+                    self.voz = Voz("edton-braz", "Edton Braz", "masculina", "omnivoice",
+                                   True, "Voz pessoal clonada localmente")
+            except (ImportError, OSError, AttributeError):
+                # Sem amostra pessoal, mantém o comportamento compatível anterior.
+                self._perfil_edton = None
         # O efeito (Cyber, Stealth) continua mesmo quando a voz cai para uma reserva.
         self.efeito = (buscar_voz(voz) or self.voz).efeito
         self.velocidade = float(velocidade or 1.0)
@@ -270,6 +287,14 @@ class Falante:
     # Síntese
     def sintetizar(self, texto: str) -> tuple[bytes, str]:
         """Devolve (áudio, formato) com formato 'wav' ou 'mp3'."""
+        if self._perfil_edton is not None:
+            from optimus.estudio import omnivoice
+
+            amostra = self._perfil_edton.caminho_amostra()
+            onda = omnivoice.gerar(texto, amostra=amostra, genero="masculina",
+                                   velocidade=self.velocidade,
+                                   passos=32)
+            return _wav_bytes(onda, 24000), "wav"
         motor = self.voz.motor
         if motor == "kokoro":
             return self._com_efeito(self._kokoro_wav(texto)), "wav"
