@@ -10,6 +10,8 @@ from __future__ import annotations
 import re
 import shutil
 import subprocess
+from html import escape as html_escape
+from io import BytesIO
 from pathlib import Path
 
 from optimus.safety import LIVRE, MODERADO
@@ -55,6 +57,64 @@ def _paginas_parse(s: str, total: int) -> list[int]:
             except ValueError:
                 continue
     return sorted(indices)
+
+
+def _ordem_paginas_parse(s: str, total: int) -> list[int]:
+    """Interpreta a ordem informada sem ordenar nem remover repetições."""
+    if not s or not s.strip():
+        return list(range(total))
+    indices = []
+    for parte in re.split(r"[,\s]+", s.strip()):
+        if not parte:
+            continue
+        try:
+            if "-" in parte:
+                a, b = (int(v) for v in parte.split("-", 1))
+                passo = 1 if b >= a else -1
+                candidatos = range(a, b + passo, passo)
+            else:
+                candidatos = (int(parte),)
+        except ValueError:
+            continue
+        indices.extend(i - 1 for i in candidatos if 1 <= i <= total)
+    return indices
+
+
+def _sobrepor_texto(pagina, texto: str, marca: bool = False) -> None:
+    """Aplica texto visível à página. Requer reportlab; não cria assinatura digital."""
+    try:
+        from reportlab.lib.colors import Color
+        from reportlab.pdfgen import canvas
+        from pypdf import PdfReader
+    except ImportError as erro:
+        raise RuntimeError(
+            'Este recurso exige reportlab. Instale: pip install "optimus-assistente[documentos]"'
+        ) from erro
+    largura = float(pagina.mediabox.width)
+    altura = float(pagina.mediabox.height)
+    buffer = BytesIO()
+    tela = canvas.Canvas(buffer, pagesize=(largura, altura))
+    if marca:
+        tela.saveState()
+        tela.setFillColor(Color(0.55, 0.55, 0.55, alpha=0.24))
+        tela.translate(largura / 2, altura / 2)
+        tela.rotate(35)
+        tela.setFont("Helvetica-Bold", max(18, min(48, largura / 12)))
+        tela.drawCentredString(0, 0, texto[:100])
+        tela.restoreState()
+    else:
+        tela.setFillColor(Color(0, 0, 0, alpha=0.9))
+        tela.setFont("Helvetica", 9)
+        tela.drawCentredString(largura / 2, 18, texto[:80])
+    tela.save()
+    buffer.seek(0)
+    pagina.merge_page(PdfReader(buffer).pages[0])
+
+
+def _salvar_pdf(writer, destino: Path) -> None:
+    destino.parent.mkdir(parents=True, exist_ok=True)
+    with open(destino, "wb") as arquivo:
+        writer.write(arquivo)
 
 
 @ferramenta(
@@ -254,7 +314,7 @@ def pdf_organizar(ctx, arquivo: str, paginas: str, destino: str = ""):
     leitor = PdfReader(str(caminho), strict=False)
     if leitor.is_encrypted:
         return {"erro": "PDF protegido."}
-    idxs = _paginas_parse(paginas, len(leitor.pages))
+    idxs = _ordem_paginas_parse(paginas, len(leitor.pages))
     if not idxs:
         return {"erro": "Ordem de páginas inválida."}
     writer = PdfWriter()
@@ -434,7 +494,7 @@ def pdf_comprimir(ctx, arquivo: str, destino: str = ""):
 
 @ferramenta(
     "pdf_marca",
-    "Adiciona marca d'água de texto (metadado; visual plena recomenda reportlab).",
+    "Aplica marca d'água de texto visível em todas as páginas.",
     {"arquivo": texto("PDF"),
      "texto": texto("Texto da marca"),
      "destino": texto("Arquivo de saída")},
@@ -452,18 +512,22 @@ def pdf_marca(ctx, arquivo: str, texto: str, destino: str = ""):
     if leitor.is_encrypted:
         return {"erro": "PDF protegido."}
     writer = PdfWriter()
-    for pagina in leitor.pages:
-        writer.add_page(pagina)
+    try:
+        for pagina in leitor.pages:
+            writer.add_page(pagina)
+            _sobrepor_texto(writer.pages[-1], texto, marca=True)
+    except RuntimeError as erro:
+        return {"erro": str(erro)}
     writer.add_metadata({"/Watermark": texto[:100]})
     out = _caminho(ctx, destino or f"{caminho.stem}_marca.pdf")
-    with open(out, "wb") as f:
-        writer.write(f)
-    return {"mensagem": f"Marca '{texto[:40]}' registrada.", "destino": str(out)}
+    _salvar_pdf(writer, out)
+    return {"mensagem": f"Marca d'água visual aplicada em {len(leitor.pages)} página(s).",
+            "destino": str(out), "visual": True}
 
 
 @ferramenta(
     "pdf_numeros",
-    "Prepara numeração de páginas.",
+    "Insere números de página visíveis no rodapé.",
     {"arquivo": texto("PDF"),
      "destino": texto("Arquivo de saída")},
     grupo="pdf", risco=MODERADO, obrigatorios=["arquivo"],
@@ -480,13 +544,16 @@ def pdf_numeros(ctx, arquivo: str, destino: str = ""):
     if leitor.is_encrypted:
         return {"erro": "PDF protegido."}
     writer = PdfWriter()
-    for pagina in leitor.pages:
-        writer.add_page(pagina)
-    writer.add_metadata({"/PageLabels": f"1-{len(leitor.pages)}"})
+    try:
+        for i, pagina in enumerate(leitor.pages, start=1):
+            writer.add_page(pagina)
+            _sobrepor_texto(writer.pages[-1], str(i), marca=False)
+    except RuntimeError as erro:
+        return {"erro": str(erro)}
     out = _caminho(ctx, destino or f"{caminho.stem}_numerado.pdf")
-    with open(out, "wb") as f:
-        writer.write(f)
-    return {"mensagem": f"Numeração preparada para {len(leitor.pages)} páginas.", "destino": str(out)}
+    _salvar_pdf(writer, out)
+    return {"mensagem": f"Numeração visível inserida em {len(leitor.pages)} página(s).",
+            "destino": str(out), "paginas_numeradas": len(leitor.pages)}
 
 
 @ferramenta(
@@ -502,18 +569,16 @@ def pdf_assinar(ctx, arquivo: str, texto: str, destino: str = ""):
 
 
 @ferramenta(
-    "pdf_censurar",
-    "Localiza termos sensíveis e marca o arquivo.",
-    {"arquivo": texto("PDF"),
-     "texto": texto("Termos separados por vírgula"),
-     "destino": texto("Arquivo de saída")},
-    grupo="pdf", risco=MODERADO, obrigatorios=["arquivo", "texto"],
+    "pdf_localizar_termos",
+    "Localiza termos sensíveis e informa em quais páginas aparecem. NÃO remove nem oculta os dados.",
+    {"arquivo": texto("PDF"), "texto": texto("Termos separados por vírgula")},
+    grupo="pdf", risco=LIVRE, obrigatorios=["arquivo", "texto"],
 )
-def pdf_censurar(ctx, arquivo: str, texto: str, destino: str = ""):
+def pdf_localizar_termos(ctx, arquivo: str, texto: str):
     err = _precisa_pypdf()
     if err:
         return err
-    from pypdf import PdfReader, PdfWriter
+    from pypdf import PdfReader
     caminho = _caminho(ctx, arquivo)
     if not caminho.is_file():
         return {"erro": f"Arquivo não encontrado: {caminho}"}
@@ -525,18 +590,28 @@ def pdf_censurar(ctx, arquivo: str, texto: str, destino: str = ""):
         return {"erro": "PDF protegido."}
     encontrados = []
     for i, pagina in enumerate(leitor.pages):
-        t = (pagina.extract_text() or "")
+        conteudo = pagina.extract_text() or ""
         for termo in termos:
-            if termo.lower() in t.lower():
+            if termo.casefold() in conteudo.casefold():
                 encontrados.append({"pagina": i + 1, "termo": termo})
-    writer = PdfWriter()
-    for p in leitor.pages:
-        writer.add_page(p)
-    writer.add_metadata({"/CensoredTerms": ",".join(termos)[:200]})
-    out = _caminho(ctx, destino or f"{caminho.stem}_censurado.pdf")
-    with open(out, "wb") as f:
-        writer.write(f)
-    return {"mensagem": f"Marcado. {len(encontrados)} ocorrência(s).", "ocorrencias": encontrados[:50], "destino": str(out)}
+    return {
+        "mensagem": "Localizei os termos, mas não alterei o PDF. Isso NÃO é censura/redação.",
+        "ocorrencias": encontrados[:50],
+        "total_ocorrencias": len(encontrados),
+        "arquivo_original_preservado": str(caminho),
+    }
+
+
+@ferramenta(
+    "pdf_censurar",
+    "Indisponível: censura irreversível não implementada. Use pdf_localizar_termos para localizar "
+    "ocorrências; isso não oculta os dados.",
+    {"arquivo": texto("PDF"), "texto": texto("Termos separados por vírgula")},
+    grupo="pdf", risco=MODERADO, obrigatorios=["arquivo", "texto"],
+)
+def pdf_censurar(ctx, arquivo: str, texto: str):
+    return {"erro": "Censura irreversível não está implementada. O PDF original não foi alterado. "
+            "Use pdf_localizar_termos apenas para localizar ocorrências; isso não oculta os dados."}
 
 
 @ferramenta(
@@ -598,7 +673,7 @@ def pdf_ocr(ctx, arquivo: str, idioma: str = "por", destino: str = ""):
 
 @ferramenta(
     "pdf_converter",
-    "Converte PDF para HTML/txt/csv ou Office→PDF via LibreOffice.",
+    "Converte PDF para HTML, TXT, CSV, DOCX e arquivos Office para PDF via LibreOffice.",
     {"arquivo": texto("Arquivo"),
      "formato": texto("html|txt|docx|csv|pdf"),
      "destino": texto("Saída")},
@@ -631,17 +706,27 @@ def pdf_converter(ctx, arquivo: str, formato: str, destino: str = ""):
             return lido
         texto_pdf = lido.get("texto") or ""
         out = _caminho(ctx, destino or f"{caminho.stem}.{formato}")
+        out.parent.mkdir(parents=True, exist_ok=True)
         if formato == "txt":
             out.write_text(texto_pdf, encoding="utf-8")
         elif formato == "html":
-            out.write_text(f"<html><body><pre>{texto_pdf.replace('<','<')}</pre></body></html>", encoding="utf-8")
+            out.write_text(
+                f"<html><body><pre>{html_escape(texto_pdf)}</pre></body></html>",
+                encoding="utf-8",
+            )
         elif formato == "csv":
             linhas = [l.replace('"', '""') for l in texto_pdf.splitlines() if l.strip()]
             out.write_text("\n".join(f'"{l}"' for l in linhas), encoding="utf-8")
         else:
-            out = out.with_suffix(".txt")
-            out.write_text(texto_pdf, encoding="utf-8")
-            return {"mensagem": "Texto extraído (DOCX completo requer python-docx).", "destino": str(out)}
+            try:
+                from docx import Document
+            except ImportError:
+                return {"erro": 'DOCX exige python-docx. Instale: pip install "optimus-assistente[documentos]"'}
+            out = out.with_suffix(".docx")
+            documento = Document()
+            for linha in texto_pdf.splitlines():
+                documento.add_paragraph(linha)
+            documento.save(str(out))
         return {"mensagem": f"Convertido para {formato}.", "destino": str(out)}
     return {"erro": f"Formato '{formato}' não suportado. Use html, txt, csv ou pdf."}
 

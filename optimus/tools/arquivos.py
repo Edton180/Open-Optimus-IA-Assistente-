@@ -5,6 +5,7 @@ from __future__ import annotations
 import fnmatch
 import os
 import shutil
+import tempfile
 import time
 
 from optimus.safety import BLOQUEADO, CRITICO, LIVRE, MODERADO, Avaliacao, caminho_de_sistema
@@ -34,17 +35,41 @@ def listar_pasta(ctx, caminho: str = "."):
 
 @ferramenta(
     "ler_arquivo",
-    "Lê um arquivo de texto (código, notas, configurações, CSV...).",
-    {"caminho": texto("Caminho do arquivo")},
-    grupo="arquivos",
+    "Lê um arquivo de texto em blocos paginados de até 64 KB. Para arquivos grandes, repita "
+    "a chamada usando o proximo_offset retornado até fim=true.",
+    {"caminho": texto("Caminho do arquivo"),
+     "offset": numero("Deslocamento em bytes (padrão 0)"),
+     "limite_bytes": numero("Tamanho do bloco em bytes, máximo 65536")},
+    grupo="arquivos", obrigatorios=["caminho"],
 )
-def ler_arquivo(ctx, caminho: str):
+def ler_arquivo(ctx, caminho: str, offset: int = 0, limite_bytes: int = 65536):
     alvo = resolver(ctx, caminho)
-    if alvo.stat().st_size > 2_000_000:
-        return {"erro": "Arquivo grande demais para ler inteiro (mais de 2 MB)."}
-    conteudo = alvo.read_text(encoding="utf-8", errors="replace")
-    return {"caminho": str(alvo), "conteudo": conteudo[:20000],
-            "cortado": len(conteudo) > 20000}
+    if not alvo.is_file():
+        return {"erro": f"Arquivo não encontrado ou não é arquivo: {alvo}"}
+    offset = max(0, int(offset or 0))
+    limite = max(4, min(65536, int(limite_bytes or 65536)))
+    total = alvo.stat().st_size
+    if offset > total:
+        return {"erro": f"Offset {offset} ultrapassa o tamanho do arquivo ({total} bytes)."}
+    with alvo.open("rb") as arquivo:
+        arquivo.seek(offset)
+        bruto = arquivo.read(limite)
+    # Não cortar uma sequência UTF-8 válida no meio: o próximo bloco começa no byte pendente.
+    while bruto:
+        try:
+            conteudo = bruto.decode("utf-8")
+            break
+        except UnicodeDecodeError as erro:
+            if erro.reason == "unexpected end of data" and erro.end == len(bruto):
+                bruto = bruto[:erro.start]
+                continue
+            conteudo = bruto.decode("utf-8", errors="replace")
+            break
+    else:
+        conteudo = ""
+    proximo = offset + len(bruto)
+    return {"caminho": str(alvo), "conteudo": conteudo, "offset": offset,
+            "proximo_offset": proximo, "total_bytes": total, "fim": proximo >= total}
 
 
 def _risco_escrever(args, ctx) -> Avaliacao:
@@ -63,10 +88,30 @@ def _risco_escrever(args, ctx) -> Avaliacao:
     grupo="arquivos", risco=_risco_escrever,
 )
 def escrever_arquivo(ctx, caminho: str, conteudo: str):
+    """Grava primeiro em arquivo temporário e só publica o destino após concluir."""
     alvo = resolver(ctx, caminho)
     alvo.parent.mkdir(parents=True, exist_ok=True)
-    alvo.write_text(conteudo, encoding="utf-8")
-    return {"mensagem": f"Arquivo salvo em {alvo}", "bytes": len(conteudo.encode())}
+    temporario = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="wb", prefix=f".{alvo.name}.", suffix=".optimus-tmp",
+            dir=alvo.parent, delete=False,
+        ) as arquivo:
+            temporario = arquivo.name
+            dados = conteudo.encode("utf-8")
+            arquivo.write(dados)
+            arquivo.flush()
+            os.fsync(arquivo.fileno())
+        os.replace(temporario, alvo)
+        temporario = None
+        return {"mensagem": f"Arquivo salvo em {alvo}", "bytes": len(dados),
+                "atomico": True}
+    finally:
+        if temporario and os.path.exists(temporario):
+            try:
+                os.unlink(temporario)
+            except OSError:
+                pass
 
 
 def _risco_apagar(args, ctx) -> Avaliacao:
