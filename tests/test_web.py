@@ -511,6 +511,29 @@ def test_api_biblioteca_zim_lista_arquivos_locais(tmp_path, monkeypatch):
 
 
 
+
+def test_api_importa_conteudo_inicial_nomad_sem_download_no_teste(monkeypatch):
+    from optimus import zim
+
+    chamada = {}
+    def importar():
+        chamada["executada"] = True
+        return {"ok": True, "ja_existia": False,
+                "arquivo": "wikipedia_en_100_mini_2026-01.zim",
+                "tamanho_bytes": 4_537_782, "mensagem": "Mini-Wikipédia adicionada."}
+
+    monkeypatch.setattr(zim, "importar_conteudo_inicial_nomad", importar)
+    httpd, base = _subir()
+    try:
+        dados = _req(base + "/api/zim/nomad-inicial", {})
+        assert dados["ok"] is True
+        assert dados["arquivo"] == "wikipedia_en_100_mini_2026-01.zim"
+        assert chamada["executada"] is True
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+
+
 def test_api_zim_expoe_estado_do_leitor_e_rejeita_caminho(tmp_path, monkeypatch):
     from optimus import kiwix, zim
 
