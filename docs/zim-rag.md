@@ -21,7 +21,7 @@ no máximo 150 entradas (limite configurável pela API, até 1.000), registra o 
 retoma de onde parou. O estado do arquivo considera tamanho e mtime; quando o arquivo
 ZIM muda, os trechos antigos daquele arquivo são removidos e a indexação recomeça.
 Artigos são extraídos em memória com limite de 2 MiB, HTML é convertido em texto e
-dividido em chunks de até 900 caracteres com sobreposição, mantendo o tamanho adequado ao modelo leve all-minilm. SQLite FTS5 guarda o índice lexical e a origem
+dividido em chunks de até 900 caracteres com sobreposição, mantendo o tamanho adequado ao modelo leve granite-embedding:278m. SQLite FTS5 guarda o índice lexical e a origem
 exata de cada trecho. Não altera o arquivo ZIM.
 
 ## Recuperação híbrida e embeddings
@@ -29,9 +29,9 @@ exata de cada trecho. Não altera o arquivo ZIM.
 A recuperação combina cobertura lexical FTS5 com similaridade cosseno de embeddings.
 Se um modelo de embedding compatível já estiver instalado no Ollama, o Optimus detecta
 automaticamente modelos conhecidos (EmbeddingGemma, nomic-embed-text, mxbai-embed-large,
-BGE-M3, Snowflake Arctic Embed e all-minilm). Também aceita o nome explícito via API.
+BGE-M3, Snowflake Arctic Embed e granite-embedding:278m). Também aceita o nome explícito via API.
 Ao clicar em **Indexar / continuar**, se o Ollama local estiver ativo e nenhum modelo de
-embedding estiver instalado, o Optimus baixa automaticamente `all-minilm` (46 MB) pela API
+embedding estiver instalado, o Optimus baixa automaticamente `granite-embedding:278m` (563 MB) pela API
 local do Ollama. Esse download ocorre como parte da ação explícita de indexação; não há
 download em segundo plano durante conversas. Se o Ollama não estiver disponível, a indexação
 continua em modo lexical e informa a limitação. Se um modelo conhecido já estiver instalado,
