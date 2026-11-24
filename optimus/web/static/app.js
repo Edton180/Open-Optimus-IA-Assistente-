@@ -122,7 +122,7 @@ function irPara(tela) {
     tela = "chat";
   }
   const ativo = tela === "chat" ? (modoHud ? "hud" : "chat") : tela;
-  $$(".menu button").forEach((b) => b.classList.toggle("ativo", b.dataset.tela === ativo));
+  $$$(".menu button").forEach((b) => b.classList.toggle("ativo", b.dataset.tela === ativo));
   $$("#hud-nav button").forEach((b) => b.classList.toggle("ativo", b.dataset.ir === (tela === "chat" ? "painel-conversa" : tela)));
   $$(".tela").forEach((t) => t.classList.toggle("ativa", t.id === "tela-" + tela));
   document.body.classList.toggle("fora-do-chat", tela !== "chat");

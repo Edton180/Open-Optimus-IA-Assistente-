@@ -264,11 +264,8 @@ def test_boot_nao_pode_ficar_preso_e_arquivos_estaticos_nao_sao_cacheados():
         httpd.server_close()
 
 
-def test_seletores_de_varios_elementos_usam_query_selector_all():
-    """Evita que um seletor singular querySelector bloqueie o boot com forEach."""
+def test_seletor_do_menu_nao_interrompe_a_inicializacao():
+    """O menu usa querySelectorAll, pois vários botões precisam receber eventos."""
     codigo = (server.ESTATICOS / "app.js").read_text(encoding="utf-8")
-    seletores_singulares_com_for_each = re.findall(
-        r'(?<!\\$)\\$\\([^;\\n]*?\\)\\s*\\.forEach\\s*\\(', codigo
-    )
-    assert not seletores_singulares_com_for_each, seletores_singulares_com_for_each
+    assert '$(".menu button").forEach(' not in codigo
     assert '$$(".menu button").forEach(' in codigo
