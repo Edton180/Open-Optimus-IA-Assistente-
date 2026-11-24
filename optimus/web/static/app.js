@@ -45,6 +45,30 @@ async function api(caminho, opcoes = {}) {
   }
 }
 
+const API_CONTRATO_MINIMO = 2;
+async function verificarCompatibilidadeApi() {
+  try {
+    const versao = await api("/api/versao");
+    if (Number(versao.api_contrato) < API_CONTRATO_MINIMO) {
+      throw new Error("O servidor do Optimus está em uma versão antiga.");
+    }
+    return versao;
+  } catch (erro) {
+    const mensagem = String(erro?.message || erro);
+    if (/rota não encontrada|not found|404/i.test(mensagem)) {
+      throw new Error("O processo Python do Optimus ainda está carregado com o servidor antigo. Feche completamente o Optimus (encerre o processo/terminal, não apenas a aba do navegador) e abra novamente.");
+    }
+    throw erro;
+  }
+}
+function mensagemErroApi(erro) {
+  const mensagem = String(erro?.message || erro || "erro desconhecido");
+  if (/rota não encontrada|not found|404/i.test(mensagem)) {
+    return "O processo Python do Optimus ainda está carregado com o servidor antigo. Feche completamente o Optimus (encerre o processo/terminal, não apenas a aba do navegador) e abra novamente.";
+  }
+  return mensagem;
+}
+
 function pedirSenha() {
   $("#modal-senha").classList.remove("oculto");
   const campo = $("#form-senha")?.elements.namedItem("senha");
@@ -158,8 +182,8 @@ function irPara(tela) {
 // ---------- Biblioteca local ZIM ----------
 function mensagemErroZim(erro) {
   const mensagem = String(erro?.message || erro || "erro desconhecido");
-  if (/rota não encontrada/i.test(mensagem)) {
-    return "A API em execução não oferece as rotas da biblioteca ZIM. Atualize o Optimus pela opção de atualização e reinicie o programa; a interface e o servidor precisam estar na mesma versão.";
+  if (/rota não encontrada|not found|404/i.test(mensagem)) {
+    return "O processo Python do Optimus ainda está carregado com o servidor antigo. Feche completamente o Optimus (encerre o processo/terminal, não apenas a aba do navegador) e abra novamente.";
   }
   return mensagem;
 }
@@ -170,6 +194,7 @@ async function carregarZim() {
   if (!status || !lista || !resumo) return;
   status.textContent = "Consultando arquivos ZIM locais…";
   try {
+    await verificarCompatibilidadeApi();
     const dados = await api("/api/zim");
     const arquivos = Array.isArray(dados.arquivos) ? dados.arquivos : [];
     resumo.innerHTML = [
@@ -332,7 +357,7 @@ async function atualizarStatusIndiceZim() {
         ? vetores + " vetores locais."
         : "sem embeddings; busca lexical ativa.") +
       " A indexação pode ser retomada a qualquer momento.";
-  } catch (erro) { alvo.textContent = "Índice ZIM ainda não disponível: " + erro.message; }
+  } catch (erro) { alvo.textContent = "Índice ZIM ainda não disponível: " + mensagemErroZim(erro); }
 }
 $("#zim-indexar")?.addEventListener("click", async () => {
   const botao = $("#zim-indexar"), status = $("#zim-index-status");
@@ -363,6 +388,7 @@ async function carregarModulos() {
   if (!estadoEl || !grade) return;
   estadoEl.textContent = "Verificando executáveis e serviços locais…";
   try {
+    await verificarCompatibilidadeApi();
     const [dados, telemetria] = await Promise.all([
       api("/api/modulos"), api("/api/modulos/recursos")
     ]);
@@ -377,7 +403,7 @@ async function carregarModulos() {
     }).join("") || '<p class="sutil">Nenhum módulo foi identificado.</p>';
     estadoEl.textContent = `${itens.length} componentes verificados · ${new Date().toLocaleTimeString("pt-BR")}`;
   } catch (erro) {
-    estadoEl.textContent = "Não foi possível consultar o inventário: " + erro.message;
+    estadoEl.textContent = "Não foi possível consultar o inventário: " + mensagemErroApi(erro);
   }
 }
 function formatarBytes(valor) {
@@ -1220,13 +1246,40 @@ $("#verificar-atualizacao").addEventListener("click", async () => {
     baixar.classList.remove("oculto");
   } catch (e) { estadoEl.textContent = "⚠️ Não consegui verificar: " + e.message; }
 });
+async function aguardarReinicioOptimus(estadoEl) {
+  const inicio = Date.now();
+  while (Date.now() - inicio < 90000) {
+    try {
+      const resposta = await fetch("/api/versao", { cache: "no-store" });
+      if (!resposta.ok) throw new Error("servidor reiniciando");
+      const versao = await resposta.json();
+      if (Number(versao.api_contrato) >= API_CONTRATO_MINIMO) {
+        estadoEl.textContent = "✅ Nova versão carregada. Atualizando a interface…";
+        window.location.reload();
+        return;
+      }
+    } catch (_) {}
+    estadoEl.textContent = "Reiniciando o servidor do Optimus… aguardando a nova versão.";
+    await new Promise(resolve => setTimeout(resolve, 1000));
+  }
+  estadoEl.textContent = "A atualização foi aplicada, mas o servidor não voltou automaticamente. Feche completamente o Optimus e abra novamente.";
+}
 $("#baixar-atualizacao").addEventListener("click", async (ev) => {
   const estadoEl = $("#atualizacao-estado"); ev.target.disabled = true;
   estadoEl.textContent = "Baixando e aplicando (sem perder seus dados)…";
   try {
     const d = await api("/api/atualizacao", { method: "POST", json: {} });
-    if (d.erro || d.ok === false) { estadoEl.textContent = "⚠️ " + (d.erro || d.mensagem); }
-    else { estadoEl.textContent = "✅ " + (d.mensagem || "Atualizado!") + " Reinicie o Optimus para usar a nova versão."; ev.target.classList.add("oculto"); }
+    if (d.erro || d.ok === false) {
+      estadoEl.textContent = "⚠️ " + (d.erro || d.mensagem);
+    } else if (d.reiniciando) {
+      ev.target.classList.add("oculto");
+      estadoEl.textContent = "Atualização aplicada. Reiniciando o Optimus automaticamente…";
+      await aguardarReinicioOptimus(estadoEl);
+    } else {
+      estadoEl.textContent = "✅ " + (d.mensagem || "Atualização aplicada.") +
+        " Feche completamente o Optimus e abra novamente para carregar o servidor atualizado.";
+      ev.target.classList.add("oculto");
+    }
   } catch (e) { estadoEl.textContent = "⚠️ Falha ao atualizar: " + e.message; }
   finally { ev.target.disabled = false; }
 });
@@ -1358,6 +1411,7 @@ async function atualizarHomeAssistantGerenciado() {
   const diag = $("#ha-gerenciado-diagnostico"), badge = $("#ha-gerenciado-badge");
   const status = $("#ha-gerenciado-status"), abrir = $("#ha-gerenciado-abrir");
   try {
+    await verificarCompatibilidadeApi();
     const d = await api("/api/casa/gerenciado");
     const rt = d.runtime || {}, c = d.container || {}, tarefa = d.tarefa || {};
     badge.textContent = c.rodando ? "Em execução" : c.instalado ? "Instalado / parado" : rt.docker_instalado ? (rt.docker_ativo === null ? "Permissão necessária" : rt.docker_ativo ? "Pronto para instalar" : "Docker parado") : "Não instalado";
@@ -1386,9 +1440,7 @@ async function atualizarHomeAssistantGerenciado() {
     return false;
   } catch (e) {
     badge.textContent = "Falha no diagnóstico";
-    diag.textContent = e.message.toLowerCase().includes("rota não encontrada")
-      ? "A API desta instalação está desatualizada. Atualize o Optimus e reinicie o programa para carregar o gerenciador de Casa."
-      : "Não foi possível consultar o gerenciador: " + e.message;
+    diag.textContent = mensagemErroApi(e);
     return false;
   }
 }
