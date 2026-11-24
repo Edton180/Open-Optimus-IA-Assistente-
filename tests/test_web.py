@@ -312,3 +312,26 @@ def test_senha_do_tunel_nao_bloqueia_navegador_local():
     finally:
         httpd.shutdown()
         httpd.server_close()
+
+
+def test_trocar_senha_do_celular_atualiza_autenticacao_do_tunel(monkeypatch):
+    httpd, base = _subir()
+    monkeypatch.setattr(server, "porta_celular", lambda config, porta: 0)
+    proxy = {"CF-Ray": "teste-cloudflare", "CF-Connecting-IP": "198.51.100.30"}
+    try:
+        _req(base + "/api/celular", {"senha": "senha-inicial"})
+        assert server.Manipulador.senha == "senha-inicial"
+        assert _req(base + "/api/estado", cab={**proxy, "X-Optimus-Senha": "senha-inicial"})["versao"]
+
+        _req(base + "/api/celular", {"senha": "senha-atualizada"})
+        assert server.Manipulador.senha == "senha-atualizada"
+        try:
+            _req(base + "/api/estado", cab={**proxy, "X-Optimus-Senha": "senha-inicial"})
+            assert False, "a senha anterior não deve continuar autorizando o túnel"
+        except urllib.error.HTTPError as erro:
+            assert erro.code == 401
+        assert _req(base + "/api/estado", cab={**proxy, "X-Optimus-Senha": "senha-atualizada"})["versao"]
+    finally:
+        server.desligar_celular()
+        httpd.shutdown()
+        httpd.server_close()
