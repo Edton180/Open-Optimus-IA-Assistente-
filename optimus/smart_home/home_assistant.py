@@ -46,7 +46,7 @@ def _comando_docker() -> list[str] | None:
     return None
 
 
-def _executar(args: list[str], timeout: int = 45, check: bool = True) -> subprocess.CompletedProcess:
+def _executar(args: list[str], timeout: int = 45, check: bool = True, elevate: bool = False) -> subprocess.CompletedProcess:
     base = _comando_docker()
     if not base:
         raise RuntimeError("Docker não está instalado. Use 'Instalar ambiente' nesta tela.")
@@ -56,7 +56,7 @@ def _executar(args: list[str], timeout: int = 45, check: bool = True) -> subproc
     except subprocess.TimeoutExpired as exc:
         raise RuntimeError("O comando Docker excedeu o tempo limite. Verifique se o Docker está iniciado.") from exc
     detalhe = (p.stderr or p.stdout or "").strip()
-    if p.returncode and ("permission denied" in detalhe.lower() or "access is denied" in detalhe.lower()):
+    if elevate and p.returncode and ("permission denied" in detalhe.lower() or "access is denied" in detalhe.lower()):
         pkexec = shutil.which("pkexec") if platform.system() == "Linux" else None
         if pkexec:
             try:
@@ -94,13 +94,17 @@ def _runtime() -> dict[str, Any]:
             p = _executar(["version", "--format", "{{.Server.Version}}"], timeout=8, check=False)
             resultado["docker_ativo"] = p.returncode == 0 and bool(p.stdout.strip())
             resultado["docker_versao"] = p.stdout.strip()[:80]
+            detalhe = (p.stderr or "").lower()
+            if p.returncode and ("permission denied" in detalhe or "access is denied" in detalhe):
+                resultado["docker_ativo"] = None
+                resultado["observacao"] = "Docker instalado, mas exige autorização administrativa para consultar/gerenciar o serviço."
         except Exception as exc:
             resultado["observacao"] = str(exc)
     return resultado
 
 
-def _container() -> dict[str, Any]:
-    p = _executar(["inspect", "--format", "{{.State.Status}}|{{.State.Running}}|{{.Config.Image}}", NOME], timeout=12, check=False)
+def _container(elevate: bool = False) -> dict[str, Any]:
+    p = _executar(["inspect", "--format", "{{.State.Status}}|{{.State.Running}}|{{.Config.Image}}", NOME], timeout=12, check=False, elevate=elevate)
     if p.returncode:
         return {"instalado": False, "estado": "nao_instalado", "rodando": False}
     partes = p.stdout.strip().split("|", 2)
@@ -113,8 +117,10 @@ def _container() -> dict[str, Any]:
 def estado() -> dict[str, Any]:
     runtime = _runtime()
     try:
-        container = _container() if runtime["docker_ativo"] else {
-            "instalado": False, "estado": "runtime_indisponivel", "rodando": False}
+        container = _container() if runtime["docker_ativo"] is True else {
+            "instalado": False,
+            "estado": "permissao_pendente" if runtime["docker_ativo"] is None else "runtime_indisponivel",
+            "rodando": False}
         erro = ""
     except Exception as exc:
         container = {"instalado": False, "estado": "erro", "rodando": False}
@@ -144,17 +150,17 @@ def _instalar_runtime_linux() -> None:
         raise RuntimeError("Não encontrei pkexec para solicitar autorização administrativa. Instale Docker Engine pelo gerenciador de pacotes ou disponibilize pkexec e tente novamente.")
     if not shutil.which("apt-get"):
         raise RuntimeError("A instalação automática do runtime está validada apenas em Debian/Ubuntu (apt). Neste Linux, instale Docker Engine pelo gerenciador de pacotes.")
-    script = _pasta() / "instalar_docker.sh"
-    script.write_text(
-        "#!/bin/sh\nset -eu\napt-get update\nDEBIAN_FRONTEND=noninteractive apt-get install -y docker.io\nsystemctl enable --now docker\n",
-        encoding="utf-8",
-    )
-    script.chmod(0o700)
-    p = subprocess.run([shutil.which("pkexec"), "/bin/sh", str(script)],
-                       capture_output=True, text=True, timeout=900, check=False)
-    if p.returncode:
-        detalhe = (p.stderr or p.stdout or "autorização cancelada").strip()[-1000:]
-        raise RuntimeError(f"Não foi possível instalar/iniciar Docker: {detalhe}")
+    pkexec = shutil.which("pkexec")
+    comandos = [
+        [pkexec, "apt-get", "update"],
+        [pkexec, "env", "DEBIAN_FRONTEND=noninteractive", "apt-get", "install", "-y", "docker.io"],
+        [pkexec, "systemctl", "enable", "--now", "docker"],
+    ]
+    for comando in comandos:
+        p = subprocess.run(comando, capture_output=True, text=True, timeout=900, check=False)
+        if p.returncode:
+            detalhe = (p.stderr or p.stdout or "autorização cancelada").strip()[-1000:]
+            raise RuntimeError(f"Não foi possível instalar/iniciar Docker: {detalhe}")
     if not _comando_docker():
         raise RuntimeError("A instalação terminou, mas o executável Docker não foi localizado.")
 
@@ -196,12 +202,12 @@ def instalar() -> dict[str, Any]:
     if not runtime["docker_ativo"]:
         raise RuntimeError("Docker está instalado, mas não está ativo. Inicie o serviço e tente novamente.")
     dados = _pasta()
-    _executar(["pull", IMAGEM], timeout=900)
+    _executar(["pull", IMAGEM], timeout=900, elevate=True)
     existente = _container()
     if existente["instalado"]:
         if existente["rodando"]:
             return {"ok": True, "mensagem": "Home Assistant já está em execução.", "url": f"http://127.0.0.1:{PORTA}"}
-        _executar(["rm", "-f", NOME], timeout=30)
+        _executar(["rm", "-f", NOME], timeout=30, elevate=True)
     args = ["run", "-d", "--name", NOME, "--restart", "unless-stopped",
             "-e", f"TZ={os.environ.get('TZ', 'America/Sao_Paulo')}",
             "-v", f"{dados.resolve()}:/config"]
@@ -210,7 +216,7 @@ def instalar() -> dict[str, Any]:
     else:
         args += ["-p", f"{PORTA}:8123"]
     args += [IMAGEM]
-    _executar(args, timeout=90)
+    _executar(args, timeout=90, elevate=True)
     for _ in range(30):
         time.sleep(2)
         st = _container()
@@ -223,11 +229,11 @@ def acao(nome: str) -> dict[str, Any]:
     if nome == "instalar":
         return instalar()
     if nome == "iniciar":
-        _executar(["start", NOME])
+        _executar(["start", NOME], elevate=True)
     elif nome == "parar":
-        _executar(["stop", NOME], timeout=60)
+        _executar(["stop", NOME], timeout=60, elevate=True)
     elif nome == "reiniciar":
-        _executar(["restart", NOME], timeout=90)
+        _executar(["restart", NOME], timeout=90, elevate=True)
     elif nome == "atualizar":
         dados = _pasta()
         _executar(["pull", IMAGEM], timeout=900)
@@ -249,11 +255,11 @@ def acao(nome: str) -> dict[str, Any]:
                 "arquivo": str(arquivo)}
     elif nome == "desinstalar":
         _executar(["stop", NOME], timeout=60, check=False)
-        _executar(["rm", "-f", NOME], timeout=30, check=False)
+        _executar(["rm", "-f", NOME], timeout=30, check=False, elevate=True)
         return {"ok": True, "mensagem": "Container removido. Os dados e backups foram preservados.",
                 "dados": str(_pasta())}
     elif nome == "logs":
-        p = _executar(["logs", "--tail", "100", NOME], timeout=20, check=False)
+        p = _executar(["logs", "--tail", "100", NOME], timeout=20, check=False, elevate=True)
         return {"ok": True, "logs": (p.stdout + p.stderr)[-16000:]}
     else:
         raise ValueError("Ação desconhecida.")
