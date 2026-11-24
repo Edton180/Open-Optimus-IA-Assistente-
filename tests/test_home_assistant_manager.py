@@ -59,10 +59,15 @@ def test_diagnostico_docker_usa_timeout_curto(monkeypatch):
     assert chamadas == [3]
 
 
-
 def test_container_linux_habilita_bluetooth_sem_privileged(monkeypatch, tmp_path):
     monkeypatch.setattr(ha.platform, "system", lambda: "Linux")
-    monkeypatch.setattr(ha.Path, "exists", lambda self: str(self) == "/run/dbus/system_bus_socket")
+    # Use path components rather than a POSIX string: this test simulates Linux
+    # while running on Windows, where pathlib uses WindowsPath separators.
+    monkeypatch.setattr(
+        ha.Path,
+        "exists",
+        lambda self: self.name == "system_bus_socket" and self.parent.name == "dbus",
+    )
     args = ha._argumentos_container(tmp_path)
     assert "--network" in args and "host" in args
     assert "--cap-add" in args
