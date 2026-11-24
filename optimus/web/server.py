@@ -862,7 +862,7 @@ def iniciar(host: str = "127.0.0.1", porta: int = 8765, abrir_navegador: bool = 
     Manipulador.estado = Estado(optimus)
     threading.Thread(target=aquecer_modelos, args=(optimus,), daemon=True).start()
     # A senha protege o acesso de outros aparelhos; só neste PC (127.0.0.1) não é pedida.
-    Manipulador.senha = senha if (tunel or host not in ("127.0.0.1", "localhost")) else ""
+    Manipulador.senha = senha if (senha or tunel or host not in ("127.0.0.1", "localhost")) else ""
     servidor = ThreadingHTTPServer((host, porta), Manipulador)
     _porta_principal = servidor.server_address[1]
     servidor.daemon_threads = True
