@@ -609,3 +609,20 @@ def test_home_assistant_gerenciado_rota_e_api_dispositivos(tmp_path, monkeypatch
             assert erro.code == 400
     finally:
         httpd.shutdown()
+
+
+def test_api_zim_instalar_kiwix_rota_disponivel(monkeypatch):
+    from optimus import kiwix
+
+    monkeypatch.setattr(kiwix, "instalar", lambda: {
+        "ok": True, "instalado": True, "gerenciado": True
+    })
+    httpd, base = _subir()
+    try:
+        resultado = _req(base + "/api/zim/instalar", {})
+        assert resultado["ok"] is True
+        assert resultado["instalado"] is True
+        assert resultado["gerenciado"] is True
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
