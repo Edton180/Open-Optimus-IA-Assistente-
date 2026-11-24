@@ -1067,7 +1067,66 @@ $("#atualizar-tunel").addEventListener("click", mostrarTunel);
 
 // ---------- Casa ----------
 let vigiaCameras = null;
+async function atualizarHomeAssistantGerenciado() {
+  const diag = $("#ha-gerenciado-diagnostico"), badge = $("#ha-gerenciado-badge");
+  const status = $("#ha-gerenciado-status"), abrir = $("#ha-gerenciado-abrir");
+  try {
+    const d = await api("/api/casa/gerenciado");
+    const rt = d.runtime || {}, c = d.container || {}, tarefa = d.tarefa || {};
+    badge.textContent = c.rodando ? "Em execução" : c.instalado ? "Instalado / parado" : rt.docker_instalado ? (rt.docker_ativo ? "Pronto para instalar" : "Docker parado") : "Não instalado";
+    diag.textContent = [
+      "Sistema: " + (rt.sistema || "desconhecido"),
+      "Docker: " + (rt.docker_instalado ? (rt.docker_ativo ? "ativo " + (rt.docker_versao || "") : "instalado, mas parado") : "não instalado"),
+      "Home Assistant: " + (c.rodando ? "rodando" : c.instalado ? c.estado : "não instalado"),
+      d.nota || "", rt.observacao || "", d.erro || ""
+    ].filter(Boolean).join(" · ");
+    abrir.disabled = !c.rodando;
+    abrir.dataset.url = d.url || "";
+    if (tarefa.estado === "executando") {
+      status.textContent = tarefa.mensagem || "Operação em andamento…";
+      return true;
+    }
+    if (tarefa.estado === "falhou") status.textContent = "⚠️ " + (tarefa.erro || "A operação falhou.");
+    else if (tarefa.estado === "concluido") status.textContent = "✅ " + (tarefa.mensagem || "Operação concluída.");
+    return false;
+  } catch (e) {
+    badge.textContent = "Falha no diagnóstico";
+    diag.textContent = "Não foi possível consultar o gerenciador: " + e.message;
+    return false;
+  }
+}
+async function executarAcaoHomeAssistant(acao) {
+  const status = $("#ha-gerenciado-status");
+  const botoes = $("#ha-gerenciado button");
+  if (acao === "desinstalar" && !window.confirm("Remover o container Home Assistant? Os dados e backups serão preservados.")) return;
+  botoes.forEach((b) => { b.disabled = true; });
+  status.textContent = "Solicitando operação ao Optimus…";
+  try {
+    await api("/api/casa/gerenciado", { method: "POST", json: { acao }, tempo: 30000 });
+    let emAndamento = true;
+    const inicio = Date.now();
+    while (emAndamento && Date.now() - inicio < 20 * 60 * 1000) {
+      await new Promise((resolve) => setTimeout(resolve, 1800));
+      emAndamento = await atualizarHomeAssistantGerenciado();
+    }
+    if (emAndamento) status.textContent = "A operação continua em segundo plano. Use Atualizar status para acompanhar.";
+  } catch (e) {
+    status.textContent = "⚠️ " + e.message;
+  } finally {
+    botoes.forEach((b) => { b.disabled = false; });
+    await atualizarHomeAssistantGerenciado();
+  }
+}
+$("#ha-gerenciado-instalar").addEventListener("click", () => executarAcaoHomeAssistant("instalar"));
+$("#ha-gerenciado-atualizar").addEventListener("click", atualizarHomeAssistantGerenciado);
+$("#ha-gerenciado-abrir").addEventListener("click", () => {
+  const url = $("#ha-gerenciado-abrir").dataset.url;
+  if (url) window.open(url, "_blank", "noopener,noreferrer");
+});
+$("[data-ha-acao]").forEach((b) => b.addEventListener("click", () => executarAcaoHomeAssistant(b.dataset.haAcao)));
+
 async function carregarCasa() {
+  await atualizarHomeAssistantGerenciado();
   const d = await api("/api/config");
   $("#casa-url").value = d.config.casa.url || ""; $("#casa-token").value = d.config.casa.token || "";
   try {
