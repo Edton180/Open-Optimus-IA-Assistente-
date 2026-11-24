@@ -663,6 +663,26 @@ class Manipulador(BaseHTTPRequestHandler):
                 aprovado = interpretar_confirmacao(aprovado, nivel)
             tarefa.responder(bool(aprovado))
             return self._json({"ok": True, "aprovado": bool(aprovado)})
+        if recurso == "casa" and ident == "gerenciado":
+            from optimus.smart_home import home_assistant as ha
+
+            if metodo == "GET":
+                return self._json(ha.estado())
+            if metodo == "POST":
+                acao = str((self._corpo().get("acao") or "")).strip().lower()
+                permitidas = {"instalar", "iniciar", "parar", "reiniciar", "atualizar",
+                              "backup", "desinstalar", "logs"}
+                if acao not in permitidas:
+                    return self._json({"erro": "Ação de gerenciamento inválida."}, 400)
+                def executar():
+                    try:
+                        ha.executar_acao(acao)
+                    except Exception:
+                        log.exception("Falha no gerenciamento do Home Assistant")
+                threading.Thread(target=executar, daemon=True,
+                                 name="home-assistant-gerenciado").start()
+                return self._json({"ok": True, "mensagem": "Operação iniciada.",
+                                   "estado": "executando"}, 202)
         if recurso == "casa" and ident == "testar" and metodo == "POST":
             from urllib.parse import urlsplit
             import httpx
@@ -670,6 +690,8 @@ class Manipulador(BaseHTTPRequestHandler):
             corpo = self._corpo()
             url = str(corpo.get("url", "")).strip().rstrip("/")
             token = str(corpo.get("token", "")).strip()
+            if token == "••••••" or not token:
+                token = str(optimus.config.get("casa", "token") or "").strip()
             try:
                 partes_url = urlsplit(url)
                 if (partes_url.scheme not in ("http", "https") or not partes_url.hostname
