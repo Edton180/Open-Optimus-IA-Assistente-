@@ -57,18 +57,62 @@ def test_pdf_numeros_insere_numeros_visiveis(tmp_path):
     assert all(any(linha.strip() == str(n) for linha in texto.splitlines()) for n, texto in enumerate(paginas, 1))
 
 
-def test_pdf_localizar_termos_nao_altera_original_e_censurar_recusa(tmp_path):
+def test_pdf_localizar_termos_nao_altera_original(tmp_path):
     origem = tmp_path / "original.pdf"
     _criar_pdf(origem, ["CPF 123456", "SEM DADO"])
     tamanho = origem.stat().st_size
 
     localizados = pdf.pdf_localizar_termos(_ctx(tmp_path), str(origem), "123456")
-    censura = pdf.pdf_censurar(_ctx(tmp_path), str(origem), "123456")
 
     assert localizados["total_ocorrencias"] == 1
     assert localizados["ocorrencias"][0]["pagina"] == 1
-    assert "não está implementada" in censura["erro"]
     assert origem.stat().st_size == tamanho
+
+
+def test_pdf_censurar_rasteriza_remove_texto_original_e_valida_ocr(tmp_path, monkeypatch):
+    import sys
+    import types
+    from PIL import Image
+    from pypdf import PdfReader
+
+    origem = tmp_path / "original.pdf"
+    destino = tmp_path / "censurado.pdf"
+    _criar_pdf(origem, ["CPF 12345678900"])
+
+    class PaginaFalsa:
+        def render(self, scale):
+            return types.SimpleNamespace(to_pil=lambda: Image.new("RGB", (300, 400), "white"))
+
+    class DocumentoFalso:
+        def __init__(self, path):
+            self.paginas = [PaginaFalsa()]
+        def __len__(self):
+            return len(self.paginas)
+        def __getitem__(self, index):
+            return self.paginas[index]
+
+    chamadas = {"n": 0}
+    def ocr_data(imagem, **kwargs):
+        chamadas["n"] += 1
+        if chamadas["n"] == 1:
+            return {"text": ["12345678900"], "left": [50], "top": [60],
+                    "width": [130], "height": [24]}
+        return {"text": [""], "left": [0], "top": [0], "width": [0], "height": [0]}
+
+    fake_tesseract = types.SimpleNamespace(
+        Output=types.SimpleNamespace(DICT="dict"), image_to_data=ocr_data
+    )
+    fake_pdfium = types.SimpleNamespace(PdfDocument=DocumentoFalso)
+    monkeypatch.setitem(sys.modules, "pytesseract", fake_tesseract)
+    monkeypatch.setitem(sys.modules, "pypdfium2", fake_pdfium)
+
+    resultado = pdf.pdf_censurar(_ctx(tmp_path), str(origem), "12345678900",
+                                 str(destino), "por", 3)
+
+    assert "erro" not in resultado
+    assert resultado["texto_selecionavel_removido"] is True
+    assert PdfReader(str(destino)).pages[0].extract_text() in (None, "")
+    assert origem.is_file()
 
 
 def test_pdf_converter_escapa_html_e_gera_docx_real(tmp_path):
