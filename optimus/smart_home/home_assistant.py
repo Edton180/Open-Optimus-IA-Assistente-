@@ -290,6 +290,7 @@ def executar_acao(nome: str) -> dict[str, Any]:
         _definir_tarefa("executando", f"Executando: {nome}")
         resultado = acao(nome)
         _definir_tarefa("concluido", resultado.get("mensagem", "Operação concluída."))
+        _TAREFA["resultado"] = resultado
         return resultado
     except Exception as exc:
         _definir_tarefa("falhou", "", str(exc))
