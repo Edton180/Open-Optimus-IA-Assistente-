@@ -350,7 +350,7 @@ def _validar_url_publica(url: str) -> str:
         if partes.scheme.lower() not in ("http", "https"):
             raise ValueError("Somente URLs HTTP e HTTPS são permitidas.")
         if partes.username is not None or partes.password is not None:
-            raise ValueError("URLs com usuário/senha embutidos não são permitidas.")
+            raise ValueError("URLs com credenciais embutidas não são permitidas.")
         host = (partes.hostname or "").rstrip(".").lower()
         if not host or host == "localhost" or host.endswith(
                 (".localhost", ".local", ".internal", ".lan", ".home.arpa")):
