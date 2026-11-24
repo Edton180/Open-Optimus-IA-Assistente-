@@ -512,13 +512,17 @@ def pdf_marca(ctx, arquivo: str, texto: str, destino: str = ""):
     if leitor.is_encrypted:
         return {"erro": "PDF protegido."}
     writer = PdfWriter()
-    for pagina in leitor.pages:
-        writer.add_page(pagina)
+    try:
+        for pagina in leitor.pages:
+            _sobrepor_texto(pagina, texto, marca=True)
+            writer.add_page(pagina)
+    except RuntimeError as erro:
+        return {"erro": str(erro)}
     writer.add_metadata({"/Watermark": texto[:100]})
     out = _caminho(ctx, destino or f"{caminho.stem}_marca.pdf")
-    with open(out, "wb") as f:
-        writer.write(f)
-    return {"mensagem": f"Marca '{texto[:40]}' registrada.", "destino": str(out)}
+    _salvar_pdf(writer, out)
+    return {"mensagem": f"Marca d'água visual aplicada em {len(leitor.pages)} página(s).",
+            "destino": str(out), "visual": True}
 
 
 @ferramenta(
