@@ -38,6 +38,11 @@ uma operação concluída.
 - "Liste os campos preenchíveis deste formulário PDF."
 - "Remova os metadados do documento e salve uma cópia."
 - "Compare estes dois PDFs e mostre o que mudou."
+- "Censure o CPF 123.456.789-00 no documento, gere uma cópia e informe as páginas afetadas."
+- "Assine digitalmente contrato.pdf com certificado certificado.p12."
+- "Converta o documento para PDF/A-2b usando meu perfil sRGB.icc."
+- "Compare visualmente as duas versões e gere um ZIP das diferenças."
+- "Preencha os campos do formulário PDF com os dados que informei."
 
 ## Terminal
 
