@@ -69,7 +69,9 @@ VOZES: list[Voz] = [
         "Ultrarrealista pela ElevenLabs (precisa de chave)", VOZ_ELEVENLABS_PADRAO,
         reservas=("prime", "titan", "sistema-masculina")),
     Voz("edton-braz", "Edton Braz", "masculina", "elevenlabs", False,
-        "Brasileira, jovem, simpática e animada (ElevenLabs; sem chave usa a Titan)",
+        "Narrador brasileiro jovem-adulto para vídeos educativos e tecnologia: claro, articulado, " \
+        "dinâmico e conversacional, com energia controlada e pausas naturais (ElevenLabs; " \
+        "sem chave usa a voz neural Titan ajustada)",
         VOZ_EDTON_BRAZ, reservas=("titan", "prime", "sistema-masculina")),
     Voz("aurora", "Aurora", "feminina", "edge", False, "Feminina neural, online",
         "pt-BR-FranciscaNeural", reservas=("valkyrie", "sistema-feminina")),
@@ -365,7 +367,9 @@ class Falante:
         taxa = f"{int(round((self.velocidade * self.voz.velocidade - 1) * 100)):+d}%"
 
         async def gerar() -> bytes:
-            comunicador = edge_tts.Communicate(texto, self.voz.base, rate=taxa)
+            edton = _normal(self.pedida) in ("edton", "edton braz", "edton-braz")
+            pitch = "+2Hz" if edton else "+0Hz"
+            comunicador = edge_tts.Communicate(texto, self.voz.base, rate=taxa, pitch=pitch)
             pedacos = []
             async for parte in comunicador.stream():
                 if parte["type"] == "audio":
