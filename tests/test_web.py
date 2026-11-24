@@ -321,12 +321,7 @@ def test_trocar_senha_do_celular_atualiza_autenticacao_do_tunel(monkeypatch):
     try:
         _req(base + "/api/celular", {"senha": "senha-inicial"})
         assert server.Manipulador.senha == "senha-inicial"
-        try:
-            _req(base + "/api/estado", cab={**proxy, "X-Optimus-Senha": "senha-inicial"})
-        except urllib.error.HTTPError as erro:
-            assert erro.code == 401
-        else:
-            assert _req(base + "/api/estado", cab={**proxy, "X-Optimus-Senha": "senha-inicial"})["versao"]
+        assert _req(base + "/api/estado", cab={**proxy, "X-Optimus-Senha": "senha-inicial"})["versao"]
 
         _req(base + "/api/celular", {"senha": "senha-atualizada"})
         assert server.Manipulador.senha == "senha-atualizada"
