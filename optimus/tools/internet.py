@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import base64
 import html
+import ipaddress
 import re
+import socket
 import unicodedata
-from urllib.parse import parse_qs, unquote, urlsplit, urlunsplit
+from urllib.parse import parse_qs, unquote, urljoin, urlsplit, urlunsplit
 
 import httpx
 
@@ -337,17 +339,71 @@ def html_para_texto(conteudo: str, limite: int = 8000) -> str:
     return conteudo[:limite]
 
 
+def _validar_url_publica(url: str) -> str:
+    """Valida destino externo e bloqueia SSRF antes de cada requisição/redirecionamento.
+
+    A resolução DNS é repetida a cada salto. Endereços privados, loopback, link-local,
+    multicast, reservados, nomes locais e URLs com credenciais são recusados.
+    """
+    try:
+        partes = urlsplit(url.strip())
+        if partes.scheme.lower() not in ("http", "https"):
+            raise ValueError("Somente URLs HTTP e HTTPS são permitidas.")
+        if partes.username is not None or partes.password is not None:
+            raise ValueError("URLs com credenciais embutidas não são permitidas.")
+        host = (partes.hostname or "").rstrip(".").lower()
+        if not host or host == "localhost" or host.endswith(
+                (".localhost", ".local", ".internal", ".lan", ".home.arpa")):
+            raise ValueError("Endereço local ou inválido bloqueado por segurança.")
+        porta = partes.port or (443 if partes.scheme.lower() == "https" else 80)
+        try:
+            enderecos = [ipaddress.ip_address(host)]
+        except ValueError:
+            try:
+                respostas = socket.getaddrinfo(host, porta, type=socket.SOCK_STREAM)
+            except OSError as erro:
+                raise ValueError(f"Não foi possível validar o domínio: {host}") from erro
+            enderecos = [ipaddress.ip_address(item[4][0].split("%")[0])
+                         for item in respostas]
+        if not enderecos or any(not endereco.is_global for endereco in enderecos):
+            raise ValueError("Destino não público (rede privada, local ou reservada) bloqueado.")
+        return urlunsplit((partes.scheme.lower(), partes.netloc, partes.path or "/",
+                           partes.query, ""))
+    except ValueError:
+        raise
+    except Exception as erro:
+        raise ValueError("URL inválida ou não segura.") from erro
+
+
 @ferramenta(
     "ler_pagina",
-    "Abre um link e devolve o texto da página (para ler artigos, documentação etc.).",
-    {"url": texto("Endereço completo, com https://")},
+    "Abre uma página HTTP/HTTPS pública, valida redirecionamentos e devolve seu texto. "
+    "Endereços locais, privados e reservados são bloqueados por segurança.",
+    {"url": texto("Endereço público completo, com https://")},
     grupo="internet",
 )
 def ler_pagina(ctx, url: str):
     if not url.startswith(("http://", "https://")):
         url = "https://" + url
-    resposta = httpx.get(url, headers=_AGENTE, timeout=20, follow_redirects=True)
+    destino = _validar_url_publica(url)
+    resposta = None
+    # Não seguir redirecionamentos automaticamente: cada destino precisa passar pela validação.
+    for _ in range(6):
+        resposta = httpx.get(destino, headers=_AGENTE, timeout=20, follow_redirects=False)
+        if resposta.status_code not in (301, 302, 303, 307, 308):
+            break
+        local = resposta.headers.get("location")
+        if not local:
+            resposta.raise_for_status()
+        destino = _validar_url_publica(urljoin(destino, local))
+    else:
+        raise ValueError("A página excedeu o limite de 5 redirecionamentos.")
     resposta.raise_for_status()
+    tipo = resposta.headers.get("content-type", "").lower()
+    if tipo and not any(t in tipo for t in ("text/html", "text/plain", "application/xhtml")):
+        raise ValueError(f"Tipo de conteúdo não suportado para leitura: {tipo.split(';')[0]}.")
+    if len(resposta.content) > 2_000_000:
+        raise ValueError("Página maior que o limite seguro de 2 MB.")
     titulo = re.search(r"(?is)<title[^>]*>(.*?)</title>", resposta.text)
     return {"url": str(resposta.url),
             "titulo": html.unescape(titulo.group(1).strip()) if titulo else "",

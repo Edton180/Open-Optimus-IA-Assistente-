@@ -90,3 +90,65 @@ def test_pesquisa_especifica_nao_aprova_resultado_por_uma_palavra_generica():
         "link": "https://example.org/internet",
     }
     assert internet._pontuar_resultado(resultado, variantes) == 0.0
+
+
+def test_leitura_bloqueia_loopback_antes_de_fazer_requisicao(monkeypatch):
+    chamadas = []
+    monkeypatch.setattr(internet.httpx, "get", lambda *a, **k: chamadas.append(a))
+    import pytest
+    with pytest.raises(ValueError, match="local"):
+        internet.ler_pagina(None, "http://127.0.0.1:8765/admin")
+    assert chamadas == []
+
+
+def test_validacao_dns_bloqueia_ip_privado(monkeypatch):
+    import socket
+    import pytest
+
+    monkeypatch.setattr(socket, "getaddrinfo", lambda *a, **k: [
+        (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("192.168.1.10", 80))
+    ])
+    with pytest.raises(ValueError, match="não público"):
+        internet._validar_url_publica("https://exemplo.com")
+
+
+def test_validacao_dns_rejeita_resposta_mista_publica_e_privada(monkeypatch):
+    import socket
+    import pytest
+
+    monkeypatch.setattr(socket, "getaddrinfo", lambda *a, **k: [
+        (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.216.34", 443)),
+        (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("10.0.0.8", 443)),
+    ])
+    with pytest.raises(ValueError, match="não público"):
+        internet._validar_url_publica("https://exemplo.com")
+
+
+def test_redirecionamento_para_rede_privada_e_bloqueado(monkeypatch):
+    import socket
+    import pytest
+
+    monkeypatch.setattr(socket, "getaddrinfo", lambda *a, **k: [
+        (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.216.34", 443))
+    ])
+    class Resposta:
+        status_code = 302
+        headers = {"location": "http://10.0.0.5/config"}
+        content = b""
+        text = ""
+        url = "https://exemplo.com/"
+        def raise_for_status(self):
+            return None
+    chamadas = []
+    monkeypatch.setattr(internet.httpx, "get", lambda *a, **k: (chamadas.append(a[0]) or Resposta()))
+    with pytest.raises(ValueError, match="não público"):
+        internet.ler_pagina(None, "https://exemplo.com/")
+    assert chamadas == ["https://exemplo.com/"]
+
+
+def test_validacao_url_rejeita_credenciais_e_esquemas_nao_http():
+    import pytest
+    with pytest.raises(ValueError, match="credenciais"):
+        internet._validar_url_publica("https://usuario:senha@example.com/")
+    with pytest.raises(ValueError, match="HTTP"):
+        internet._validar_url_publica("file:///etc/passwd")
