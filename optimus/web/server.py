@@ -13,6 +13,7 @@ import mimetypes
 import queue
 import re
 import subprocess
+import shutil
 import threading
 import time
 import uuid
@@ -584,7 +585,7 @@ class Manipulador(BaseHTTPRequestHandler):
                 Manipulador.senha = senha
                 if _servidor_celular is not None:
                     _servidor_celular.RequestHandlerClass.senha = senha
-                resultado = iniciar_tunel(_porta_principal or self.server.server_address[1], senha)
+                resultado = iniciar_tunel(self.server.server_address[1], senha)
                 if resultado.get("erro"):
                     return self._json(resultado, 503)
             url_externa = estado_tunel().get("url", "")
