@@ -151,8 +151,10 @@ def _modelo_auto(url: str, configurado: str = "") -> str:
         if resposta.status_code != 200:
             return ""
         nomes = [str(m.get("name") or "") for m in resposta.json().get("models", [])]
-        preferidos = ("embeddinggemma", "nomic-embed-text", "mxbai-embed-large",
-                      "bge-m3", "snowflake-arctic-embed", "all-minilm")
+        preferidos = ("granite-embedding:278m", "embeddinggemma", "qwen3-embedding:0.6b",
+                      "nomic-embed-text-v2-moe", "bge-m3", "paraphrase-multilingual",
+                      "nomic-embed-text", "mxbai-embed-large", "snowflake-arctic-embed",
+                      "all-minilm")
         for preferido in preferidos:
             encontrado = next((n for n in nomes if preferido in n.casefold()), "")
             if encontrado:
@@ -163,7 +165,7 @@ def _modelo_auto(url: str, configurado: str = "") -> str:
 
 
 def preparar_embedding(url: str, modelo: str = "") -> dict[str, Any]:
-    """Garante um modelo leve local após ação explícita de indexação do usuário."""
+    """Garante um modelo de embeddings multilíngue após ação explícita de indexação."""
     if not url or urlsplit(url).hostname not in {"127.0.0.1", "localhost", "::1"}:
         return {"instalado": False, "erro": "Ollama local indisponível; a indexação continuará em modo lexical."}
     existente = _modelo_auto(url, modelo)
@@ -173,7 +175,7 @@ def preparar_embedding(url: str, modelo: str = "") -> dict[str, Any]:
         import httpx
         with httpx.stream(
             "POST", url.rstrip("/") + "/api/pull",
-            json={"model": "all-minilm", "stream": True},
+            json={"model": modelo or "granite-embedding:278m", "stream": True},
             timeout=httpx.Timeout(600, connect=5),
         ) as resposta:
             if resposta.status_code != 200:
@@ -190,7 +192,7 @@ def preparar_embedding(url: str, modelo: str = "") -> dict[str, Any]:
                     concluido = True
             if not concluido:
                 return {"instalado": False, "erro": "Ollama encerrou o download sem confirmar sucesso."}
-        return {"instalado": True, "modelo": "all-minilm", "origem": "baixado"}
+        return {"instalado": True, "modelo": modelo or "granite-embedding:278m", "origem": "baixado"}
     except Exception as erro:
         return {"instalado": False, "erro": f"Falha ao preparar modelo de embeddings: {erro}"}
 
@@ -206,7 +208,7 @@ def _embeddings(url: str, modelo: str, textos: list[str]) -> list[list[float] | 
         try:
             resposta = httpx.post(
                 url.rstrip("/") + "/api/embed",
-                json={"model": modelo, "input": [texto[:4000] for texto in lote]},
+                json={"model": modelo, "input": [texto[:4000] for texto in lote], "keep_alive": 0},
                 timeout=90,
             )
             if resposta.status_code != 200:
