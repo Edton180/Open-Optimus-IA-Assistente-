@@ -484,7 +484,8 @@ def buscar(consulta: str, limite: int = 6, modelo_embedding: str = "",
             score = 0.65 * lexical + 0.35 * max(0.0, vetor)
             resultados.append({"titulo": r["titulo"], "trecho": r["texto"],
                                "arquivo": r["arquivo"], "artigo": r["caminho_artigo"],
-                               "url": r["url"], "citacao": f"{r['titulo']} — {r['arquivo']}#{r['caminho_artigo']}",
+                               "url": r["url"], "hash_trecho": r["hash"],
+                               "citacao": f"{r['titulo']} — {r['arquivo']}#{r['caminho_artigo']}",
                                "score": round(score, 4), "tipo_fonte": "ZIM"})
         resultados.sort(key=lambda x: x["score"], reverse=True)
         return resultados[:max(1, min(int(limite), 20))]
