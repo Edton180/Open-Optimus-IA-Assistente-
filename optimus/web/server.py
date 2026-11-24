@@ -446,8 +446,14 @@ class Manipulador(BaseHTTPRequestHandler):
                      "parametros": f.parametros, "obrigatorios": f.obrigatorios}
                     for f in registradas().values() if f.grupo == "pdf"
                 ]
+                try:
+                    import pypdf  # noqa: F401
+                    pdf_instalado = True
+                except ImportError:
+                    pdf_instalado = False
                 return self._json({"ferramentas": ferramentas_pdf,
-                                   "pasta": str(pasta_pdf)})
+                                   "pasta": str(pasta_pdf), "dependencias_instaladas": pdf_instalado,
+                                   "comando_instalacao": 'pip install "optimus-assistente[pdf]"'})
             if metodo == "POST" and ident == "upload":
                 tamanho = int(self.headers.get("Content-Length") or 0)
                 if tamanho <= 0 or tamanho > 200 * 1024 * 1024:
