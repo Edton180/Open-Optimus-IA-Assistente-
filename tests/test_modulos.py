@@ -4,7 +4,7 @@ from optimus import modulos
 def test_inventario_inclui_core_e_integracoes_opcionais(monkeypatch):
     monkeypatch.setattr(modulos.shutil, "which", lambda _nome: None)
     monkeypatch.setattr(modulos, "_http", lambda _url: False)
-    monkeypatch.setattr(modulos, "_porta", lambda _host, _port: False)
+    monkeypatch.setattr(modulos, "_processo", lambda _host, _port: False)
 
     itens = modulos.inventario()
     por_id = {item["id"]: item for item in itens}
