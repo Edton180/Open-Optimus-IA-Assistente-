@@ -14,10 +14,10 @@ Fonte de referência: README do Linux SDK, instruções `linux/AGENTS.md`, proto
 | Capacidade Muse Linux | Equivalente no Optimus | Estado real / diferença |
 |---|---|---|
 | `system.run` — executar comandos e retornar saída/código | `executar_comando` | Existe em Windows/Linux/macOS/Android. É síncrono, timeout configurável até 600 s e limitado a 12.000 caracteres de stdout e 4.000 de stderr. Não há ainda o mesmo protocolo remoto de sessão. |
-| `file.read` — leitura em blocos de 64 KB | `ler_arquivo` | Existe, mas limita a 2 MB e 20.000 caracteres; não oferece leitura paginada por offset de 64 KB. |
-| `file.write` — escrita em blocos e substituição somente ao concluir | `escrever_arquivo` | Existe, mas grava o conteúdo recebido de uma vez; não tem protocolo de chunks nem troca atômica após concluir. |
-| `device.health` — uptime, carga, memória, disco e temperatura | `info_sistema` / `desempenho` | CPU, RAM, disco, bateria e uptime estão disponíveis; temperatura e carga detalhada não são uniformes em todos os sistemas. |
-| Até quatro comandos simultâneos | Ciclo de ferramentas do agente | Não há garantia de limite global de quatro comandos nem política equivalente para comandos órfãos após desconexão. |
+| `file.read` — leitura em blocos de 64 KB | `ler_arquivo` | Implementada nesta etapa: leitura paginada por offset, blocos de até 64 KB, próximo offset e sinalização de fim. |
+| `file.write` — escrita em blocos e substituição somente ao concluir | `escrever_arquivo` | A gravação agora usa arquivo temporário e substituição atômica; ainda não há protocolo de chunks/retomada. |
+| `device.health` — uptime, carga, memória, disco e temperatura | `info_sistema` / `desempenho` | Inclui CPU, RAM, disco, uptime, carga média e temperatura quando o sistema expõe; campos de sensor seguem dependentes da plataforma. |
+| Até quatro comandos simultâneos | `executar_comando` | Limite global de quatro comandos implementado; o quinto recebe erro imediato, sem fila persistente ou política de comando órfão por sessão. |
 | Comandos customizados | Plugins Python e servidores MCP | Extensibilidade existe; contratos, descoberta e limites de execução são diferentes. |
 | Pareamento e sessão criptografada Noise | Interface web local com senha / MCP | Não equivale ao pareamento BLE, credenciais de dispositivo e transporte Noise do Muse. |
 | Reconexão e ciclo de vida de sessão | Servidor web local | Não há equivalência integral ao protocolo persistente de dispositivo Muse. |
@@ -52,14 +52,11 @@ Optimus precisa de uma camada própria de dispositivos/gadgets e adaptadores por
 ## Plano de implementação
 
 ### P0 — equivalência básica do agente Linux
-1. Leitura paginada de arquivos por offset/tamanho, com limite por bloco.
-2. Escrita em chunks para arquivo temporário, validação de tamanho/hash e substituição atômica
-   somente ao concluir; limpeza segura de uploads incompletos.
-3. Health report padronizado: uptime, load average quando disponível, CPU, RAM, disco,
-   temperatura e bateria, com campos ausentes explicitamente nulos.
-4. Executor de comandos com limite global de concorrência, cancelamento, timeout, captura
-   limitada de saída e auditoria de início/fim/exit code.
-5. Testes em Linux, Windows e macOS para os recursos que cada sistema suporta.
+- **Concluído nesta etapa:** leitura paginada por offset, gravação atômica de arquivo completo,
+  limite global de quatro comandos simultâneos e expansão inicial do relatório de saúde.
+- **Pendente:** escrita em chunks com validação de tamanho/hash, retomada e limpeza de uploads
+  incompletos; health report padronizado com campos ausentes explícitos; cancelamento e política
+  para comandos desconectados; testes específicos por plataforma.
 
 ### P1 — dispositivos e sessões remotas seguras
 1. Registro de dispositivos com identidade estável, nome, versão, capacidades e guia.
