@@ -18,6 +18,7 @@ import re
 import shutil
 import subprocess
 import time
+import uuid
 from pathlib import Path
 
 import httpx
@@ -635,7 +636,7 @@ def descobrir_cameras_onvif(timeout: float = 3.0, max_respostas: int = 32) -> li
         b'xmlns:w="http://schemas.xmlsoap.org/ws/2004/08/addressing" '
         b'xmlns:d="http://schemas.xmlsoap.org/ws/2005/04/discovery" '
         b'xmlns:dn="http://www.onvif.org/ver10/network/wsdl">'
-        b'<e:Header><w:MessageID>uuid:optimus-onvif-discovery</w:MessageID>'
+        f'<e:Header><w:MessageID>urn:uuid:{uuid.uuid4()}</w:MessageID>'.encode('ascii')
         b'<w:To>urn:schemas-xmlsoap-org:ws:2005:04:discovery</w:To>'
         b'<w:Action>http://schemas.xmlsoap.org/ws/2005/04/discovery/Probe</w:Action>'
         b'</e:Header><e:Body><d:Probe><d:Types>dn:NetworkVideoTransmitter</d:Types>'
