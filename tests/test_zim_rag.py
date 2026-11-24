@@ -215,3 +215,66 @@ def test_embedding_uses_existing_local_model_without_download(monkeypatch):
         "modelo": "nomic-embed-text:latest",
         "origem": "existente",
     }
+
+def test_real_zim_archive_round_trip(tmp_path, monkeypatch):
+    import pytest
+
+    writer = pytest.importorskip("libzim.writer")
+    Creator, Item, StringProvider, Hint = (
+        writer.Creator, writer.Item, writer.StringProvider, writer.Hint
+    )
+
+    class Artigo(Item):
+        def __init__(self):
+            super().__init__()
+            self.path = "artigo-seguranca"
+            self.title = "Segurança do trabalho"
+            self.conteudo = (
+                "<html><meta charset='utf-8'><h1>Segurança do trabalho</h1>"
+                "<p>Equipamentos de proteção individual reduzem riscos ocupacionais.</p></html>"
+            )
+
+        def get_path(self):
+            return self.path
+
+        def get_title(self):
+            return self.title
+
+        def get_mimetype(self):
+            return "text/html"
+
+        def get_contentprovider(self):
+            return StringProvider(self.conteudo)
+
+        def get_hints(self):
+            return {Hint.FRONT_ARTICLE: True}
+
+    pasta_zim = tmp_path / "biblioteca_zim"
+    pasta_zim.mkdir()
+    caminho = pasta_zim / "fixture-real.zim"
+    with Creator(str(caminho)) as creator:
+        creator.set_mainpath("artigo-seguranca")
+        creator.add_item(Artigo())
+        for chave, valor in {
+            "Creator": "Optimus test",
+            "Name": "optimus-fixture",
+            "Title": "Fixture de teste",
+            "Language": "por",
+            "Date": "2026-11-24",
+            "Description": "Arquivo ZIM mínimo gerado durante o teste.",
+            "Publisher": "Optimus",
+        }.items():
+            creator.add_metadata(chave, valor)
+
+    pasta_indice = tmp_path / "indice-real"
+    pasta_indice.mkdir()
+    monkeypatch.setattr(zim_rag, "_pasta", lambda: pasta_indice)
+    monkeypatch.setattr("optimus.zim.pasta_biblioteca", lambda: pasta_zim)
+
+    resultado = zim_rag.indexar(limite=100)
+    assert resultado["indexados"] >= 1
+    encontrados = zim_rag.buscar("equipamentos proteção individual")
+    assert encontrados
+    assert encontrados[0]["arquivo"] == "fixture-real.zim"
+    assert encontrados[0]["artigo"] == "artigo-seguranca"
+    assert "zim://fixture-real.zim/artigo-seguranca" == encontrados[0]["url"]
