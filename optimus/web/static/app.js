@@ -760,9 +760,9 @@ $("#ligar-tunel").addEventListener("click", async () => {
   const campo = $("#tunel-senha"), valor = campo.value;
   const el = $("#tunel-estado");
   if (valor.length < 12) { el.textContent = "Use uma senha exclusiva com pelo menos 12 caracteres."; return; }
-  $("#ligar-tunel").disabled = true; el.textContent = "Iniciando Cloudflare Tunnel…";
+  $("#ligar-tunel").disabled = true; el.textContent = "Preparando o Cloudflare Tunnel, verificando o instalador e conectando…";
   try {
-    const d = await api("/api/tunel", { method: "POST", json: { senha: valor }, tempo: 15000 });
+    const d = await api("/api/tunel", { method: "POST", json: { senha: valor }, tempo: 90000 });
     senha = valor;
     try { sessionStorage.setItem("optimus_senha", senha); } catch (e) {}
     campo.value = "";
