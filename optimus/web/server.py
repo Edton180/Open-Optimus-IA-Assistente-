@@ -987,6 +987,13 @@ def desligar_celular() -> None:
             _servidor_celular = None
 
 
+def _senha_para_acesso(senha: str, host: str, tunel: bool) -> str:
+    """Exige senha apenas quando a interface é exposta à rede ou por túnel."""
+    if host in ("127.0.0.1", "localhost", "::1") and not tunel:
+        return ""
+    return senha
+
+
 def iniciar(host: str = "127.0.0.1", porta: int = 8765, abrir_navegador: bool = True,
             optimus: Optimus | None = None, tunel: bool = False) -> None:
     global _porta_principal
@@ -1001,7 +1008,9 @@ def iniciar(host: str = "127.0.0.1", porta: int = 8765, abrir_navegador: bool = 
     Manipulador.estado = Estado(optimus)
     threading.Thread(target=aquecer_modelos, args=(optimus,), daemon=True).start()
     # A senha protege o acesso de outros aparelhos; só neste PC (127.0.0.1) não é pedida.
-    Manipulador.senha = senha if (senha or tunel or host not in ("127.0.0.1", "localhost")) else ""
+    # A senha da rede/túnel não deve bloquear o próprio usuário no acesso local.
+    # Ela só é exigida quando a interface é exposta na rede ou por um túnel.
+    Manipulador.senha = _senha_para_acesso(senha, host, tunel)
     servidor = ThreadingHTTPServer((host, porta), Manipulador)
     _porta_principal = servidor.server_address[1]
     servidor.daemon_threads = True
