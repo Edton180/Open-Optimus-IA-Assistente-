@@ -237,7 +237,7 @@ def indexar(arquivos: list[dict] | None = None, limite: int = 150,
     lista = arquivos if arquivos is not None else zim.listar_zim().get("arquivos", [])
     limite = max(1, min(int(limite), 1000))
     modelo_embedding = _modelo_auto(url_motor, modelo_embedding)
-    total_novos = total_trechos = processados = 0
+    total_novos = total_trechos = processados = vetores_atualizados = 0
     erros: list[dict] = []
     con = _db()
     try:
@@ -253,6 +253,19 @@ def indexar(arquivos: list[dict] | None = None, limite: int = 150,
                 con.execute("DELETE FROM trechos WHERE arquivo=?", (nome,))
                 con.execute("DELETE FROM arquivos WHERE nome=?", (nome,))
                 estado = None
+            # Se o usuário instalar um modelo de embeddings depois da indexação lexical,
+            # preenche vetores faltantes sem reextrair os artigos do ZIM.
+            if modelo_embedding:
+                faltantes = con.execute(
+                    "SELECT id,texto FROM trechos WHERE arquivo=? AND embedding IS NULL LIMIT ?",
+                    (nome, limite)).fetchall()
+                for trecho_existente in faltantes:
+                    vetor = _embedding(url_motor, modelo_embedding, trecho_existente["texto"])
+                    if vetor:
+                        con.execute("UPDATE trechos SET embedding=? WHERE id=?",
+                                    (json.dumps(vetor), trecho_existente["id"]))
+                        vetores_atualizados += 1
+                con.commit()
             if estado and estado["concluido"]:
                 continue
             cursor = int(estado["cursor"]) if estado else 0
@@ -327,8 +340,10 @@ def indexar(arquivos: list[dict] | None = None, limite: int = 150,
                 erros.append({"arquivo": nome, "erro": f"{type(erro).__name__}: {erro}"[:300]})
     finally:
         con.close()
-    return {"indexados": total_novos, "trechos": total_trechos, "artigos_processados": processados,
-            "limite": limite, "erros": erros, "estado": status()}
+    return {"indexados": total_novos, "trechos": total_trechos,
+            "embeddings_atualizados": vetores_atualizados,
+            "artigos_processados": processados, "limite": limite,
+            "modelo_embedding": modelo_embedding or None, "erros": erros, "estado": status()}
 
 
 def _vetor_norma(v: list[float]) -> float:
