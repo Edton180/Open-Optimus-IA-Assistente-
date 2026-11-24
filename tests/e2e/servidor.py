@@ -10,13 +10,14 @@ def estado_fake():
         "runtime": {"sistema": "Linux", "suportado": True, "docker_instalado": True,
                     "docker_ativo": True, "docker_versao": "test", "observacao": ""},
         "container": {"instalado": False, "estado": "nao_instalado", "rodando": False},
-        "tarefa": dict(ha._TAREFA),
+        "tarefa": dict(ha._TAREFA), "acoes": list(ha._TAREFA.get("acoes", [])),
         "url": "", "dados": "/tmp/optimus/home_assistant",
         "nota": "Home Assistant Container de teste."
     }
 
 
 def acao_fake(nome):
+    ha._TAREFA.setdefault("acoes", []).append(nome)
     ha._TAREFA.update(estado="concluido", mensagem="Operação simulada com sucesso.",
                       erro="", atualizado=0.0)
     return {"ok": True, "mensagem": "Operação simulada com sucesso."}
