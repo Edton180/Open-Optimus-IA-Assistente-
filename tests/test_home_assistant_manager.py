@@ -39,3 +39,21 @@ def test_acao_desconhecida():
         assert False
     except ValueError:
         pass
+
+
+def test_diagnostico_docker_usa_timeout_curto(monkeypatch):
+    chamadas = []
+    monkeypatch.setattr(ha, "_comando_docker", lambda: ["docker"])
+
+    def executar(args, timeout=45, check=True, elevate=False):
+        chamadas.append(timeout)
+        return __import__("subprocess").CompletedProcess(args, 0, "26.0", "")
+
+    monkeypatch.setattr(ha, "_executar", executar)
+    estado = ha._runtime()
+    assert estado["docker_ativo"] is True
+    assert chamadas == [3]
+
+    chamadas.clear()
+    ha._container()
+    assert chamadas == [3]
