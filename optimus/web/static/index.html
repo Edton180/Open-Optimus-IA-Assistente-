@@ -432,9 +432,11 @@
 
     <section id="tela-casa" class="tela">
       <div class="tela-cabecalho"><h2>Casa inteligente</h2>
-        <p>Luzes, tomadas e câmeras pela rede. Você <b>não precisa</b> do Home Assistant: tomadas TP-Link Kasa e câmeras IP funcionam direto. O Home Assistant é opcional, para quem já usa e quer trazer tudo junto.</p></div>
+        <p>Controle de dispositivos pelo Home Assistant, descoberta de câmeras ONVIF e prévias de câmeras IP cadastradas. O Home Assistant é opcional, mas necessário para a integração ampla de luzes, tomadas, sensores e outros aparelhos. A integração direta TP-Link Kasa ainda não está disponível nesta versão.</p></div>
       <h3 class="subtitulo">📷 Prévia das câmeras</h3>
-      <p class="sutil">Prévia JPEG atualizada periodicamente (não é vídeo contínuo). Cadastre o endereço de snapshot/RTSP e as credenciais da câmera. A descoberta automática por fabricante/ONVIF ainda não está disponível.</p>
+      <p class="sutil">A prévia é uma imagem JPEG atualizada periodicamente, não vídeo contínuo. Use a busca ONVIF para localizar câmeras compatíveis na rede; depois informe o endereço RTSP ou snapshot e as credenciais no cadastro. A descoberta identifica endpoints, mas não adivinha a senha nem o endereço RTSP.</p>
+      <div class="linha"><button class="botao" id="casa-onvif-descobrir">🔎 Descobrir câmeras ONVIF na rede</button></div>
+      <div id="casa-onvif-resultados" class="lista" aria-live="polite"></div>
       <div class="cartao formulario" id="form-camera">
         <div class="linha">
           <label>Nome<input id="cam-nome" class="campo" placeholder="Portão"></label>
