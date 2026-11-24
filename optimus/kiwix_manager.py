@@ -19,6 +19,7 @@ import urllib.error
 import urllib.request
 import zipfile
 from pathlib import Path, PurePosixPath
+from urllib.parse import urlsplit
 
 from optimus.config import pasta_base
 
@@ -88,6 +89,10 @@ def estado() -> dict:
 def _baixar(url: str, destino: Path) -> None:
     req = urllib.request.Request(url, headers={"User-Agent": "Optimus-Kiwix-Manager/1"})
     with urllib.request.urlopen(req, timeout=TIMEOUT) as resposta:
+        destino_url = urlsplit(resposta.geturl())
+        host = (destino_url.hostname or "").lower()
+        if destino_url.scheme != "https" or not (host == "kiwix.org" or host.endswith(".kiwix.org")):
+            raise RuntimeError("O download foi redirecionado para uma origem não autorizada.")
         tamanho = int(resposta.headers.get("Content-Length") or 0)
         if tamanho > MAX_DOWNLOAD:
             raise RuntimeError("O pacote Kiwix excede o limite de download seguro (100 MB).")
@@ -116,7 +121,7 @@ def _criar_links_seguros(destino: Path, links: list[tuple[str, str]]) -> None:
     raiz = destino.resolve()
     for nome, alvo in links:
         saida = _destino_membro(destino, nome)
-        relativo = posixpath.normpath(posixpath.join(posixpath.dirname(nome), alvo))
+        relativo = posixpath.normpath(posixpath.join(posixpath.dirname(nome), alvo.replace("\\\\", "/")))
         if relativo == ".." or relativo.startswith("../") or relativo.startswith("/"):
             raise RuntimeError("Pacote Kiwix rejeitado: link aponta para fora da pasta.")
         origem = _destino_membro(destino, relativo)
