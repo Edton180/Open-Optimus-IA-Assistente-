@@ -677,7 +677,8 @@ def test_atualizacao_aplicada_solicita_reinicio_apos_responder(monkeypatch):
         resposta = _req(base + "/api/atualizacao", {})
         assert resposta["ok"] is True
         assert resposta["reiniciando"] is True
-        assert server._reinicio_solicitado.is_set()
+        assert server._reinicio_solicitado.wait(timeout=1), \
+            "o pedido de reinício deve ser registrado após a resposta HTTP"
     finally:
         server._reinicio_solicitado.clear()
         httpd.shutdown()
