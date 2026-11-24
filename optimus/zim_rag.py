@@ -161,23 +161,30 @@ def _modelo_auto(url: str, configurado: str = "") -> str:
     return ""
 
 
-def _embedding(url: str, modelo: str, texto: str) -> list[float] | None:
-    if not url or not modelo:
-        return None
+def _embeddings(url: str, modelo: str, textos: list[str]) -> list[list[float] | None]:
+    """Gera embeddings em lote para reduzir round-trips ao Ollama."""
+    if not url or not modelo or not textos:
+        return [None] * len(textos)
     try:
         import httpx
-        resposta = httpx.post(url.rstrip("/") + "/api/embed",
-                              json={"model": modelo, "input": texto[:4000]},
-                              timeout=45)
+        resposta = httpx.post(
+            url.rstrip("/") + "/api/embed",
+            json={"model": modelo, "input": [texto[:4000] for texto in textos]},
+            timeout=90,
+        )
         if resposta.status_code != 200:
-            return None
-        dados = resposta.json()
-        vetor = dados.get("embeddings", [[]])[0]
-        if not vetor or not isinstance(vetor, list):
-            return None
-        return [float(x) for x in vetor]
+            return [None] * len(textos)
+        vetores = resposta.json().get("embeddings") or []
+        saida = []
+        for vetor in vetores[:len(textos)]:
+            saida.append([float(x) for x in vetor] if isinstance(vetor, list) and vetor else None)
+        return saida + [None] * (len(textos) - len(saida))
     except Exception:
-        return None
+        return [None] * len(textos)
+
+
+def _embedding(url: str, modelo: str, texto: str) -> list[float] | None:
+    return _embeddings(url, modelo, [texto])[0]
 
 
 def _carregar_libzim():
@@ -278,8 +285,9 @@ def indexar(arquivos: list[dict] | None = None, limite: int = 150,
                 faltantes = con.execute(
                     "SELECT id,texto FROM trechos WHERE arquivo=? AND embedding IS NULL LIMIT ?",
                     (nome, limite)).fetchall()
-                for trecho_existente in faltantes:
-                    vetor = _embedding(url_motor, modelo_embedding, trecho_existente["texto"])
+                vetores = _embeddings(
+                    url_motor, modelo_embedding, [r["texto"] for r in faltantes])
+                for trecho_existente, vetor in zip(faltantes, vetores):
                     if vetor:
                         con.execute("UPDATE trechos SET embedding=? WHERE id=?",
                                     (json.dumps(vetor), trecho_existente["id"]))
@@ -322,6 +330,8 @@ def indexar(arquivos: list[dict] | None = None, limite: int = 150,
                             conteudo = bytes(item_zim.content)
                             texto = _texto(conteudo)
                             partes = _chunks(texto)
+                            vetores = (_embeddings(url_motor, modelo_embedding, partes)
+                                       if modelo_embedding else [])
                             titulo = str(getattr(entrada, "title", "") or entrada.path)[:500]
                             artigo = str(entrada.path)[:1000]
                             for posicao, trecho in enumerate(partes):
@@ -331,7 +341,7 @@ def indexar(arquivos: list[dict] | None = None, limite: int = 150,
                                     (nome, artigo, posicao)).fetchone()
                                 if anterior and anterior["hash"] == digest:
                                     continue
-                                vetor = _embedding(url_motor, modelo_embedding, trecho)
+                                vetor = vetores[posicao] if posicao < len(vetores) else None
                                 url = f"zim://{nome}/{artigo}"
                                 if anterior:
                                     con.execute("UPDATE trechos SET titulo=?,url=?,texto=?,hash=?,embedding=? WHERE id=?",
