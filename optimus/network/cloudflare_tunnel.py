@@ -122,6 +122,31 @@ def estado() -> dict[str, str | bool]:
                 "url": _URL if vivo and _VERIFICADO else "", "erro": _ERROR}
 
 
+def _validar_publicacao(processo: subprocess.Popen, prazo: float = 90.0) -> None:
+    """Continua verificando em segundo plano se o hostname público responde por HTTPS."""
+    global _VERIFICADO, _ERROR
+    limite = time.monotonic() + prazo
+    while time.monotonic() < limite and processo.poll() is None:
+        with _LOCK:
+            if _VERIFICADO:
+                return
+            url = _URL
+        if url:
+            try:
+                resposta = httpx.get(url, timeout=6.0, follow_redirects=True)
+                if resposta.status_code == 200 and "text/html" in (
+                        resposta.headers.get("content-type", "").lower()):
+                    with _LOCK:
+                        _VERIFICADO = True
+                    return
+            except httpx.HTTPError:
+                pass
+        time.sleep(2.0)
+    with _LOCK:
+        if not _VERIFICADO and processo.poll() is None:
+            _ERROR = "O túnel iniciou, mas o endereço público não respondeu à verificação HTTPS."
+
+
 def iniciar(porta: int, senha: str, *, instalador: Callable[[], str] = garantir_instalado,
             espera: float = 20.0) -> dict[str, str | bool]:
     """Inicia/reutiliza um Quick Tunnel apontando somente para localhost."""
@@ -190,7 +215,11 @@ def iniciar(porta: int, senha: str, *, instalador: Callable[[], str] = garantir_
             except httpx.HTTPError:
                 pass
         time.sleep(0.15)
-    return estado()
+    atual = estado()
+    if atual.get("iniciando"):
+        threading.Thread(target=_validar_publicacao, args=(processo,),
+                         daemon=True, name="optimus-cloudflare-health").start()
+    return atual
 
 
 def parar() -> None:
