@@ -503,3 +503,32 @@ def test_pdf_imprimir_livreto_cria_imposicao_frente_verso(tmp_path):
     assert "PAGINA UM" in leitor.pages[0].extract_text()
     assert "PAGINA DOIS" in leitor.pages[1].extract_text()
     assert "PAGINA TRES" in leitor.pages[1].extract_text()
+
+
+def test_pdf_ajustar_cores_gera_copia_rasterizada(tmp_path):
+    origem = tmp_path / "origem.pdf"
+    destino = tmp_path / "cinza.pdf"
+    _criar_pdf(origem, ["TESTE CORES"])
+    resultado = pdf_suite.pdf_ajustar_cores(_ctx(tmp_path), str(origem), "cinza", str(destino))
+    assert "erro" not in resultado
+    assert resultado["texto_selecionavel"] is False
+    assert len(PdfReader(destino).pages) == 1
+    assert origem.is_file()
+
+
+def test_pdf_ajustar_cores_rejeita_modo_invalido(tmp_path):
+    origem = tmp_path / "origem.pdf"
+    _criar_pdf(origem, ["TESTE"])
+    resultado = pdf_suite.pdf_ajustar_cores(_ctx(tmp_path), str(origem), "azul")
+    assert "erro" in resultado and "cinza ou inverter" in resultado["erro"]
+
+
+def test_pdf_gerar_senha_tem_comprimento_e_classes(tmp_path):
+    resultado = pdf_suite.pdf_gerar_senha(_ctx(tmp_path), 24)
+    senha = resultado["senha"]
+    assert len(senha) == 24
+    assert any(c.islower() for c in senha)
+    assert any(c.isupper() for c in senha)
+    assert any(c.isdigit() for c in senha)
+    assert any(c in "!@#$%&*+-_=?" for c in senha)
+    assert pdf_suite.pdf_gerar_senha(_ctx(tmp_path), 2)["tamanho"] == 12
