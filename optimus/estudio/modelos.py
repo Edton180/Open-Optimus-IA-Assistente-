@@ -254,16 +254,13 @@ def instalar_todos(progresso=None, ids: list[str] | None = None, cancelado=None)
                 if progresso:
                     progresso(((indice - 1) + max(0.0, min(1.0, float(pct)))) / total, msg)
 
-            resultado = instalar(item.id, callback if progresso or cancelado else None)
-            verificar_cancelamento()
+            resultado = instalar(item.id, callback if progresso or cancelado else None,
+                                 cancelado=cancelado)
             resultados.append({"id": item.id, "nome": item.nome, "estado": "instalado",
                                 "detalhes": resultado})
+            verificar_cancelamento()
         except _InstalacaoCancelada:
             return retornar_cancelado()
-        except _InstalacaoCancelada:
-            return {"total": len(resultados), "instalados": sum(
-                r["estado"] in {"instalado", "já instalado"} for r in resultados),
-                "cancelado": True, "resultados": resultados}
         except Exception as erro:  # cada falha fica registrada; os outros modelos continuam
             resultados.append({"id": item.id, "nome": item.nome, "estado": "falhou",
                                 "erro": f"{type(erro).__name__}: {erro}"})
