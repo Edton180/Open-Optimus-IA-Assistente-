@@ -784,6 +784,9 @@ class Manipulador(BaseHTTPRequestHandler):
                                                "web.porta_celular."}, 500)
                 config.definir("web", "celular", True)
                 config.salvar()
+                # A senha do acesso móvel e a do túnel compartilham a mesma credencial.
+                # Atualiza o handler principal imediatamente após a rotação.
+                Manipulador.senha = str(config.get("web", "senha", "") or "")
             if consulta.get("nova_chave"):
                 config.definir("web", "token_agenda", "")
             if rede:
