@@ -279,3 +279,72 @@ def test_real_zim_archive_round_trip(tmp_path, monkeypatch):
     assert encontrados[0]["arquivo"] == "fixture-real.zim"
     assert encontrados[0]["artigo"] == "artigo-seguranca"
     assert "zim://fixture-real.zim/artigo-seguranca" == encontrados[0]["url"]
+
+
+def test_status_distingue_biblioteca_vazia_de_busca_lexical(tmp_path, monkeypatch):
+    from optimus import zim
+
+    pasta_indice = tmp_path / "indice-vazio"
+    pasta_indice.mkdir(parents=True)
+    monkeypatch.setattr(zim_rag, "_pasta", lambda: pasta_indice)
+    monkeypatch.setattr(zim, "listar_zim", lambda: {
+        "total": 0, "arquivos": [], "tamanho_total_bytes": 0,
+        "pasta_configurada": True,
+    })
+    estado = zim_rag.status()
+    assert estado["artigos_indexados"] == 0
+    assert estado["trechos"] == 0
+    assert estado["com_embeddings"] == 0
+    assert estado["modo_busca"] == "indisponivel"
+    assert estado["pronto"] is False
+    assert estado["arquivos_zim_disponiveis"] == 0
+    assert "Nenhum arquivo ZIM" in estado["mensagem"]
+
+
+def test_status_com_zim_sem_indexacao_nao_anuncia_busca_ativa(tmp_path, monkeypatch):
+    from optimus import zim
+
+    pasta_indice = tmp_path / "indice-pendente"
+    pasta_indice.mkdir(parents=True)
+    monkeypatch.setattr(zim_rag, "_pasta", lambda: pasta_indice)
+    monkeypatch.setattr(zim, "listar_zim", lambda: {
+        "total": 1, "arquivos": [{"nome": "wiki.zim"}],
+        "tamanho_total_bytes": 100, "pasta_configurada": True,
+    })
+    estado = zim_rag.status()
+    assert estado["arquivos_zim_disponiveis"] == 1
+    assert estado["modo_busca"] == "indisponivel"
+    assert estado["pronto"] is False
+    assert "ainda não indexados" in estado["mensagem"]
+
+
+def test_status_nao_conta_trechos_de_zim_removido(tmp_path, monkeypatch):
+    from optimus import zim
+
+    pasta_indice = tmp_path / "indice-orfaos"
+    pasta_indice.mkdir(parents=True)
+    monkeypatch.setattr(zim_rag, "_pasta", lambda: pasta_indice)
+    monkeypatch.setattr(zim, "listar_zim", lambda: {
+        "total": 0, "arquivos": [], "tamanho_total_bytes": 0,
+        "pasta_configurada": True,
+    })
+    con = zim_rag._db()
+    con.execute(
+        "INSERT INTO arquivos(nome,caminho,tamanho,mtime_ns,cursor,total,concluido,atualizado) "
+        "VALUES(?,?,?,?,?,?,?,?)",
+        ("apagado.zim", "/tmp/apagado.zim", 100, 1, 1, 1, 1, 1.0),
+    )
+    con.execute(
+        "INSERT INTO trechos(arquivo,caminho_artigo,titulo,url,posicao,texto,hash,embedding) "
+        "VALUES(?,?,?,?,?,?,?,?)",
+        ("apagado.zim", "artigo", "Título", "zim://apagado.zim/artigo", 0,
+         "conteúdo antigo suficiente para teste", "a" * 64, None),
+    )
+    con.commit()
+    con.close()
+
+    estado = zim_rag.status()
+    assert estado["trechos"] == 0
+    assert estado["artigos_indexados"] == 0
+    assert estado["modo_busca"] == "indisponivel"
+    assert estado["trechos_de_arquivos_ausentes"] == 1

@@ -6,6 +6,7 @@ presentes e health-checks locais com timeout curto.
 from __future__ import annotations
 
 import shutil
+import subprocess
 import psutil
 from urllib.request import urlopen
 from urllib.error import URLError
@@ -38,7 +39,7 @@ def _http(url: str) -> bool:
 def _servico(nome: str, descricao: str, executaveis: tuple[str, ...],
              host: str, port: int, url: str = "", processos: tuple[str, ...] = ()) -> dict:
     executavel = next((shutil.which(item) for item in executaveis if shutil.which(item)), None)
-    ativo = _http(url) if url else _processo(*processos) if processos else False
+    ativo = (_http(url) and (not processos or _processo(*processos))) if url else _processo(*processos) if processos else False
     if ativo:
         estado, detalhe = ("disponivel", f"Respondendo em {host}:{port}") if url else ("disponivel", "Processo ativo no sistema")
     elif executavel:
@@ -49,22 +50,75 @@ def _servico(nome: str, descricao: str, executaveis: tuple[str, ...],
             "detalhe": detalhe, "executavel": bool(executavel)}
 
 
+def _kiwix() -> dict:
+    """Usa a mesma fonte de verdade do Leitor Kiwix, inclusive a instalação privada."""
+    from optimus import kiwix
+
+    dados = kiwix.estado()
+    if dados.get("executando"):
+        estado, detalhe = "disponivel", "Servidor Kiwix iniciado pelo Optimus e respondendo nesta sessão"
+    elif dados.get("instalado") and dados.get("gerenciado"):
+        estado, detalhe = "instalado_parado", (
+            f"Kiwix Tools {dados.get('versao') or ''} instalado na pasta privada do Optimus; "
+            "leitor parado até solicitação"
+        )
+    elif dados.get("instalado"):
+        estado, detalhe = "instalado_parado", "Kiwix encontrado no sistema; leitor parado"
+    else:
+        estado, detalhe = "nao_instalado", dados.get("erro") or "Nenhum executável Kiwix conhecido foi encontrado"
+    return {"id": "Kiwix", "nome": "Kiwix",
+            "descricao": "Servidor e leitor de bibliotecas offline no formato ZIM.",
+            "estado": estado, "detalhe": detalhe,
+            "executavel": bool(dados.get("executavel_disponivel")),
+            "gerenciado": bool(dados.get("gerenciado")),
+            "executando": bool(dados.get("executando")),
+            "versao": dados.get("versao")}
+
+
+def _docker() -> dict:
+    """Confirma o daemon via Docker CLI; encontrar um processo não prova disponibilidade."""
+    executavel = shutil.which("docker")
+    if not executavel:
+        return {"id": "Docker", "nome": "Docker",
+                "descricao": "Runtime opcional para aplicativos e serviços isolados.",
+                "estado": "nao_instalado", "detalhe": "Docker CLI não foi encontrado",
+                "executavel": False}
+    try:
+        resultado = subprocess.run(
+            [executavel, "info", "--format", "{{.ServerVersion}}"],
+            capture_output=True, text=True, timeout=3, check=False,
+        )
+        versao = (resultado.stdout or "").strip()
+        if resultado.returncode == 0 and versao:
+            estado, detalhe = "disponivel", f"Daemon Docker respondendo · Engine {versao}"
+        else:
+            erro = (resultado.stderr or resultado.stdout or "").strip().splitlines()
+            detalhe_erro = erro[0][:240] if erro else "daemon não respondeu"
+            estado, detalhe = "instalado_parado", f"Docker CLI instalado, mas daemon indisponível: {detalhe_erro}"
+    except subprocess.TimeoutExpired:
+        estado, detalhe = "instalado_parado", "Docker CLI instalado, mas o daemon excedeu o tempo de diagnóstico"
+    except OSError as erro:
+        estado, detalhe = "instalado_parado", f"Docker CLI encontrado, mas não pôde ser executado: {erro}"
+    return {"id": "Docker", "nome": "Docker",
+            "descricao": "Runtime opcional para aplicativos e serviços isolados.",
+            "estado": estado, "detalhe": detalhe, "executavel": True}
+
+
 def inventario() -> list[dict]:
-    """Retorna o estado observado sem executar comandos privilegiados."""
+    """Retorna o estado observado sem executar comandos privilegiados ou iniciar serviços."""
     return [
         {"id": "Optimus Core", "nome": "Optimus Core",
          "descricao": "Agente local, interface, memória SQLite, ferramentas e perfis de hardware.",
          "estado": "nativo", "detalhe": "Parte integrante desta instalação", "executavel": True},
         _servico("Ollama", "Motor de modelos de IA locais.",
                  ("ollama",), "127.0.0.1", 11434, "http://127.0.0.1:11434/api/tags"),
-        _servico("Kiwix", "Servidor e leitor de bibliotecas offline no formato ZIM.",
-                 ("kiwix-serve", "kiwix-desktop"), "127.0.0.1", 8080, processos=("kiwix",)),
+        _kiwix(),
         _servico("Kolibri", "Plataforma de aprendizagem e conteúdo educacional offline.",
-                 ("kolibri",), "127.0.0.1", 8080, processos=("kolibri",)),
+                 ("kolibri",), "127.0.0.1", 8080, "http://127.0.0.1:8080/",
+                 processos=("kolibri",)),
         _servico("Qdrant", "Banco vetorial opcional para busca semântica avançada.",
                  ("qdrant",), "127.0.0.1", 6333, "http://127.0.0.1:6333/healthz"),
-        _servico("Docker", "Runtime opcional para aplicativos e serviços isolados.",
-                 ("docker",), "127.0.0.1", 2375, processos=("dockerd", "com.docker.backend")),
+        _docker(),
     ]
 
 

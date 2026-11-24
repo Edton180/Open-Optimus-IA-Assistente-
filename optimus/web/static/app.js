@@ -352,10 +352,17 @@ async function atualizarStatusIndiceZim() {
   try {
     const s = await api("/api/zim/status");
     const vetores = Number(s.com_embeddings || 0);
-    alvo.textContent = (s.artigos_indexados || 0) + " artigos · " +
-      (s.trechos || 0) + " trechos · " + (vetores
-        ? vetores + " vetores locais."
-        : "sem embeddings; busca lexical ativa.") +
+    const artigos = Number(s.artigos_indexados || 0);
+    const trechos = Number(s.trechos || 0);
+    if (!trechos) {
+      alvo.textContent = (artigos || 0) + " artigos · 0 trechos · " +
+        (s.mensagem || "Nenhum conteúdo foi indexado ainda.") +
+        (s.arquivos_zim_disponiveis ? " A indexação pode ser iniciada ou retomada." : "");
+      return;
+    }
+    alvo.textContent = artigos + " artigos · " + trechos + " trechos · " + (vetores
+      ? vetores + " embeddings locais; busca híbrida ativa."
+      : "sem embeddings; busca lexical ativa.") +
       " A indexação pode ser retomada a qualquer momento.";
   } catch (erro) { alvo.textContent = "Índice ZIM ainda não disponível: " + mensagemErroZim(erro); }
 }
@@ -366,6 +373,11 @@ $("#zim-indexar")?.addEventListener("click", async () => {
   try {
     const resultado = await api("/api/zim/indexar", { method: "POST", json: { limite: 150 } });
     if (resultado.erro) throw new Error(resultado.erro);
+    if (resultado.sem_arquivos) {
+      await atualizarStatusIndiceZim();
+      status.textContent = resultado.mensagem || "Adicione arquivos .zim antes de indexar.";
+      return;
+    }
     const erros = resultado.erros || [];
     status.textContent = (resultado.artigos_processados || 0) + " entradas processadas · " +
       (resultado.indexados || 0) + " artigos indexados · " +
@@ -396,8 +408,9 @@ async function carregarModulos() {
     const itens = dados.modulos || [];
     grade.innerHTML = itens.map((m) => {
       const status = m.estado === "disponivel" ? "Disponível" :
-        m.estado === "instalado_parado" ? "Instalado · serviço indisponível" :
-        m.estado === "nativo" ? "Recurso nativo do Optimus" : "Não instalado";
+        m.estado === "instalado_parado" ? "Instalado · parado" :
+        m.estado === "nativo" ? "Recurso nativo do Optimus" :
+        m.estado === "permissao_necessaria" ? "Permissão necessária" : "Não instalado";
       return `<article class="cartao"><div class="linha entre"><b>${esc(m.nome)}</b><span class="selo">${esc(status)}</span></div>
         <p>${esc(m.descricao)}</p><small class="sutil">${esc(m.detalhe || "Detecção local")}</small></article>`;
     }).join("") || '<p class="sutil">Nenhum módulo foi identificado.</p>';

@@ -526,6 +526,15 @@ class Manipulador(BaseHTTPRequestHandler):
                 corpo = self._corpo()
                 modelo = str(corpo.get("modelo_embedding") or "").strip()
                 try:
+                    catalogo = zim.listar_zim()
+                    if not catalogo.get("arquivos"):
+                        estado_indice = zim_rag.status()
+                        return self._json({
+                            "ok": False,
+                            "sem_arquivos": True,
+                            "mensagem": "Nenhum arquivo ZIM foi encontrado. Adicione um arquivo .zim à pasta biblioteca_zim antes de indexar.",
+                            "estado": estado_indice,
+                        })
                     url_motor = getattr(optimus.motor, "url", "")
                     preparo = zim_rag.preparar_embedding(url_motor, modelo)
                     modelo = preparo.get("modelo") or modelo

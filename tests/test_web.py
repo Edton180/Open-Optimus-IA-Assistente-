@@ -677,7 +677,30 @@ def test_atualizacao_aplicada_solicita_reinicio_apos_responder(monkeypatch):
         resposta = _req(base + "/api/atualizacao", {})
         assert resposta["ok"] is True
         assert resposta["reiniciando"] is True
-        assert server._reinicio_solicitado.is_set()
+        assert server._reinicio_solicitado.wait(timeout=1), \
+            "o pedido de reinício deve ser registrado após a resposta HTTP"
     finally:
         server._reinicio_solicitado.clear()
+        httpd.shutdown()
+
+
+def test_indexacao_sem_zim_nao_baixa_modelo_de_embedding(monkeypatch):
+    from optimus import zim, zim_rag
+
+    monkeypatch.setattr(zim, "listar_zim", lambda: {
+        "total": 0, "arquivos": [], "tamanho_total_bytes": 0,
+        "pasta_configurada": True,
+    })
+
+    def nao_deve_baixar(*_args, **_kwargs):
+        raise AssertionError("não deve baixar embeddings sem arquivo ZIM")
+
+    monkeypatch.setattr(zim_rag, "preparar_embedding", nao_deve_baixar)
+    httpd, base = _subir()
+    try:
+        resposta = _req(base + "/api/zim/indexar", {"limite": 150})
+        assert resposta["sem_arquivos"] is True
+        assert "Nenhum arquivo ZIM" in resposta["mensagem"]
+        assert resposta["estado"]["modo_busca"] == "indisponivel"
+    finally:
         httpd.shutdown()
