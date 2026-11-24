@@ -521,14 +521,37 @@ def buscar(consulta: str, limite: int = 6, modelo_embedding: str = "",
 
 
 def status() -> dict[str, Any]:
+    from optimus import zim
+
     con = _db()
     try:
         arquivos = [dict(r) for r in con.execute(
             "SELECT nome,tamanho,total,cursor,concluido,atualizado FROM arquivos ORDER BY nome")]
-        return {"arquivos": arquivos, "artigos_indexados": int(con.execute(
-            "SELECT COUNT(DISTINCT arquivo || ':' || caminho_artigo) FROM trechos").fetchone()[0]),
-            "trechos": int(con.execute("SELECT COUNT(*) FROM trechos").fetchone()[0]),
-            "com_embeddings": int(con.execute(
-                "SELECT COUNT(*) FROM trechos WHERE embedding IS NOT NULL").fetchone()[0])}
+        artigos = int(con.execute(
+            "SELECT COUNT(DISTINCT arquivo || ':' || caminho_artigo) FROM trechos").fetchone()[0])
+        trechos = int(con.execute("SELECT COUNT(*) FROM trechos").fetchone()[0])
+        embeddings = int(con.execute(
+            "SELECT COUNT(*) FROM trechos WHERE embedding IS NOT NULL").fetchone()[0])
+        catalogo = zim.listar_zim()
+        arquivos_disponiveis = int(catalogo.get("total") or 0)
+        modo = "hibrido" if embeddings else "lexical" if trechos else "indisponivel"
+        return {
+            "arquivos": arquivos,
+            "arquivos_zim_disponiveis": arquivos_disponiveis,
+            "artigos_indexados": artigos,
+            "trechos": trechos,
+            "com_embeddings": embeddings,
+            "modo_busca": modo,
+            "pronto": trechos > 0,
+            "mensagem": (
+                "Nenhum arquivo ZIM foi adicionado à biblioteca."
+                if arquivos_disponiveis == 0 else
+                "Arquivos ZIM encontrados, mas ainda não indexados. Clique em Indexar / continuar."
+                if trechos == 0 else
+                "Busca híbrida lexical e vetorial disponível."
+                if embeddings else
+                "Busca lexical disponível; embeddings ainda não foram gerados."
+            ),
+        }
     finally:
         con.close()
