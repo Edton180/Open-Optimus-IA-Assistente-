@@ -153,6 +153,7 @@ def test_pausa_vira_silencio_no_audio(monkeypatch):
 
 
 def test_perfil_edton_braz_tem_parametros_de_narracao_ptbr(monkeypatch, tmp_path):
+    monkeypatch.setattr(vozes, "pasta_base", lambda: tmp_path)
     perfil = vozes.obter("Edton Braz")
     assert perfil.id == "edton-braz"
     assert perfil.idioma == "pt-BR" and perfil.genero == "masculina"
@@ -161,7 +162,6 @@ def test_perfil_edton_braz_tem_parametros_de_narracao_ptbr(monkeypatch, tmp_path
     assert perfil.descricao and "micro-pausas" in perfil.descricao
 
     # Com pesos preparados, o perfil passa a usar o voice design do OmniVoice.
-    monkeypatch.setattr(vozes, "pasta_base", lambda: tmp_path)
     marcador = tmp_path / "estudio" / "modelos" / ".prontos" / "omnivoice.ok"
     marcador.parent.mkdir(parents=True)
     marcador.write_text("ok", encoding="utf-8")
