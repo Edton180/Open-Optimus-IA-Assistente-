@@ -1,4 +1,6 @@
-from optimus.tools.casa import _extrair_xaddrs_onvif
+import re
+
+from optimus.tools.casa import _extrair_xaddrs_onvif, _mensagem_probe_onvif
 
 
 def test_extrai_endpoints_http_onvif_sem_duplicar():
@@ -30,3 +32,16 @@ def test_rejeita_endpoints_com_credenciais_embutidas_e_esquemas_nao_http():
 
 def test_xml_invalido_nao_interrompe_descoberta():
     assert _extrair_xaddrs_onvif(b"<Envelope><XAddrs>") == []
+
+
+
+def test_probe_usa_uuid_valido_e_unico_em_cada_requisicao():
+    primeira = _mensagem_probe_onvif().decode("utf-8")
+    segunda = _mensagem_probe_onvif().decode("utf-8")
+    padrao = r"<w:MessageID>urn:uuid:([0-9a-fA-F-]{36})</w:MessageID>"
+    id_primeiro = re.search(padrao, primeira)
+    id_segundo = re.search(padrao, segunda)
+    assert id_primeiro is not None
+    assert id_segundo is not None
+    assert id_primeiro.group(1) != id_segundo.group(1)
+    assert primeira.count("<d:Probe>") == 1
