@@ -137,6 +137,29 @@ def _db() -> sqlite3.Connection:
     return con
 
 
+def _modelo_auto(url: str, configurado: str = "") -> str:
+    """Usa apenas um modelo de embedding já instalado; nunca baixa modelos sem consentimento."""
+    if configurado:
+        return configurado
+    if not url:
+        return ""
+    try:
+        import httpx
+        resposta = httpx.get(url.rstrip("/") + "/api/tags", timeout=2.5)
+        if resposta.status_code != 200:
+            return ""
+        nomes = [str(m.get("name") or "") for m in resposta.json().get("models", [])]
+        preferidos = ("embeddinggemma", "nomic-embed-text", "mxbai-embed-large",
+                      "bge-m3", "snowflake-arctic-embed", "all-minilm")
+        for preferido in preferidos:
+            encontrado = next((n for n in nomes if preferido in n.casefold()), "")
+            if encontrado:
+                return encontrado
+    except Exception:
+        pass
+    return ""
+
+
 def _embedding(url: str, modelo: str, texto: str) -> list[float] | None:
     if not url or not modelo:
         return None
@@ -167,6 +190,7 @@ def indexar(arquivos: list[dict] | None = None, limite: int = 150,
     from optimus import zim
     lista = arquivos if arquivos is not None else zim.listar_zim().get("arquivos", [])
     limite = max(1, min(int(limite), 1000))
+    modelo_embedding = _modelo_auto(url_motor, modelo_embedding)
     total_novos = total_trechos = processados = 0
     erros: list[dict] = []
     con = _db()
@@ -198,6 +222,7 @@ def indexar(arquivos: list[dict] | None = None, limite: int = 150,
                             continue
                         if processados >= limite:
                             break
+                        processados += 1
                         proximo = indice + 1
                         try:
                             if getattr(entrada, "is_redirect", False):
@@ -245,7 +270,6 @@ def indexar(arquivos: list[dict] | None = None, limite: int = 150,
                         con.execute("UPDATE arquivos SET cursor=?,atualizado=? WHERE nome=?",
                                     (proximo, time.time(), nome))
                         con.commit()
-                        processados += 1
                     concluido = processados < limite and proximo >= total if 'proximo' in locals() else cursor >= total
                     # Quando não há mais entradas elegíveis, a próxima varredura confirma conclusão.
                     if processados < limite:
@@ -274,6 +298,7 @@ def buscar(consulta: str, limite: int = 6, modelo_embedding: str = "",
            url_motor: str = "") -> list[dict[str, Any]]:
     """Recuperação híbrida: FTS5 + similaridade cosseno; fallback lexical."""
     consulta = str(consulta or "").strip()
+    modelo_embedding = _modelo_auto(url_motor, modelo_embedding)
     if len(consulta) < 2:
         return []
     con = _db()
