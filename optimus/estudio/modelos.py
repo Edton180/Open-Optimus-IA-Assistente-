@@ -150,19 +150,17 @@ def instalar(ident: str, progresso=None) -> dict:
         _pip("install", item.pacote)
         importlib.invalidate_caches()
         # Pré-carrega os pesos agora, não apenas na primeira utilização do recurso.
-        if item.id == "omnivoice":
-            from optimus.estudio import omnivoice
+        if item.id in {"omnivoice", "chatterbox", "faster-whisper"}:
+            from huggingface_hub import snapshot_download
 
-            omnivoice.modelo()
-        elif item.id == "chatterbox":
-            from chatterbox.mtl_tts import ChatterboxMultilingualTTS
-
-            ChatterboxMultilingualTTS.from_pretrained(device="cpu")
-        elif item.id == "faster-whisper":
-            from optimus.voice.stt import Ouvinte
-
-            Ouvinte("small")._carregar()
+            repositorios = {
+                "omnivoice": "k2-fsa/OmniVoice",
+                "chatterbox": "ResembleAI/chatterbox",
+                "faster-whisper": "Systran/faster-whisper-small",
+            }
+            snapshot_download(repo_id=repositorios[item.id])
         elif item.id == "demucs":
+            # O Demucs baixa o checkpoint oficial e o deixa no cache do torch hub.
             from demucs.pretrained import get_model
 
             get_model(name="htdemucs")
@@ -181,7 +179,7 @@ def instalar(ident: str, progresso=None) -> dict:
 
 
 
-def instalar_todos(progresso=None, ids: list[str] | None = None) -> dict:
+def instalar_todos(progresso=None, ids: list[str] | None = None, cancelado=None) -> dict:
     """Instala sequencialmente todos os motores e pesos do catálogo.
 
     Faz uma pré-verificação de espaço, preserva os itens já instalados e continua
@@ -203,6 +201,10 @@ def instalar_todos(progresso=None, ids: list[str] | None = None) -> dict:
     resultados = []
     total = max(1, len(selecionados))
     for indice, item in enumerate(selecionados, 1):
+        if cancelado and cancelado():
+            return {"total": len(resultados), "instalados": sum(
+                r["estado"] in {"instalado", "já instalado"} for r in resultados),
+                "cancelado": True, "resultados": resultados}
         if item.instalado():
             resultados.append({"id": item.id, "nome": item.nome, "estado": "já instalado"})
             continue
