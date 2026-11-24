@@ -57,3 +57,33 @@ def test_diagnostico_docker_usa_timeout_curto(monkeypatch):
     chamadas.clear()
     ha._container()
     assert chamadas == [3]
+
+
+
+def test_container_linux_habilita_bluetooth_sem_privileged(monkeypatch, tmp_path):
+    monkeypatch.setattr(ha.platform, "system", lambda: "Linux")
+    monkeypatch.setattr(ha.Path, "exists", lambda self: str(self) == "/run/dbus/system_bus_socket")
+    args = ha._argumentos_container(tmp_path)
+    assert "--network" in args and "host" in args
+    assert "--cap-add" in args
+    assert args[args.index("--cap-add") + 1] == "NET_ADMIN"
+    assert args[args.index("--cap-add", args.index("--cap-add") + 1) + 1] == "NET_RAW"
+    assert "/run/dbus:/run/dbus:ro" in args
+    assert "--privileged" not in args
+
+
+def test_container_linux_sem_dbus_nao_falha(monkeypatch, tmp_path):
+    monkeypatch.setattr(ha.platform, "system", lambda: "Linux")
+    monkeypatch.setattr(ha.Path, "exists", lambda self: False)
+    args = ha._argumentos_container(tmp_path)
+    assert "--cap-add" in args
+    assert "/run/dbus:/run/dbus:ro" not in args
+
+
+def test_container_windows_nao_recebe_capacidades_linux(monkeypatch, tmp_path):
+    monkeypatch.setattr(ha.platform, "system", lambda: "Windows")
+    args = ha._argumentos_container(tmp_path)
+    assert "-p" in args
+    assert "8123:8123" in args
+    assert "--cap-add" not in args
+    assert "--network" not in args
