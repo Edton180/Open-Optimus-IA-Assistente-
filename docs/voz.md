@@ -87,7 +87,7 @@ reconhecimento aceita variações comuns de pronúncia.
 ## Perfil pessoal Edton Braz
 
 A entrada **Edton Braz** que já existia no catálogo era uma voz pública da ElevenLabs
-(Mat(h)eus), não uma clonagem da voz pessoal do proprietário. Para criar o perfil pessoal,
+(Matheus), não uma clonagem da voz pessoal do proprietário. Para criar o perfil pessoal,
 abra **Estúdio > Vozes > Clonar uma voz**, mantenha o nome sugerido **Edton Braz**, escolha
 uma gravação própria/autorizada e confirme a declaração de consentimento.
 
