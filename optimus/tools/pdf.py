@@ -7,6 +7,7 @@ dependem do LibreOffice (soffice) quando disponíveis.
 
 from __future__ import annotations
 
+import difflib
 import re
 import shutil
 import subprocess
@@ -631,8 +632,18 @@ def pdf_comparar(ctx, arquivo_a: str, arquivo_b: str):
     ta = (a.get("texto") or "").strip()
     tb = (b.get("texto") or "").strip()
     iguais = ta == tb
-    return {"iguais": iguais, "tamanho_a": len(ta), "tamanho_b": len(tb),
-            "mensagem": "Textos idênticos." if iguais else "Há diferenças no texto."}
+    diferencas = list(difflib.unified_diff(
+        ta.splitlines(), tb.splitlines(), fromfile=Path(arquivo_a).name,
+        tofile=Path(arquivo_b).name, lineterm=""
+    ))
+    return {
+        "iguais": iguais, "tamanho_a": len(ta), "tamanho_b": len(tb),
+        "linhas_diferentes": sum(1 for linha in diferencas if linha.startswith(("+", "-"))
+                                 and not linha.startswith(("+++", "---"))),
+        "diff": "\n".join(diferencas)[:20000],
+        "mensagem": "Textos idênticos." if iguais else "Diferenças textuais encontradas; veja o diff.",
+        "observacao": "A comparação atual é textual. Diferenças apenas visuais, fontes e posições podem não aparecer."
+    }
 
 
 @ferramenta(
@@ -643,30 +654,56 @@ def pdf_comparar(ctx, arquivo_a: str, arquivo_b: str):
      "destino": texto("Saída")},
     grupo="pdf", risco=MODERADO, obrigatorios=["arquivo"],
 )
-def pdf_ocr(ctx, arquivo: str, idioma: str = "por", destino: str = ""):
+def pdf_ocr(ctx, arquivo: str, idioma: str = "por", destino: str = "", formato: str = "pdf"):
     try:
         import pytesseract
         from pypdfium2 import PdfDocument
+        from pypdf import PdfReader, PdfWriter
     except ImportError:
-        return {"erro": "OCR precisa de: pip install pypdfium2 pytesseract e Tesseract no sistema."}
+        return {"erro": "OCR precisa de pypdfium2, pytesseract e Tesseract instalado no sistema."}
     caminho = _caminho(ctx, arquivo)
     if not caminho.is_file():
         return {"erro": f"Arquivo não encontrado: {caminho}"}
+    formato = (formato or "pdf").lower()
+    if formato not in ("pdf", "txt", "ambos"):
+        return {"erro": "Formato deve ser pdf, txt ou ambos."}
     try:
         doc = PdfDocument(str(caminho))
         textos = []
+        writer = PdfWriter()
         for i in range(len(doc)):
             page = doc[i]
             bitmap = page.render(scale=2).to_pil()
-            t = pytesseract.image_to_string(bitmap, lang=idioma or "por")
-            textos.append(f"--- Página {i+1} ---\n{t.strip()}")
+            textos.append(f"--- Página {i+1} ---\n{pytesseract.image_to_string(bitmap, lang=idioma or 'por').strip()}")
+            if formato in ("pdf", "ambos"):
+                pdf_bytes = pytesseract.image_to_pdf_or_hocr(bitmap, extension="pdf", lang=idioma or "por")
+                leitor_ocr = PdfReader(BytesIO(pdf_bytes), strict=False)
+                for pagina_ocr in leitor_ocr.pages:
+                    writer.add_page(pagina_ocr)
         texto_final = "\n\n".join(textos)
-        out_txt = _caminho(ctx, destino or f"{caminho.stem}_ocr.txt")
-        if not str(out_txt).lower().endswith(".txt"):
-            out_txt = out_txt.with_suffix(".txt")
-        out_txt.write_text(texto_final, encoding="utf-8")
-        return {"mensagem": f"OCR concluído ({len(doc)} páginas).", "texto": texto_final[:30000],
-                "arquivo_texto": str(out_txt)}
+        resultado = {"mensagem": f"OCR concluído ({len(doc)} páginas).", "texto": texto_final[:30000]}
+        if formato in ("pdf", "ambos"):
+            out_pdf = _caminho(ctx, destino or f"{caminho.stem}_ocr.pdf")
+            if out_pdf.suffix.lower() != ".pdf":
+                out_pdf = out_pdf.with_suffix(".pdf")
+            out_pdf.parent.mkdir(parents=True, exist_ok=True)
+            temp = out_pdf.with_name(out_pdf.name + ".tmp")
+            with temp.open("wb") as arquivo_saida:
+                writer.write(arquivo_saida)
+            validado = PdfReader(str(temp), strict=True)
+            if len(validado.pages) != len(doc):
+                temp.unlink(missing_ok=True)
+                return {"erro": "OCR gerou quantidade inesperada de páginas; original preservado."}
+            temp.replace(out_pdf)
+            resultado["arquivo_pdf_pesquisavel"] = str(out_pdf)
+        if formato in ("txt", "ambos"):
+            out_txt = _caminho(ctx, destino or f"{caminho.stem}_ocr.txt")
+            if out_txt.suffix.lower() != ".txt":
+                out_txt = out_txt.with_suffix(".txt")
+            out_txt.parent.mkdir(parents=True, exist_ok=True)
+            out_txt.write_text(texto_final, encoding="utf-8")
+            resultado["arquivo_texto"] = str(out_txt)
+        return resultado
     except Exception as e:
         return {"erro": f"Falha no OCR: {e}"}
 
