@@ -9,7 +9,7 @@ Este documento usa o [Project NOMAD](https://github.com/Crosstalk-Solutions/proj
 | Área de referência | NOMAD apresenta | Situação encontrada no Optimus | Evolução necessária |
 |---|---|---|---|
 | Command Center | Painel web/API que gerencia serviços | Painel web local próprio já existe | Painel de módulos, serviços, health, logs, filas e permissões |
-| IA local/remota | Ollama e APIs compatíveis | Já existe Ollama, modelos remotos e seleção por hardware | Catálogo de modelos, download/gestão, benchmark e RAG avançado |
+| IA local/remota | Ollama e APIs compatíveis | Já existe Ollama, modelos remotos, catálogo de modelos, avaliação de hardware e ferramentas de download | Melhorar benchmark reprodutível, comparação histórica e políticas de atualização/armazenamento; não duplicar catálogo nem download existentes |
 | RAG/Knowledge Base | Upload, busca semântica e Qdrant | Já existe SQLite FTS5, aprendizagem de sites/arquivos e contexto automático | Ingestão incremental multimodal, embeddings locais, citações de página/trecho, filtros e reindexação |
 | Biblioteca offline | Kiwix e arquivos ZIM | Não identificada na auditoria inicial | Catálogo ZIM, downloads retomáveis, checksum, idioma, licença e leitor |
 | Educação | Kolibri, cursos e progresso | Não identificada na auditoria inicial | Integração opcional, perfis, progresso e conteúdo offline |
@@ -18,7 +18,7 @@ Este documento usa o [Project NOMAD](https://github.com/Crosstalk-Solutions/proj
 | Notas | FlatNotes/Markdown | Não confirmada uma aplicação de notas completa | Notas Markdown, tags, anexos, pesquisa, backlinks e exportação |
 | Catálogo de apps | Supply Depot e containers | Plugins de ferramentas existem; catálogo de apps não foi confirmado | Catálogo assinado, permissões, versões e instalação consentida |
 | Benchmark | Pontuação de hardware/leaderboard | Detecção de hardware e perfis de modelo já existem | Benchmark reprodutível, relatórios locais e publicação opt-in |
-| Atualizações | Atualizações opt-in de core/apps/conteúdo | Atualizador do Optimus já existe, com histórico de correções | Backup, migração, rollback, canais e atualizações de módulos/conteúdo |
+| Atualizações | Atualizações opt-in de core/apps/conteúdo | Já existem atualização do core, backup em instalações de release, rollback para instalações Git/release e canais stable/beta | Evoluir migrações de dados versionadas, atualização independente de módulos/conteúdos e recuperação testada após falha |
 | Setup wizard | Configuração inicial e coleções | Instaladores Windows/Linux/Android já existem | Wizard modular, idioma, caminhos, espaço e perfil de hardware |
 | Offline-first | Acesso offline a conteúdo e serviços | Agente e modelos locais já existem; pesquisa web depende de rede | Matriz offline explícita e teste sem conectividade |
 | Idiomas | Interface/conteúdo majoritariamente inglês conforme README/FAQ | Optimus prioriza português brasileiro | pt-BR como idioma principal e seleção por módulo |
@@ -36,14 +36,14 @@ Este documento usa o [Project NOMAD](https://github.com/Crosstalk-Solutions/proj
 
 ## Fases de implementação
 
-- [ ] Inventariar arquitetura atual, dados, atualizador, UI e cobertura de testes.
+- [ ] Inventariar arquitetura atual, dados, atualizador, UI e cobertura de testes (incluindo recursos já existentes para evitar duplicação).
 - [ ] Consolidar Knowledge Center com ingestão, proveniência e citações.
 - [ ] Criar catálogo modular e painel de serviços.
 - [ ] Integrar biblioteca offline Kiwix/ZIM.
 - [ ] Implementar notas e Data Lab.
 - [ ] Integrar Kolibri e mapas PMTiles.
-- [ ] Implementar benchmark local e publicação opt-in.
-- [ ] Completar wizard, backup, rollback e atualização de módulos.
+- [ ] Ampliar benchmark local reprodutível e publicação opt-in, preservando catálogo, avaliação de hardware e downloads de modelos já existentes.
+- [ ] Evoluir wizard e migrações de dados; preservar backup, rollback e canais stable/beta já existentes; adicionar atualização independente de módulos/conteúdos.
 - [ ] Integrar tudo ao agente, voz pt-BR e casa inteligente.
 - [ ] Rodar E2E e validar Windows/Linux e modo offline.
 
