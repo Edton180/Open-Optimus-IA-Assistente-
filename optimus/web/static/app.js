@@ -132,6 +132,7 @@ async function carregarPDF() {
   try {
     const dados = await api("/api/pdf");
     pdfFerramentas = dados.ferramentas || [];
+    if (!dados.dependencias_instaladas) estadoEl.textContent = "⚠️ Instale o suporte completo: " + dados.comando_instalacao + " (Windows/Linux).";
     $("#pdf-ferramenta").innerHTML = pdfFerramentas.map((f) =>
       `<option value="${esc(f.nome)}">${esc(f.nome.replaceAll("_", " "))}</option>`).join("");
     if (!pdfFerramentas.length) throw new Error("Nenhuma ferramenta PDF foi registrada.");
@@ -193,7 +194,9 @@ $("#pdf-executar").addEventListener("click", async () => {
   const argumentos = {};
   for (const campo of $("[data-pdf-param]")) {
     const nome = campo.dataset.pdfParam;
-    argumentos[nome] = campo.type === "number" && campo.value !== "" ? Number(campo.value) : campo.value.trim();
+    const valor = campo.value.trim();
+    if (valor === "" && !(f.obrigatorios || []).includes(nome)) continue;
+    argumentos[nome] = campo.type === "number" ? Number(valor) : valor;
   }
   for (const nome of f.obrigatorios || []) {
     if (argumentos[nome] === "" || argumentos[nome] === undefined) {
