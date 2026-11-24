@@ -180,7 +180,7 @@ def preparar_embedding(url: str, modelo: str = "") -> dict[str, Any]:
         ) as resposta:
             if resposta.status_code != 200:
                 return {"instalado": False,
-                        "erro": f"Ollama não conseguiu baixar all-minilm (HTTP {resposta.status_code})."}
+                        "erro": f"Ollama não conseguiu baixar o modelo de embeddings (HTTP {resposta.status_code})."}
             concluido = False
             for linha in resposta.iter_lines():
                 if not linha:
