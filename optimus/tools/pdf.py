@@ -706,17 +706,27 @@ def pdf_converter(ctx, arquivo: str, formato: str, destino: str = ""):
             return lido
         texto_pdf = lido.get("texto") or ""
         out = _caminho(ctx, destino or f"{caminho.stem}.{formato}")
+        out.parent.mkdir(parents=True, exist_ok=True)
         if formato == "txt":
             out.write_text(texto_pdf, encoding="utf-8")
         elif formato == "html":
-            out.write_text(f"<html><body><pre>{texto_pdf.replace('<','<')}</pre></body></html>", encoding="utf-8")
+            out.write_text(
+                f"<html><body><pre>{html_escape(texto_pdf)}</pre></body></html>",
+                encoding="utf-8",
+            )
         elif formato == "csv":
             linhas = [l.replace('"', '""') for l in texto_pdf.splitlines() if l.strip()]
             out.write_text("\n".join(f'"{l}"' for l in linhas), encoding="utf-8")
         else:
-            out = out.with_suffix(".txt")
-            out.write_text(texto_pdf, encoding="utf-8")
-            return {"mensagem": "Texto extraído (DOCX completo requer python-docx).", "destino": str(out)}
+            try:
+                from docx import Document
+            except ImportError:
+                return {"erro": 'DOCX exige python-docx. Instale: pip install "optimus-assistente[documentos]"'}
+            out = out.with_suffix(".docx")
+            documento = Document()
+            for linha in texto_pdf.splitlines():
+                documento.add_paragraph(linha)
+            documento.save(str(out))
         return {"mensagem": f"Convertido para {formato}.", "destino": str(out)}
     return {"erro": f"Formato '{formato}' não suportado. Use html, txt, csv ou pdf."}
 
