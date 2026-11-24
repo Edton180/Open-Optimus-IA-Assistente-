@@ -35,6 +35,7 @@ def _preparar(tmp_path, monkeypatch):
     monkeypatch.setattr(kiwix.time, "sleep", lambda _: None)
     monkeypatch.setattr(kiwix, "_processo", None)
     monkeypatch.setattr(kiwix, "_arquivo_ativo", None)
+    monkeypatch.setattr(kiwix, "_porta_disponivel", lambda: kiwix.PORT)
     return pasta
 
 
@@ -194,3 +195,7 @@ def test_extracao_rejeita_traversal_zip(tmp_path):
         z.writestr("../fora.txt", "conteudo")
     with pytest.raises(RuntimeError):
         kiwix_manager._extrair_zip(pacote, tmp_path / "saida")
+
+
+def test_normaliza_nome_zim_conforme_kiwix():
+    assert kiwix._zim_name("Wikipédia + Saúde 2026.ZIM") == "wikipedia_plus_saude_2026"
