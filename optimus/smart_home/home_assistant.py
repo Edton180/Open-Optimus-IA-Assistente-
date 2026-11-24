@@ -125,6 +125,16 @@ def estado() -> dict[str, Any]:
     except Exception as exc:
         container = {"instalado": False, "estado": "erro", "rodando": False}
         erro = str(exc)
+    if container.get("estado") == "permissao_pendente":
+        try:
+            import httpx
+            resposta = httpx.get(f"http://127.0.0.1:{PORTA}/", timeout=1.5,
+                                 follow_redirects=False)
+            container = {"instalado": True, "estado": "running",
+                         "rodando": resposta.status_code < 500,
+                         "verificacao": "HTTP local"}
+        except Exception:
+            pass
     try:
         tarefa = dict(_TAREFA)
     except Exception:
@@ -260,7 +270,7 @@ def acao(nome: str) -> dict[str, Any]:
         return {"ok": True, "mensagem": "Backup criado; a configuração original foi preservada.",
                 "arquivo": str(arquivo)}
     elif nome == "desinstalar":
-        _executar(["stop", NOME], timeout=60, check=False)
+        _executar(["stop", NOME], timeout=60, check=False, elevate=True)
         _executar(["rm", "-f", NOME], timeout=30, check=False, elevate=True)
         return {"ok": True, "mensagem": "Container removido. Os dados e backups foram preservados.",
                 "dados": str(_pasta())}
