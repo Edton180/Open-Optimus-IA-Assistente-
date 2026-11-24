@@ -624,7 +624,7 @@ def estudio_instalar_modelo(ctx, modelo: str):
     item = modelos.obter(modelo)
 
     def trabalho(progresso, cancelado, **_):
-        return modelos.instalar(item.id, progresso)
+        return modelos.instalar(item.id, progresso, cancelado=cancelado)
 
     return _na_fila(ctx, "modelo", f"Instalar {item.nome}", trabalho)
 
