@@ -162,25 +162,30 @@ def _modelo_auto(url: str, configurado: str = "") -> str:
 
 
 def _embeddings(url: str, modelo: str, textos: list[str]) -> list[list[float] | None]:
-    """Gera embeddings em lote para reduzir round-trips ao Ollama."""
+    """Gera embeddings em lotes pequenos para reduzir round-trips e pico de RAM."""
     if not url or not modelo or not textos:
         return [None] * len(textos)
-    try:
-        import httpx
-        resposta = httpx.post(
-            url.rstrip("/") + "/api/embed",
-            json={"model": modelo, "input": [texto[:4000] for texto in textos]},
-            timeout=90,
-        )
-        if resposta.status_code != 200:
-            return [None] * len(textos)
-        vetores = resposta.json().get("embeddings") or []
-        saida = []
-        for vetor in vetores[:len(textos)]:
-            saida.append([float(x) for x in vetor] if isinstance(vetor, list) and vetor else None)
-        return saida + [None] * (len(textos) - len(saida))
-    except Exception:
-        return [None] * len(textos)
+    import httpx
+    saida: list[list[float] | None] = []
+    for inicio in range(0, len(textos), 16):
+        lote = textos[inicio:inicio + 16]
+        try:
+            resposta = httpx.post(
+                url.rstrip("/") + "/api/embed",
+                json={"model": modelo, "input": [texto[:4000] for texto in lote]},
+                timeout=90,
+            )
+            if resposta.status_code != 200:
+                saida.extend([None] * len(lote))
+                continue
+            vetores = resposta.json().get("embeddings") or []
+            for vetor in vetores[:len(lote)]:
+                saida.append([float(x) for x in vetor]
+                             if isinstance(vetor, list) and vetor else None)
+            saida.extend([None] * (len(lote) - len(vetores)))
+        except Exception:
+            saida.extend([None] * len(lote))
+    return saida
 
 
 def _embedding(url: str, modelo: str, texto: str) -> list[float] | None:
