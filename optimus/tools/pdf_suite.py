@@ -1220,3 +1220,165 @@ def pdf_unir_documentos(ctx, arquivos: str, destino: str = ""):
                 "destino": str(saida), "paginas": paginas, "tamanho_bytes": saida.stat().st_size}
     except Exception as exc:
         return {"erro": f"Falha ao unir documentos: {exc}"}
+
+
+@ferramenta(
+    "pdf_dividir_pares_impares",
+    "Divide um PDF em dois arquivos: páginas ímpares (1, 3, 5...) e pares (2, 4, 6...). "
+    "Preserva o conteúdo vetorial e o texto selecionável.",
+    {"arquivo": texto("PDF de origem"), "destino_impares": texto("PDF de páginas ímpares"),
+     "destino_pares": texto("PDF de páginas pares")},
+    grupo="pdf", risco=MODERADO, obrigatorios=["arquivo"],
+)
+def pdf_dividir_pares_impares(ctx, arquivo: str, destino_impares: str = "",
+                              destino_pares: str = ""):
+    deps = _pypdf()
+    if not deps:
+        return {"erro": 'Instale: pip install "optimus-assistente[pdf]"'}
+    PdfReader, PdfWriter = deps
+    origem = _path(ctx, arquivo)
+    if not origem.is_file():
+        return {"erro": f"PDF não encontrado: {origem}"}
+    try:
+        leitor = PdfReader(str(origem), strict=False)
+        if leitor.is_encrypted:
+            return {"erro": "O PDF está protegido. Desbloqueie-o antes de dividir."}
+        impares, pares = PdfWriter(), PdfWriter()
+        for indice, pagina in enumerate(leitor.pages):
+            (impares if indice % 2 == 0 else pares).add_page(pagina)
+        base = origem.with_suffix("")
+        saida_i = _path(ctx, destino_impares or f"{base.name}_impares.pdf")
+        saida_p = _path(ctx, destino_pares or f"{base.name}_pares.pdf")
+        saida_i.parent.mkdir(parents=True, exist_ok=True)
+        saida_p.parent.mkdir(parents=True, exist_ok=True)
+        if len(impares.pages):
+            with saida_i.open("wb") as f:
+                impares.write(f)
+        if len(pares.pages):
+            with saida_p.open("wb") as f:
+                pares.write(f)
+        return {"mensagem": "PDF separado em páginas ímpares e pares.",
+                "impares": str(saida_i) if len(impares.pages) else "",
+                "paginas_impares": len(impares.pages),
+                "pares": str(saida_p) if len(pares.pages) else "",
+                "paginas_pares": len(pares.pages)}
+    except Exception as exc:
+        return {"erro": f"Falha ao separar páginas pares e ímpares: {exc}"}
+
+
+def _compor_folha(escritor, paginas, largura: float, altura: float,
+                  colunas: int, linhas: int) -> None:
+    from copy import copy
+    from pypdf import Transformation
+
+    celula_w, celula_h = largura / colunas, altura / linhas
+    for indice, pagina in enumerate(paginas):
+        if pagina is None:
+            continue
+        coluna, linha = indice % colunas, indice // colunas
+        caixa = pagina.mediabox
+        pw, ph = float(caixa.width), float(caixa.height)
+        escala = min(celula_w / pw, celula_h / ph)
+        x = coluna * celula_w + (celula_w - pw * escala) / 2
+        y = altura - (linha + 1) * celula_h + (celula_h - ph * escala) / 2
+        escritor.pages[-1].merge_transformed_page(
+            copy(pagina), Transformation().scale(escala).translate(x, y)
+        )
+
+
+@ferramenta(
+    "pdf_paginas_por_folha",
+    "Coloca 2, 4, 6 ou 9 páginas de origem em cada folha, preservando texto e vetores.",
+    {"arquivo": texto("PDF de origem"), "por_folha": numero("Quantidade: 2, 4, 6 ou 9"),
+     "destino": texto("PDF de saída")},
+    grupo="pdf", risco=MODERADO, obrigatorios=["arquivo"],
+)
+def pdf_paginas_por_folha(ctx, arquivo: str, por_folha: int = 2, destino: str = ""):
+    deps = _pypdf()
+    if not deps:
+        return {"erro": 'Instale: pip install "optimus-assistente[pdf]"'}
+    PdfReader, PdfWriter = deps
+    quantidade = int(por_folha or 2)
+    grades = {2: (2, 1), 4: (2, 2), 6: (3, 2), 9: (3, 3)}
+    if quantidade not in grades:
+        return {"erro": "por_folha deve ser 2, 4, 6 ou 9."}
+    origem = _path(ctx, arquivo)
+    if not origem.is_file():
+        return {"erro": f"PDF não encontrado: {origem}"}
+    saida = _path(ctx, destino or f"{origem.stem}_{quantidade}porfolha.pdf")
+    try:
+        leitor = PdfReader(str(origem), strict=False)
+        if leitor.is_encrypted:
+            return {"erro": "O PDF está protegido. Desbloqueie-o antes de organizar."}
+        colunas, linhas = grades[quantidade]
+        primeira = leitor.pages[0]
+        largura, altura = float(primeira.mediabox.width), float(primeira.mediabox.height)
+        escritor = PdfWriter()
+        for inicio in range(0, len(leitor.pages), quantidade):
+            grupo = leitor.pages[inicio:inicio + quantidade]
+            escritor.add_blank_page(width=largura, height=altura)
+            _compor_folha(escritor, grupo, largura, altura, colunas, linhas)
+        saida.parent.mkdir(parents=True, exist_ok=True)
+        with saida.open("wb") as f:
+            escritor.write(f)
+        return {"mensagem": f"Organizei {len(leitor.pages)} páginas em {len(escritor.pages)} folha(s).",
+                "destino": str(saida), "paginas_origem": len(leitor.pages),
+                "folhas_saida": len(escritor.pages), "por_folha": quantidade}
+    except Exception as exc:
+        return {"erro": f"Falha ao montar páginas por folha: {exc}"}
+
+
+@ferramenta(
+    "pdf_imprimir_livreto",
+    "Reorganiza as páginas em ordem de livreto (imposição frente e verso), duas páginas por lado. "
+    "A impressão deve ser feita em frente e verso com virada pela borda curta.",
+    {"arquivo": texto("PDF de origem"), "destino": texto("PDF de saída")},
+    grupo="pdf", risco=MODERADO, obrigatorios=["arquivo"],
+)
+def pdf_imprimir_livreto(ctx, arquivo: str, destino: str = ""):
+    deps = _pypdf()
+    if not deps:
+        return {"erro": 'Instale: pip install "optimus-assistente[pdf]"'}
+    PdfReader, PdfWriter = deps
+    from pypdf import Transformation
+    from copy import copy
+
+    origem = _path(ctx, arquivo)
+    if not origem.is_file():
+        return {"erro": f"PDF não encontrado: {origem}"}
+    saida = _path(ctx, destino or f"{origem.stem}_livreto.pdf")
+    try:
+        leitor = PdfReader(str(origem), strict=False)
+        if leitor.is_encrypted:
+            return {"erro": "O PDF está protegido. Desbloqueie-o antes de montar o livreto."}
+        paginas = list(leitor.pages)
+        total = len(paginas)
+        preenchido = ((total + 3) // 4) * 4
+        paginas.extend([None] * (preenchido - total))
+        primeira = next(p for p in paginas if p is not None)
+        largura, altura = float(primeira.mediabox.width), float(primeira.mediabox.height)
+        escritor = PdfWriter()
+        for folha in range(preenchido // 4):
+            pares = [(preenchido - 1 - 2 * folha, 2 * folha),
+                     (2 * folha + 1, preenchido - 2 - 2 * folha)]
+            for esquerda, direita in pares:
+                escritor.add_blank_page(width=largura * 2, height=altura)
+                alvo = escritor.pages[-1]
+                for indice, x in ((esquerda, 0), (direita, largura)):
+                    pagina = paginas[indice]
+                    if pagina is None:
+                        continue
+                    pw, ph = float(pagina.mediabox.width), float(pagina.mediabox.height)
+                    escala = min(largura / pw, altura / ph)
+                    tx = x + (largura - pw * escala) / 2
+                    ty = (altura - ph * escala) / 2
+                    alvo.merge_transformed_page(copy(pagina),
+                        Transformation().scale(escala).translate(tx, ty))
+        saida.parent.mkdir(parents=True, exist_ok=True)
+        with saida.open("wb") as f:
+            escritor.write(f)
+        return {"mensagem": f"Livreto criado: {total} páginas de conteúdo em {len(escritor.pages)} lados.",
+                "destino": str(saida), "paginas_origem": total,
+                "lados_saida": len(escritor.pages), "impressao_frente_verso": True}
+    except Exception as exc:
+        return {"erro": f"Falha ao montar livreto: {exc}"}
