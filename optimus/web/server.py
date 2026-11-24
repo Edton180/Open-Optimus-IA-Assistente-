@@ -828,7 +828,7 @@ def iniciar_tunel(porta: int, senha: str) -> dict[str, str | bool]:
         _url_tunel = ""
         _erro_tunel = ""
         try:
-            _processo_tunel = subprocess.Popen(
+            processo = subprocess.Popen(
                 [executavel, "tunnel", "--no-autoupdate", "--url",
                  f"http://127.0.0.1:{int(porta)}"],
                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
@@ -837,34 +837,34 @@ def iniciar_tunel(porta: int, senha: str) -> dict[str, str | bool]:
             _processo_tunel = None
             _erro_tunel = str(erro)
             return {"erro": f"Não foi possível iniciar o Cloudflare Tunnel: {erro}"}
-        processo = _processo_tunel
+        _processo_tunel = processo
 
-        def ler_saida():
-            global _url_tunel
-            try:
-                for linha in processo.stdout or ():
-                    achado = re.search(r"https://[a-z0-9-]+[.]trycloudflare[.]com", linha, re.I)
-                    if achado:
-                        with _trava_tunel:
-                            _url_tunel = achado.group(0)
-            except (OSError, ValueError):
-                pass
+    def ler_saida():
+        global _url_tunel
+        try:
+            for linha in processo.stdout or ():
+                achado = re.search(r"https://[a-z0-9-]+[.]trycloudflare[.]com", linha, re.I)
+                if achado:
+                    with _trava_tunel:
+                        _url_tunel = achado.group(0)
+        except (OSError, ValueError):
+            pass
 
-        threading.Thread(target=ler_saida, daemon=True, name="optimus-cloudflare-log").start()
-        limite = time.monotonic() + 10
-        while time.monotonic() < limite:
-            if processo.poll() is not None:
+    threading.Thread(target=ler_saida, daemon=True, name="optimus-cloudflare-log").start()
+    limite = time.monotonic() + 10
+    while time.monotonic() < limite:
+        if processo.poll() is not None:
+            with _trava_tunel:
                 _erro_tunel = f"cloudflared encerrou com código {processo.returncode}."
-                break
-            if _url_tunel:
-                return estado_tunel()
-            time.sleep(0.1)
-        if _url_tunel:
+            break
+        if estado_tunel().get("url"):
             return estado_tunel()
-        return {"ligado": False, "iniciando": processo.poll() is None, "url": "",
-                "erro": _erro_tunel or
-                "O túnel ainda está iniciando. Atualize o status em alguns segundos."}
-
+        time.sleep(0.1)
+    if estado_tunel().get("url"):
+        return estado_tunel()
+    return {"ligado": False, "iniciando": processo.poll() is None, "url": "",
+            "erro": _erro_tunel or
+            "O túnel ainda está iniciando. Atualize o status em alguns segundos."}
 
 def parar_tunel() -> None:
     global _processo_tunel, _url_tunel, _erro_tunel
