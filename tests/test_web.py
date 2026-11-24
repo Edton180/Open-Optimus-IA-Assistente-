@@ -626,3 +626,33 @@ def test_api_zim_instalar_kiwix_rota_disponivel(monkeypatch):
     finally:
         httpd.shutdown()
         httpd.server_close()
+
+
+def test_rotas_essenciais_e_contrato_da_api_nao_retornam_404(monkeypatch):
+    from optimus import kiwix, modulos, zim, zim_rag
+    from optimus.smart_home import home_assistant
+
+    monkeypatch.setattr(kiwix, "estado", lambda: {"instalado": False, "executando": False})
+    monkeypatch.setattr(zim, "listar_zim", lambda: {
+        "total": 0, "tamanho_total_bytes": 0, "arquivos": [], "pasta_configurada": True
+    })
+    monkeypatch.setattr(zim_rag, "status", lambda: {"artigos_indexados": 0, "trechos": 0})
+    monkeypatch.setattr(modulos, "inventario", lambda: [])
+    monkeypatch.setattr(modulos, "recursos", lambda: {"cpu_percentual": 0})
+    monkeypatch.setattr(home_assistant, "estado", lambda: {
+        "runtime": {}, "container": {"instalado": False, "rodando": False},
+        "tarefa": {}, "url": "", "erro": ""
+    })
+
+    httpd, base = _subir()
+    try:
+        versao = _req(base + "/api/versao")
+        assert versao["api_contrato"] == server.API_CONTRATO
+        assert versao["recursos"]["zim"] is True
+        assert _req(base + "/api/zim")["total"] == 0
+        assert _req(base + "/api/zim/status")["trechos"] == 0
+        assert _req(base + "/api/modulos")["modulos"] == []
+        assert _req(base + "/api/modulos/recursos")["recursos"]["cpu_percentual"] == 0
+        assert "container" in _req(base + "/api/casa/gerenciado")
+    finally:
+        httpd.shutdown()
