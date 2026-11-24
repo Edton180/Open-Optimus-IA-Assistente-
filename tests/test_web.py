@@ -274,3 +274,14 @@ def test_seletor_do_menu_nao_interrompe_a_inicializacao():
     ]
     assert len(seletores_menu) == 2
     assert all(linha.startswith('$$(".menu button")') for linha in seletores_menu)
+
+
+def test_senha_nao_e_exigida_no_acesso_local_sem_rede_ou_tunel():
+    """Uma senha salva para celular/rede não deve bloquear a interface no próprio PC."""
+    from optimus.web.server import _senha_para_acesso
+
+    assert _senha_para_acesso("senha-configurada", "127.0.0.1", False) == ""
+    assert _senha_para_acesso("senha-configurada", "localhost", False) == ""
+    assert _senha_para_acesso("senha-configurada", "::1", False) == ""
+    assert _senha_para_acesso("senha-configurada", "0.0.0.0", False) == "senha-configurada"
+    assert _senha_para_acesso("senha-configurada", "127.0.0.1", True) == "senha-configurada"
