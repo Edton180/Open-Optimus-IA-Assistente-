@@ -54,3 +54,16 @@ Este documento usa o [Project NOMAD](https://github.com/Crosstalk-Solutions/proj
 - [FAQ do Project NOMAD](https://github.com/Crosstalk-Solutions/project-nomad/blob/main/FAQ.md)
 
 A matriz é uma auditoria inicial dos documentos públicos e do código do Optimus consultado. Ela não afirma que todos os recursos internos do NOMAD foram auditados em profundidade.
+
+
+## Entrega incremental: Command Center (fundação)
+
+A primeira entrega de código desta trilha adiciona a tela **Central de módulos** e a rota autenticada
+`GET /api/modulos`. O inventário verifica localmente Optimus Core, Ollama, Kiwix, Kolibri, Qdrant e
+Docker, distinguindo recurso nativo, serviço respondendo, executável instalado sem resposta e ausência
+do executável. As sondagens usam timeouts curtos e não executam comandos privilegiados.
+
+**Limite desta entrega:** inventariar não equivale a integrar ou instalar. Kiwix, Kolibri, Qdrant e
+Docker ainda não recebem gerenciamento de ciclo de vida nesta etapa; a interface informa essa
+limitação. Próximas entregas devem adicionar adaptadores independentes, instalação consentida,
+configuração, logs, atualização e testes específicos antes de apresentar ações de gerenciamento.

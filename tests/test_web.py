@@ -436,3 +436,22 @@ def test_api_descobrir_cameras_onvif_retorna_resultados(monkeypatch):
     finally:
         httpd.shutdown()
         httpd.server_close()
+
+
+def test_rota_modulos_e_tela_da_central(monkeypatch):
+    from optimus import modulos
+
+    esperado = [{"id": "Kiwix", "nome": "Kiwix", "descricao": "Biblioteca ZIM",
+                 "estado": "nao_instalado", "detalhe": "Não encontrado",
+                 "executavel": False}]
+    monkeypatch.setattr(modulos, "inventario", lambda: esperado)
+    httpd, base = _subir()
+    try:
+        pagina = urllib.request.urlopen(base + "/").read().decode()
+        assert 'data-tela="modulos"' in pagina
+        assert 'id="tela-modulos"' in pagina
+        dados = _req(base + "/api/modulos")
+        assert dados["modulos"] == esperado
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
