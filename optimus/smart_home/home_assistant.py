@@ -32,6 +32,30 @@ def _pasta() -> Path:
     return p
 
 
+def _argumentos_container(dados: Path) -> list[str]:
+    """Monta opções comuns do container sem conceder privilégios totais.
+
+    No Linux, o Home Assistant precisa das capacidades NET_ADMIN/NET_RAW e do
+    socket D-Bus do host para administrar o adaptador Bluetooth via BlueZ.
+    O socket só é montado quando existe; a ausência dele não impede o HA de
+    iniciar, mas o diagnóstico/documentação informa a limitação.
+    """
+    args = [
+        "run", "-d", "--name", NOME, "--restart", "unless-stopped",
+        "-e", f"TZ={os.environ.get('TZ', 'America/Sao_Paulo')}",
+        "-v", f"{dados.resolve()}:/config",
+    ]
+    if platform.system() == "Linux":
+        args += ["--network", "host", "--cap-add", "NET_ADMIN",
+                 "--cap-add", "NET_RAW"]
+        dbus = Path("/run/dbus")
+        if (dbus / "system_bus_socket").exists():
+            args += ["-v", "/run/dbus:/run/dbus:ro"]
+    else:
+        args += ["-p", f"{PORTA}:8123"]
+    return args
+
+
 def _comando_docker() -> list[str] | None:
     exe = shutil.which("docker")
     if exe:
@@ -285,14 +309,7 @@ def instalar() -> dict[str, Any]:
                                "Feche o serviço conflitante ou altere sua porta antes de instalar.")
     finally:
         teste_porta.close()
-    args = ["run", "-d", "--name", NOME, "--restart", "unless-stopped",
-            "-e", f"TZ={os.environ.get('TZ', 'America/Sao_Paulo')}",
-            "-v", f"{dados.resolve()}:/config"]
-    if platform.system() == "Linux":
-        args += ["--network", "host"]
-    else:
-        args += ["-p", f"{PORTA}:8123"]
-    args += [IMAGEM]
+    args = _argumentos_container(dados) + [IMAGEM]
     _executar(args, timeout=90, elevate=True)
     for _ in range(120):
         time.sleep(2)
@@ -316,11 +333,7 @@ def acao(nome: str) -> dict[str, Any]:
         _executar(["pull", IMAGEM], timeout=900, elevate=True)
         _executar(["stop", NOME], timeout=60, check=False, elevate=True)
         _executar(["rm", "-f", NOME], timeout=30, elevate=True)
-        args = ["run", "-d", "--name", NOME, "--restart", "unless-stopped",
-                "-e", f"TZ={os.environ.get('TZ', 'America/Sao_Paulo')}",
-                "-v", f"{dados.resolve()}:/config"]
-        args += ["--network", "host"] if platform.system() == "Linux" else ["-p", f"{PORTA}:8123"]
-        args += [IMAGEM]
+        args = _argumentos_container(dados) + [IMAGEM]
         _executar(args, timeout=90, elevate=True)
     elif nome == "backup":
         destino = pasta_base() / "backups"
