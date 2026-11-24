@@ -504,9 +504,14 @@ class Manipulador(BaseHTTPRequestHandler):
                 corpo = self._corpo()
                 modelo = str(corpo.get("modelo_embedding") or "").strip()
                 try:
-                    return self._json(zim_rag.indexar(
+                    url_motor = getattr(optimus.motor, "url", "")
+                    preparo = zim_rag.preparar_embedding(url_motor, modelo)
+                    modelo = preparo.get("modelo") or modelo
+                    resultado = zim_rag.indexar(
                         limite=int(corpo.get("limite") or 150),
-                        modelo_embedding=modelo, url_motor=getattr(optimus.motor, "url", "")))
+                        modelo_embedding=modelo, url_motor=url_motor)
+                    resultado["preparacao_embedding"] = preparo
+                    return self._json(resultado)
                 except (ValueError, RuntimeError, OSError) as erro:
                     return self._json({"erro": str(erro)}, 400)
             if metodo == "POST" and ident == "instalar":
