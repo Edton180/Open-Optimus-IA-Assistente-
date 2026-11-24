@@ -159,8 +159,10 @@ def test_tunel_captura_url_e_aponta_para_a_porta_correta(monkeypatch):
         processos.append(processo)
         return processo
 
-    monkeypatch.setattr(server.shutil, "which", lambda nome: "/usr/bin/cloudflared")
-    monkeypatch.setattr(server.subprocess, "Popen", iniciar_falso)
+    from optimus.network import cloudflare_tunnel
+
+    monkeypatch.setattr(cloudflare_tunnel.shutil, "which", lambda nome: "/usr/bin/cloudflared")
+    monkeypatch.setattr(cloudflare_tunnel.subprocess, "Popen", iniciar_falso)
     try:
         resultado = server.iniciar_tunel(9876, "senha-remota-segura-123")
         assert resultado["ligado"] is True
