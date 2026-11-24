@@ -14,6 +14,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from urllib.parse import urlsplit
 import unicodedata
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -149,11 +150,18 @@ def _xml_resultados(xml: bytes, nome_zim: str) -> list[dict]:
             continue
         if link.startswith("/"):
             url = f"http://{HOST}:{_porta_ativa}" + link
-        elif link.startswith("http://127.0.0.1") or link.startswith("https://127.0.0.1"):
-            url = link
         else:
-            # Não transforma URLs externas encontradas em conteúdo ZIM em links confiáveis.
-            continue
+            partes = urlsplit(link)
+            if partes.scheme not in ("http", "https") or partes.hostname not in ("127.0.0.1", "localhost"):
+                # Não transforma URLs externas encontradas em conteúdo ZIM em links confiáveis.
+                continue
+            if partes.port not in (None, _porta_ativa):
+                continue
+            url = f"http://{HOST}:{_porta_ativa}" + (partes.path or "/")
+            if partes.query:
+                url += "?" + partes.query
+            if partes.fragment:
+                url += "#" + partes.fragment
         itens.append({
             "titulo": titulo[:500], "trecho": trecho[:2000],
             "arquivo_zim": nome_zim, "url": url,
