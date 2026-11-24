@@ -21,7 +21,7 @@ no máximo 150 entradas (limite configurável pela API, até 1.000), registra o 
 retoma de onde parou. O estado do arquivo considera tamanho e mtime; quando o arquivo
 ZIM muda, os trechos antigos daquele arquivo são removidos e a indexação recomeça.
 Artigos são extraídos em memória com limite de 2 MiB, HTML é convertido em texto e
-dividido em chunks com sobreposição. SQLite FTS5 guarda o índice lexical e a origem
+dividido em chunks de até 900 caracteres com sobreposição, mantendo o tamanho adequado ao modelo leve all-minilm. SQLite FTS5 guarda o índice lexical e a origem
 exata de cada trecho. Não altera o arquivo ZIM.
 
 ## Recuperação híbrida e embeddings
