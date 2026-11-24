@@ -22,6 +22,10 @@ from optimus.estudio import pasta_estudio
 from optimus.estudio.audio import ErroEstudio
 
 
+class _InstalacaoCancelada(Exception):
+    """Interrompe o lote sem registrar cancelamento como falha de um modelo."""
+
+
 @dataclass
 class Item:
     id: str
@@ -189,7 +193,10 @@ def instalar_todos(progresso=None, ids: list[str] | None = None, cancelado=None)
     selecionados = [i for i in itens if ids is None or i.id in set(ids)]
     faltantes = [i for i in selecionados if not i.instalado()]
     estimativa = sum(i.tamanho_mb for i in faltantes)
-    livre = shutil.disk_usage(pasta_estudio()).free // (1024 * 1024)
+    # Em perfis recém-criados a pasta ainda não existe; disk_usage exige um caminho existente.
+    diretorio_estudio = pasta_estudio()
+    diretorio_estudio.mkdir(parents=True, exist_ok=True)
+    livre = shutil.disk_usage(diretorio_estudio).free // (1024 * 1024)
     reserva = max(1024, int(estimativa * 0.25))
     necessario = estimativa + reserva
     if livre < necessario:
@@ -200,23 +207,35 @@ def instalar_todos(progresso=None, ids: list[str] | None = None, cancelado=None)
         )
     resultados = []
     total = max(1, len(selecionados))
+    def verificar_cancelamento():
+        if cancelado and cancelado():
+            raise _InstalacaoCancelada()
+
+    def retornar_cancelado():
+        return {"total": len(resultados), "instalados": sum(
+            r["estado"] in {"instalado", "já instalado"} for r in resultados),
+            "cancelado": True, "resultados": resultados}
+
     for indice, item in enumerate(selecionados, 1):
         if cancelado and cancelado():
-            return {"total": len(resultados), "instalados": sum(
-                r["estado"] in {"instalado", "já instalado"} for r in resultados),
-                "cancelado": True, "resultados": resultados}
+            return retornar_cancelado()
         if item.instalado():
             resultados.append({"id": item.id, "nome": item.nome, "estado": "já instalado"})
             continue
         if progresso:
             progresso((indice - 1) / total, f"({indice}/{total}) Instalando {item.nome}…")
         try:
-            callback = (lambda pct, msg: progresso(
-                ((indice - 1) + max(0.0, min(1.0, float(pct)))) / total, msg
-            )) if progresso else None
-            resultado = instalar(item.id, callback)
+            def callback(pct, msg):
+                verificar_cancelamento()
+                if progresso:
+                    progresso(((indice - 1) + max(0.0, min(1.0, float(pct)))) / total, msg)
+
+            resultado = instalar(item.id, callback if progresso or cancelado else None)
+            verificar_cancelamento()
             resultados.append({"id": item.id, "nome": item.nome, "estado": "instalado",
                                 "detalhes": resultado})
+        except _InstalacaoCancelada:
+            return retornar_cancelado()
         except Exception as erro:  # cada falha fica registrada; os outros modelos continuam
             resultados.append({"id": item.id, "nome": item.nome, "estado": "falhou",
                                 "erro": f"{type(erro).__name__}: {erro}"})
