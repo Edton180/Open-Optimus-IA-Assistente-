@@ -508,3 +508,26 @@ def test_api_biblioteca_zim_lista_arquivos_locais(tmp_path, monkeypatch):
     finally:
         httpd.shutdown()
         httpd.server_close()
+
+
+
+def test_api_zim_expoe_estado_do_leitor_e_rejeita_caminho(tmp_path, monkeypatch):
+    from optimus import kiwix, zim
+
+    pasta = tmp_path / "biblioteca_zim"
+    pasta.mkdir()
+    (pasta / "wikipedia_pt.zim").write_bytes(b"ZIM")
+    monkeypatch.setattr(zim, "pasta_biblioteca", lambda: pasta)
+    monkeypatch.setattr(kiwix, "_executavel", lambda: None)
+    httpd, base = _subir()
+    try:
+        dados = _req(base + "/api/zim")
+        assert dados["total"] == 1
+        assert dados["kiwix"]["instalado"] is False
+        try:
+            _req(base + "/api/zim/iniciar", {"arquivo": "../fora.zim"})
+            assert False, "caminhos externos devem ser rejeitados"
+        except urllib.error.HTTPError as erro:
+            assert erro.code == 400
+    finally:
+        httpd.shutdown()

@@ -478,9 +478,22 @@ class Manipulador(BaseHTTPRequestHandler):
         recurso = partes[0] if partes else ""
         ident = partes[1] if len(partes) > 1 else ""
 
-        if recurso == "zim" and metodo == "GET":
-            from optimus import zim
-            return self._json(zim.listar_zim())
+        if recurso == "zim":
+            from optimus import kiwix, zim
+            if metodo == "GET" and ident == "kiwix":
+                return self._json(kiwix.estado())
+            if metodo == "GET" and not ident:
+                dados = zim.listar_zim()
+                dados["kiwix"] = kiwix.estado()
+                return self._json(dados)
+            if metodo == "POST" and ident == "iniciar":
+                corpo = self._corpo()
+                try:
+                    return self._json(kiwix.iniciar(str(corpo.get("arquivo") or "")))
+                except (ValueError, FileNotFoundError, RuntimeError) as erro:
+                    return self._json({"erro": str(erro)}, 400)
+            if metodo == "POST" and ident == "parar":
+                return self._json(kiwix.parar())
         if recurso == "modulos" and ident == "recursos" and metodo == "GET":
             from optimus import modulos
             return self._json({"recursos": modulos.recursos()})
