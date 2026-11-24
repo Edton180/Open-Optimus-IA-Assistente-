@@ -22,6 +22,6 @@ test("biblioteca ZIM explica incompatibilidade quando a API instalada não tem a
   }));
   await page.goto("/");
   await page.locator('[data-tela="zim"]').click();
-  await expect(page.locator("#zim-status")).toContainText(/API em execução não oferece as rotas/i);
-  await expect(page.locator("#zim-status")).toContainText(/reinicie o programa/i);
+  await expect(page.locator("#zim-status")).toContainText(/processo Python do Optimus ainda está carregado com o servidor antigo/i);
+  await expect(page.locator("#zim-status")).toContainText(/feche completamente o Optimus/i);
 });

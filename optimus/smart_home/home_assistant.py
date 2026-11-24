@@ -92,7 +92,7 @@ def _runtime() -> dict[str, Any]:
         resultado["observacao"] = "Este sistema operacional ainda não possui provisionamento validado."
     if docker:
         try:
-            p = _executar(["version", "--format", "{{.Server.Version}}"], timeout=8, check=False)
+            p = _executar(["version", "--format", "{{.Server.Version}}"], timeout=3, check=False)
             resultado["docker_ativo"] = p.returncode == 0 and bool(p.stdout.strip())
             resultado["docker_versao"] = p.stdout.strip()[:80]
             detalhe = (p.stderr or "").lower()
@@ -105,7 +105,7 @@ def _runtime() -> dict[str, Any]:
 
 
 def _container(elevate: bool = False) -> dict[str, Any]:
-    p = _executar(["inspect", "--format", "{{.State.Status}}|{{.State.Running}}|{{.Config.Image}}", NOME], timeout=12, check=False, elevate=elevate)
+    p = _executar(["inspect", "--format", "{{.State.Status}}|{{.State.Running}}|{{.Config.Image}}", NOME], timeout=3, check=False, elevate=elevate)
     if p.returncode:
         return {"instalado": False, "estado": "nao_instalado", "rodando": False}
     partes = p.stdout.strip().split("|", 2)
@@ -115,7 +115,7 @@ def _container(elevate: bool = False) -> dict[str, Any]:
             "imagem": partes[2] if len(partes) > 2 else IMAGEM}
 
 
-def _healthcheck(timeout: float = 2.0) -> dict[str, Any]:
+def _healthcheck(timeout: float = 1.5) -> dict[str, Any]:
     """Confirma que a interface HTTP do Home Assistant responde localmente."""
     try:
         import httpx
