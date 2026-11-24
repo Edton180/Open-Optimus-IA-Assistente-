@@ -102,3 +102,9 @@ Consulte o resultado da ferramenta e valide o arquivo final antes de utilizá-lo
 - `pdf_paginas_por_folha`: organiza 2, 4, 6 ou 9 páginas em cada folha, preservando o conteúdo vetorial.
 - `pdf_imprimir_livreto`: faz a imposição de páginas para impressão frente e verso, duas páginas por lado. Na impressora, selecione frente e verso com virada pela borda curta e confira uma folha de teste antes de imprimir a tiragem.
 - Essas operações não alteram o PDF de origem. A ordem do livreto é preparada para folhas dobradas; a configuração física da impressora pode variar.
+
+
+### Ajuste de cores e senha forte
+
+- `pdf_ajustar_cores`: cria uma cópia em escala de cinza ou com cores invertidas. Para aplicar o filtro, rasteriza as páginas; o texto deixa de ser selecionável. Confira a qualidade visual e preserve o PDF original.
+- `pdf_gerar_senha`: cria uma senha aleatória com letras maiúsculas e minúsculas, números e símbolos (12 a 64 caracteres). Copie e guarde a senha antes de fechar o resultado; ela não é recuperável pelo Optimus.
