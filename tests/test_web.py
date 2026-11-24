@@ -85,12 +85,13 @@ def test_confirmacao_pela_interface(tmp_path):
 def test_senha_protege_a_api():
     httpd, base = _subir(senha="segredo")
     try:
+        proxy = {"CF-Ray": "teste-cloudflare", "CF-Connecting-IP": "198.51.100.20"}
         try:
-            _req(base + "/api/estado")
-            assert False, "deveria pedir senha"
+            _req(base + "/api/estado", cab=proxy)
+            assert False, "o acesso pelo túnel deve pedir senha"
         except urllib.error.HTTPError as erro:
             assert erro.code == 401
-        assert _req(base + "/api/estado", cab={"X-Optimus-Senha": "segredo"})["versao"]
+        assert _req(base + "/api/estado", cab={**proxy, "X-Optimus-Senha": "segredo"})["versao"]
     finally:
         httpd.shutdown()
 
@@ -185,7 +186,10 @@ def test_fluxo_pdf_upload_e_execucao_pela_interface():
     httpd, base = _subir()
     try:
         catalogo = _req(base + "/api/pdf")
-        assert any(f["nome"] == "pdf_info" for f in catalogo["ferramentas"])
+        nomes = {f["nome"] for f in catalogo["ferramentas"]}
+        assert "pdf_info" in nomes
+        assert "pdf_documento_para_pdf" in nomes
+        assert "pdf_unir_documentos" in nomes
 
         buffer = BytesIO()
         writer = PdfWriter()
@@ -285,3 +289,26 @@ def test_senha_nao_e_exigida_no_acesso_local_sem_rede_ou_tunel():
     assert _senha_para_acesso("senha-configurada", "::1", False) == ""
     assert _senha_para_acesso("senha-configurada", "0.0.0.0", False) == "senha-configurada"
     assert _senha_para_acesso("senha-configurada", "127.0.0.1", True) == "senha-configurada"
+
+
+def test_senha_do_tunel_nao_bloqueia_navegador_local():
+    """Mesmo com túnel protegido, chamadas locais não precisam autenticar."""
+    httpd, base = _subir(senha="segredo")
+    try:
+        assert _req(base + "/api/estado")["versao"]
+        assert _req(base + "/api/entrar", {})["ok"] is True
+        proxy = {"CF-Ray": "teste-cloudflare", "CF-Connecting-IP": "203.0.113.8"}
+        try:
+            _req(base + "/api/estado", cab=proxy)
+            assert False, "a rota externa deve continuar protegida"
+        except urllib.error.HTTPError as erro:
+            assert erro.code == 401
+        try:
+            _req(base + "/api/entrar", {}, cab=proxy)
+            assert False, "o login externo deve validar a senha"
+        except urllib.error.HTTPError as erro:
+            assert erro.code == 401
+        assert _req(base + "/api/entrar", {"senha": "segredo"}, cab=proxy)["ok"]
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
