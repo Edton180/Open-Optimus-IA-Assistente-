@@ -1442,6 +1442,8 @@ def iniciar(host: str = "127.0.0.1", porta: int = 8765, abrir_navegador: bool = 
         # os arquivos no disco. Sobe uma instância limpa depois de liberar a porta.
         comando = [sys.executable, "-m", "optimus", "gui", "--porta",
                    str(servidor.server_address[1]), "--sem-navegador"]
+        if type(optimus.motor).__name__ == "MotorDemo":
+            comando.insert(3, "--demo")
         if tunel:
             comando.append("--tunel")
         elif host in ("0.0.0.0", ""):
