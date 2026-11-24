@@ -279,3 +279,36 @@ def test_real_zim_archive_round_trip(tmp_path, monkeypatch):
     assert encontrados[0]["arquivo"] == "fixture-real.zim"
     assert encontrados[0]["artigo"] == "artigo-seguranca"
     assert "zim://fixture-real.zim/artigo-seguranca" == encontrados[0]["url"]
+
+
+def test_status_distingue_biblioteca_vazia_de_busca_lexical(tmp_path, monkeypatch):
+    from optimus import zim
+
+    monkeypatch.setattr(zim_rag, "_pasta", lambda: tmp_path / "indice-vazio")
+    monkeypatch.setattr(zim, "listar_zim", lambda: {
+        "total": 0, "arquivos": [], "tamanho_total_bytes": 0,
+        "pasta_configurada": True,
+    })
+    estado = zim_rag.status()
+    assert estado["artigos_indexados"] == 0
+    assert estado["trechos"] == 0
+    assert estado["com_embeddings"] == 0
+    assert estado["modo_busca"] == "indisponivel"
+    assert estado["pronto"] is False
+    assert estado["arquivos_zim_disponiveis"] == 0
+    assert "Nenhum arquivo ZIM" in estado["mensagem"]
+
+
+def test_status_com_zim_sem_indexacao_nao_anuncia_busca_ativa(tmp_path, monkeypatch):
+    from optimus import zim
+
+    monkeypatch.setattr(zim_rag, "_pasta", lambda: tmp_path / "indice-pendente")
+    monkeypatch.setattr(zim, "listar_zim", lambda: {
+        "total": 1, "arquivos": [{"nome": "wiki.zim"}],
+        "tamanho_total_bytes": 100, "pasta_configurada": True,
+    })
+    estado = zim_rag.status()
+    assert estado["arquivos_zim_disponiveis"] == 1
+    assert estado["modo_busca"] == "indisponivel"
+    assert estado["pronto"] is False
+    assert "ainda não indexados" in estado["mensagem"]
