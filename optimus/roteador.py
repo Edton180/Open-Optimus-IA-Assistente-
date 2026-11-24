@@ -83,6 +83,10 @@ INTENCOES: list[tuple[str, list[str]]] = [
      ["rotina_criar", "rotinas_listar", "rotina_executar", "rotina_apagar"]),
     (r"\b(lembre que|guarde|memoriz|anote que|meu nome e|eu (gosto|moro|trabalho|sou|tenho)|"
      r"o que (voce )?sabe (sobre|de) mim|recorda|esqueca)", ["lembrar", "recordar"]),
+    (r"\b(qual resultado|o que (eu|nos) (falamos|decidimos|combinamos)|"
+     r"o que foi (decidido|combinado)|conversas? anteriores?|historico de conversas|"
+     r"pesquisa anterior|o que eu pesquisei|como (eu|nos) combinamos|lembra do que)",
+     ["buscar_conversas", "recordar"]),
     (r"\b(aprend|estud|base de conhecimento)", ["aprender", "consultar_conhecimento"]),
     (r"\b(pesquis|procur[ea] na|busqu|internet|google|site|pagina|link|https?://|preco|"
      r"cotacao|quem (e|foi)|o que (e|foi|sao)|quando (e|foi)|ultimas|atual)",
