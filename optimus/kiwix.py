@@ -5,6 +5,7 @@ fica restrito ao loopback e nunca é iniciado automaticamente.
 """
 from __future__ import annotations
 
+import atexit
 import shutil
 import subprocess
 import threading
@@ -112,3 +113,7 @@ def parar() -> dict:
         _processo = None
         _arquivo_ativo = None
         return estado()
+
+
+# Evita deixar o leitor gerenciado órfão quando o Optimus encerra normalmente.
+atexit.register(parar)
