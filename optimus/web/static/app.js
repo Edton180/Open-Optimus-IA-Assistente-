@@ -283,11 +283,13 @@ function atualizarEstadoKiwix(dados) {
   badge.textContent = dados.executando ? "Leitor em execução" :
     dados.instalado ? (dados.gerenciado ? "Kiwix gerenciado" : "Kiwix do sistema") : "Kiwix não instalado";
   status.textContent = dados.executando
-    ? "Leitura ativa: " + (dados.arquivo || "arquivo ZIM") + ". O servidor está disponível somente neste computador."
+    ? "Leitura ativa: " + (dados.arquivo || "arquivo ZIM") + ". Acesse pelo link abaixo; ele funciona no computador e no celular pela conexão do Optimus."
     : dados.instalado ? "Pronto para iniciar sob demanda · " + (dados.versao || "versão do sistema")
       : (dados.erro || "Instale o Kiwix Tools automaticamente para habilitar a leitura.");
-  link.innerHTML = dados.executando && dados.url
-    ? '<a href="' + esc(dados.url) + '" target="_blank" rel="noopener noreferrer">Abrir leitor Kiwix em nova aba ↗</a>'
+  // Não usar 127.0.0.1: no celular, esse endereço aponta para o próprio aparelho.
+  // O proxy mantém a leitura no mesmo host/porta do Optimus e preserva a autenticação.
+  link.innerHTML = dados.executando
+    ? '<a href="/api/zim/leitor/" target="_blank" rel="noopener noreferrer">Abrir leitura ZIM em nova guia ↗</a>'
     : "";
   $("#zim-fechar").disabled = !dados.executando;
   $("#zim-abrir").disabled = !dados.instalado || !!dados.executando || !$("#zim-arquivo")?.value;
