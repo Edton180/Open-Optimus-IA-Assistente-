@@ -360,7 +360,6 @@ def buscar(consulta: str, limite: int = 6, modelo_embedding: str = "",
            url_motor: str = "") -> list[dict[str, Any]]:
     """Recuperação híbrida: FTS5 + similaridade cosseno; fallback lexical."""
     consulta = str(consulta or "").strip()
-    modelo_embedding = _modelo_auto(url_motor, modelo_embedding)
     if len(consulta) < 2:
         return []
     con = _db()
@@ -377,7 +376,13 @@ def buscar(consulta: str, limite: int = 6, modelo_embedding: str = "",
         except sqlite3.OperationalError:
             lexicais = []
         candidatos = {int(r["id"]): dict(r) for r in lexicais}
-        consulta_vetor = _embedding(url_motor, modelo_embedding, consulta)
+        # Não consulta o servidor Ollama em cada conversa quando o índice ainda é lexical.
+        tem_vetores = con.execute(
+            "SELECT 1 FROM trechos WHERE embedding IS NOT NULL LIMIT 1").fetchone()
+        if tem_vetores and not modelo_embedding:
+            modelo_embedding = _modelo_auto(url_motor)
+        consulta_vetor = (_embedding(url_motor, modelo_embedding, consulta)
+                          if tem_vetores and modelo_embedding else None)
         vetoriais = []
         if consulta_vetor:
             # A varredura fica limitada a 5.000 vetores para proteger PCs modestos.
