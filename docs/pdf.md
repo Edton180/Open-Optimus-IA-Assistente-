@@ -1,19 +1,59 @@
-# PDF
+# Suite de documentos e PDF
 
-O Optimus junta, divide, gira, protege, converte e lê PDF no chat, no terminal e na tela
-`/pdf.html` do `optimus gui`.
+O Optimus processa documentos localmente por meio de ferramentas do agente, CLI e API local.
+A suite foi organizada para cobrir as categorias do iLovePDF sem depender de enviar documentos
+a um serviço externo.
 
-```bash
+## Instalação
+
+\`\`\`bash
 pip install "optimus-assistente[pdf]"
-```
+\`\`\`
 
-Isso instala o pypdf e o Pillow. OCR e PDF virado imagem pedem extras à parte
-(`pypdfium2`, `pytesseract` + o programa Tesseract). Word, PowerPoint e Excel **para** PDF
-usam o LibreOffice (`soffice`), se estiver instalado.
+O extra instala pypdf, ReportLab, python-docx, Pillow, pypdfium2, pytesseract, pdfplumber, openpyxl, python-pptx e pyHanko.
+OCR gera PDF pesquisável (texto invisível sobre as páginas renderizadas) e/ou TXT. PDF para Excel extrai tabelas quando detectáveis e usa OCR como fallback de texto; PDF para Word usa OCR em páginas escaneadas; PDF para PowerPoint cria slides com imagens das páginas. O editor adiciona elementos em coordenadas, sem edição livre do conteúdo existente. Também requer o executável Tesseract e os pacotes de idioma no sistema operacional.
+Conversão Office/HTML para PDF requer LibreOffice. Alguns recursos avançados podem exigir
+ferramentas externas específicas; o Optimus informa a dependência ausente em vez de simular
+uma operação concluída.
+
+## Ferramentas disponíveis
+
+| Categoria | Ferramentas |
+|---|---|
+| Organizar | \`pdf_juntar\`, \`pdf_dividir\`, \`pdf_extrair\`, \`pdf_remover\`, \`pdf_organizar\`, \`pdf_girar\` |
+| Otimizar | \`pdf_comprimir\`, \`pdf_reparar\`, \`pdf_ocr\` |
+| Converter para PDF | \`pdf_imagens_para_pdf\` (JPG/PNG/TIFF/BMP), conversão Office e \`pdf_html_para_pdf\` via LibreOffice |
+| Converter de PDF | \`pdf_converter\` (TXT/HTML/CSV/DOCX), \`pdf_para_imagens\` (JPG/PNG), \`pdf_para_markdown\` |
+| Editar | \`pdf_cortar\`, \`pdf_marca\`, \`pdf_numeros\`, \`pdf_girar\` |
+| Segurança | \`pdf_proteger\`, \`pdf_desbloquear\`, \`pdf_localizar_termos\`, \`pdf_censurar\` (bloqueada até haver redação segura) |
+| Inteligência | \`pdf_comparar\`, \`pdf_resumir\`, \`pdf_formularios\`, \`pdf_metadados\` |
+
+## Exemplos no chat
+
+- "Junte contrato.pdf e anexo.pdf em um arquivo."
+- "Converta estas fotos JPG em um PDF A4."
+- "Digitalize estas fotos em preto e branco e gere um PDF."
+- "Extraia as páginas 2, 4 e 7 e salve como recortes.pdf."
+- "Converta o PDF para imagens JPG e gere um ZIP."
+- "Corte 20 pontos de cada margem das páginas 1 a 3."
+- "Liste os campos preenchíveis deste formulário PDF."
+- "Remova os metadados do documento e salve uma cópia."
+- "Compare estes dois PDFs e mostre o que mudou."
+- "Censure o CPF 123.456.789-00 no documento, gere uma cópia e informe as páginas afetadas."
+- "Assine digitalmente contrato.pdf com certificado certificado.p12."
+- "Converta o documento para PDF/A-2b usando meu perfil sRGB.icc."
+- "Compare visualmente as duas versões e gere um ZIP das diferenças."
+- "Preencha os campos do formulário PDF com os dados que informei."
+- "Crie um formulário PDF com campos de nome, CPF e uma caixa de aceite."
+- "Extraia todas as imagens incorporadas neste PDF."
+- "Salve um fluxo chamado preparar_contrato: OCR, remover metadados e proteger com senha."
+- "Converta o PDF escaneado para Word usando OCR."
 
 ## Terminal
 
-```bash
+As ferramentas registradas podem ser chamadas pelo agente. Os comandos diretos existentes incluem:
+
+\`\`\`bash
 optimus pdf info contrato.pdf
 optimus pdf ler contrato.pdf --paginas 1-2
 optimus pdf juntar a.pdf b.pdf --destino juntos.pdf
@@ -22,33 +62,28 @@ optimus pdf remover contrato.pdf --paginas 1
 optimus pdf organizar contrato.pdf --paginas 3,1,2
 optimus pdf dividir contrato.pdf --a-cada 1 --destino ./partes
 optimus pdf girar contrato.pdf --graus 90
-optimus pdf cortar contrato.pdf --margem 36
 optimus pdf comprimir contrato.pdf
-optimus pdf reparar quebrado.pdf
 optimus pdf proteger contrato.pdf --senha segredo
 optimus pdf desbloquear contrato.pdf --senha segredo
 optimus pdf marca contrato.pdf --texto RASCUNHO
 optimus pdf numeros contrato.pdf
-optimus pdf assinar contrato.pdf --texto "Edton Braz"
-optimus pdf censurar contrato.pdf --texto "CPF,senha"
 optimus pdf comparar a.pdf b.pdf
-optimus pdf html contrato.pdf
-optimus pdf docx contrato.pdf
-optimus pdf csv contrato.pdf
 optimus pdf ocr escaneado.pdf --idioma por
-```
+\`\`\`
 
-## Chat
+## Limites técnicos e segurança
 
-Diga o que quer: "junta estes PDFs", "tira a página 2", "resume este PDF", "traduz o texto".
-As ferramentas são `pdf_juntar`, `pdf_extrair`, `pdf_ler`, `pdf_resumir`, `pdf_converter`,
-`pdf_ocr` e as outras do grupo `pdf`. O resumo e a tradução ficam com o modelo do Optimus:
-`pdf_resumir` só entrega o texto.
+- \`pdf_assinar\` existente é um carimbo visual, não assinatura digital ICP-Brasil.
+- \`pdf_censurar\` continua deliberadamente bloqueada: localizar texto ou desenhar tarja por cima
+  não garante remoção irreversível de texto, imagens, OCR, camadas e anexos.
+- A conversão de PDF para DOCX/HTML/CSV baseada em extração de texto não preserva perfeitamente
+  a diagramação original. PDF para Office com fidelidade visual exige um motor especializado.
+- \`pdf_comprimir\` com pypdf faz otimização estrutural; recompressão de imagens depende de
+  ferramentas externas e pode reduzir qualidade.
+- \`pdf_reparar\` é best-effort e não recupera bytes ou páginas já perdidos.
+- `pdf_pdfa` usa Ghostscript com perfil ICC fornecido e política estrita de compatibilidade. A validação formal só é declarada quando veraPDF está instalado e aprova o arquivo; sem ele, o resultado fica marcado como não verificado.
+- Formulários XFA, assinaturas digitais existentes e PDFs com conteúdo complexo podem ter
+  limitações. O editor insere objetos sobre páginas, não é um editor livre de texto existente. O arquivo original é preservado e as saídas devem ser verificadas.
+- Senhas e arquivos são processados localmente; não envie senhas para serviços de terceiros.
 
-## Limites honestos
-
-- **Assinatura** é um carimbo visual com o nome. Não é certificado ICP-Brasil.
-- **Censura** localiza os termos e marca o arquivo. Não desenha tarja preta em cima de cada palavra.
-- **PDF/A** certificado precisa do Ghostscript (`gs -dPDFA`). Sem ele, o Optimus só regrava o arquivo e avisa.
-- **PDF escaneado** não tem texto até o OCR. Sem Tesseract, `pdf_ler` devolve vazio e pede o OCR.
-- **PowerPoint e Excel para PDF** dependem do LibreOffice. No sentido contrário, o Optimus extrai o texto para HTML, DOCX ou CSV.
+Consulte o resultado da ferramenta e valide o arquivo final antes de utilizá-lo oficialmente.

@@ -7,6 +7,7 @@ dependem do LibreOffice (soffice) quando disponíveis.
 
 from __future__ import annotations
 
+import difflib
 import re
 import shutil
 import subprocess
@@ -456,12 +457,12 @@ def pdf_desbloquear(ctx, arquivo: str, senha: str, destino: str = ""):
 
 @ferramenta(
     "pdf_comprimir",
-    "Tenta reduzir o tamanho de um PDF.",
-    {"arquivo": texto("PDF"),
-     "destino": texto("Arquivo de saída")},
+    "Comprime PDF com Ghostscript (recompressão de imagens) ou otimização estrutural via pypdf.",
+    {"arquivo": texto("PDF"), "destino": texto("Arquivo de saída"),
+     "nivel": texto("extrema|recomendada|qualidade")},
     grupo="pdf", risco=MODERADO, obrigatorios=["arquivo"],
 )
-def pdf_comprimir(ctx, arquivo: str, destino: str = ""):
+def pdf_comprimir(ctx, arquivo: str, destino: str = "", nivel: str = "recomendada"):
     err = _precisa_pypdf()
     if err:
         return err
@@ -472,23 +473,48 @@ def pdf_comprimir(ctx, arquivo: str, destino: str = ""):
     leitor = PdfReader(str(caminho), strict=False)
     if leitor.is_encrypted:
         return {"erro": "PDF protegido. Desbloqueie antes."}
-    writer = PdfWriter()
-    for p in leitor.pages:
-        writer.add_page(p)
-    try:
-        writer.compress_identical_objects(remove_identicals=True, remove_orphans=True)
-    except Exception:
-        pass
+    presets = {"extrema": "/screen", "recomendada": "/ebook", "qualidade": "/printer"}
+    nivel = (nivel or "recomendada").lower()
+    if nivel not in presets:
+        return {"erro": "Nível deve ser extrema, recomendada ou qualidade."}
     out = _caminho(ctx, destino or f"{caminho.stem}_menor.pdf")
-    with open(out, "wb") as f:
-        writer.write(f)
-    antes = caminho.stat().st_size
-    depois = out.stat().st_size
+    out.parent.mkdir(parents=True, exist_ok=True)
+    gs = shutil.which("gs") or shutil.which("gswin64c") or shutil.which("gswin32c")
+    motor = "pypdf"
+    if gs:
+        temp = out.with_name(f"{out.stem}.tmp.pdf")
+        try:
+            subprocess.run([
+                gs, "-sDEVICE=pdfwrite", "-dCompatibilityLevel=1.4",
+                f"-dPDFSETTINGS={presets[nivel]}", "-dNOPAUSE", "-dQUIET", "-dBATCH",
+                f"-sOutputFile={temp}", str(caminho),
+            ], check=True, timeout=300, capture_output=True)
+            validado = PdfReader(str(temp), strict=True)
+            if len(validado.pages) != len(leitor.pages):
+                temp.unlink(missing_ok=True)
+                return {"erro": "A compressão alterou a quantidade de páginas; original preservado."}
+            temp.replace(out)
+            motor = "Ghostscript"
+        except Exception as exc:
+            temp.unlink(missing_ok=True)
+            return {"erro": f"Falha na compressão Ghostscript: {exc}. Original preservado."}
+    else:
+        writer = PdfWriter()
+        for pagina in leitor.pages:
+            writer.add_page(pagina)
+        try:
+            writer.compress_identical_objects(remove_identicals=True, remove_orphans=True)
+        except Exception:
+            pass
+        with out.open("wb") as arquivo_saida:
+            writer.write(arquivo_saida)
+    antes, depois = caminho.stat().st_size, out.stat().st_size
+    reducao = (1 - depois / max(antes, 1)) * 100
     return {
-        "mensagem": f"Tamanho: {antes} → {depois} bytes ({100*depois/max(antes,1):.0f}%).",
-        "destino": str(out),
-        "antes_bytes": antes,
-        "depois_bytes": depois,
+        "mensagem": f"Tamanho: {antes} → {depois} bytes ({100*depois/max(antes,1):.0f}% do original).",
+        "destino": str(out), "antes_bytes": antes, "depois_bytes": depois,
+        "reducao_percentual": round(reducao, 1), "motor": motor, "nivel": nivel,
+        "observacao": "Ghostscript pode reduzir qualidade de imagens. Sem Ghostscript, apenas objetos duplicados são removidos."
     }
 
 
@@ -604,14 +630,16 @@ def pdf_localizar_termos(ctx, arquivo: str, texto: str):
 
 @ferramenta(
     "pdf_censurar",
-    "Indisponível: censura irreversível não implementada. Use pdf_localizar_termos para localizar "
-    "ocorrências; isso não oculta os dados.",
-    {"arquivo": texto("PDF"), "texto": texto("Termos separados por vírgula")},
+    "Censura termos detectados por OCR, rasteriza todas as páginas e descarta o conteúdo original.",
+    {"arquivo": texto("PDF"), "texto": texto("Termos separados por vírgula"),
+     "destino": texto("PDF de saída"), "idioma": texto("Idioma Tesseract: por, eng..."),
+     "escala": numero("Escala de renderização entre 2 e 5")},
     grupo="pdf", risco=MODERADO, obrigatorios=["arquivo", "texto"],
 )
-def pdf_censurar(ctx, arquivo: str, texto: str):
-    return {"erro": "Censura irreversível não está implementada. O PDF original não foi alterado. "
-            "Use pdf_localizar_termos apenas para localizar ocorrências; isso não oculta os dados."}
+def pdf_censurar(ctx, arquivo: str, texto: str, destino: str = "",
+                 idioma: str = "por", escala: int = 3):
+    from optimus.tools.pdf_suite import censurar_por_rasterizacao
+    return censurar_por_rasterizacao(ctx, arquivo, texto, destino, idioma, escala)
 
 
 @ferramenta(
@@ -631,8 +659,18 @@ def pdf_comparar(ctx, arquivo_a: str, arquivo_b: str):
     ta = (a.get("texto") or "").strip()
     tb = (b.get("texto") or "").strip()
     iguais = ta == tb
-    return {"iguais": iguais, "tamanho_a": len(ta), "tamanho_b": len(tb),
-            "mensagem": "Textos idênticos." if iguais else "Há diferenças no texto."}
+    diferencas = list(difflib.unified_diff(
+        ta.splitlines(), tb.splitlines(), fromfile=Path(arquivo_a).name,
+        tofile=Path(arquivo_b).name, lineterm=""
+    ))
+    return {
+        "iguais": iguais, "tamanho_a": len(ta), "tamanho_b": len(tb),
+        "linhas_diferentes": sum(1 for linha in diferencas if linha.startswith(("+", "-"))
+                                 and not linha.startswith(("+++", "---"))),
+        "diff": "\n".join(diferencas)[:20000],
+        "mensagem": "Textos idênticos." if iguais else "Diferenças textuais encontradas; veja o diff.",
+        "observacao": "A comparação atual é textual. Diferenças apenas visuais, fontes e posições podem não aparecer."
+    }
 
 
 @ferramenta(
@@ -643,30 +681,56 @@ def pdf_comparar(ctx, arquivo_a: str, arquivo_b: str):
      "destino": texto("Saída")},
     grupo="pdf", risco=MODERADO, obrigatorios=["arquivo"],
 )
-def pdf_ocr(ctx, arquivo: str, idioma: str = "por", destino: str = ""):
+def pdf_ocr(ctx, arquivo: str, idioma: str = "por", destino: str = "", formato: str = "pdf"):
     try:
         import pytesseract
         from pypdfium2 import PdfDocument
+        from pypdf import PdfReader, PdfWriter
     except ImportError:
-        return {"erro": "OCR precisa de: pip install pypdfium2 pytesseract e Tesseract no sistema."}
+        return {"erro": "OCR precisa de pypdfium2, pytesseract e Tesseract instalado no sistema."}
     caminho = _caminho(ctx, arquivo)
     if not caminho.is_file():
         return {"erro": f"Arquivo não encontrado: {caminho}"}
+    formato = (formato or "pdf").lower()
+    if formato not in ("pdf", "txt", "ambos"):
+        return {"erro": "Formato deve ser pdf, txt ou ambos."}
     try:
         doc = PdfDocument(str(caminho))
         textos = []
+        writer = PdfWriter()
         for i in range(len(doc)):
             page = doc[i]
             bitmap = page.render(scale=2).to_pil()
-            t = pytesseract.image_to_string(bitmap, lang=idioma or "por")
-            textos.append(f"--- Página {i+1} ---\n{t.strip()}")
+            textos.append(f"--- Página {i+1} ---\n{pytesseract.image_to_string(bitmap, lang=idioma or 'por').strip()}")
+            if formato in ("pdf", "ambos"):
+                pdf_bytes = pytesseract.image_to_pdf_or_hocr(bitmap, extension="pdf", lang=idioma or "por")
+                leitor_ocr = PdfReader(BytesIO(pdf_bytes), strict=False)
+                for pagina_ocr in leitor_ocr.pages:
+                    writer.add_page(pagina_ocr)
         texto_final = "\n\n".join(textos)
-        out_txt = _caminho(ctx, destino or f"{caminho.stem}_ocr.txt")
-        if not str(out_txt).lower().endswith(".txt"):
-            out_txt = out_txt.with_suffix(".txt")
-        out_txt.write_text(texto_final, encoding="utf-8")
-        return {"mensagem": f"OCR concluído ({len(doc)} páginas).", "texto": texto_final[:30000],
-                "arquivo_texto": str(out_txt)}
+        resultado = {"mensagem": f"OCR concluído ({len(doc)} páginas).", "texto": texto_final[:30000]}
+        if formato in ("pdf", "ambos"):
+            out_pdf = _caminho(ctx, destino or f"{caminho.stem}_ocr.pdf")
+            if out_pdf.suffix.lower() != ".pdf":
+                out_pdf = out_pdf.with_suffix(".pdf")
+            out_pdf.parent.mkdir(parents=True, exist_ok=True)
+            temp = out_pdf.with_name(out_pdf.name + ".tmp")
+            with temp.open("wb") as arquivo_saida:
+                writer.write(arquivo_saida)
+            validado = PdfReader(str(temp), strict=True)
+            if len(validado.pages) != len(doc):
+                temp.unlink(missing_ok=True)
+                return {"erro": "OCR gerou quantidade inesperada de páginas; original preservado."}
+            temp.replace(out_pdf)
+            resultado["arquivo_pdf_pesquisavel"] = str(out_pdf)
+        if formato in ("txt", "ambos"):
+            out_txt = _caminho(ctx, destino or f"{caminho.stem}_ocr.txt")
+            if out_txt.suffix.lower() != ".txt":
+                out_txt = out_txt.with_suffix(".txt")
+            out_txt.parent.mkdir(parents=True, exist_ok=True)
+            out_txt.write_text(texto_final, encoding="utf-8")
+            resultado["arquivo_texto"] = str(out_txt)
+        return resultado
     except Exception as e:
         return {"erro": f"Falha no OCR: {e}"}
 
