@@ -108,3 +108,17 @@ imagem pequena no canto para trocar de câmera).
   navegador baixa a biblioteca e o modelo (cerca de 18 MB), então precisa de internet nesse momento.
 - A imagem pequena no canto fica visível enquanto os gestos estão ligados, para você sempre saber que a
   câmera está em uso. Aperte o botão de novo para desligar e soltar a câmera.
+
+
+## Descoberta automática de câmeras ONVIF
+
+Na ferramenta **Casa**, use `casa_descobrir_onvif` para enviar um Probe WS-Discovery à rede local
+(UDP multicast IPv4, grupo `239.255.255.250:3702`). A busca é limitada a 10 segundos e até 128
+respostas. Ela identifica os endereços HTTP(S) anunciados pela câmera, mas **não autentica, não
+altera configurações e não inicia gravação**. O resultado é uma sugestão de cadastro: confirme que
+o IP pertence a um equipamento seu e configure as credenciais no fluxo seguro da interface.
+
+A descoberta depende de multicast permitido pela rede; VLANs, isolamento de clientes Wi-Fi,
+firewalls e alguns roteadores podem bloquear WS-Discovery. A ausência de resultados não prova que
+não existam câmeras na rede. O suporte a streaming contínuo, gravação, timeline e gestão de
+credenciais ONVIF ainda é uma etapa separada.
