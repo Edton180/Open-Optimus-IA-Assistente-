@@ -132,13 +132,13 @@ async function carregarPDF() {
   try {
     const dados = await api("/api/pdf");
     pdfFerramentas = dados.ferramentas || [];
-    if (!dados.dependencias_instaladas) estadoEl.textContent = "⚠️ Instale o suporte completo: " + dados.comando_instalacao + " (Windows/Linux).";
+    const avisoDependencias = !dados.dependencias_instaladas ? "⚠️ Instale o suporte completo: " + dados.comando_instalacao + " (Windows/Linux)." : "";
     $("#pdf-ferramenta").innerHTML = pdfFerramentas.map((f) =>
       `<option value="${esc(f.nome)}">${esc(f.nome.replaceAll("_", " "))}</option>`).join("");
     if (!pdfFerramentas.length) throw new Error("Nenhuma ferramenta PDF foi registrada.");
     desenharParametrosPDF();
     desenharArquivosPDF();
-    estadoEl.textContent = `${pdfFerramentas.length} ferramentas carregadas · processamento local`;
+    estadoEl.textContent = avisoDependencias || `${pdfFerramentas.length} ferramentas carregadas · processamento local`;
   } catch (e) { estadoEl.textContent = "⚠️ " + e.message; }
 }
 function desenharArquivosPDF() {
