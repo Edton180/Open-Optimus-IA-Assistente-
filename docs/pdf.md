@@ -10,7 +10,7 @@ a um serviço externo.
 pip install "optimus-assistente[pdf]"
 \`\`\`
 
-O extra instala pypdf, ReportLab, python-docx, Pillow, pypdfium2, pytesseract, pdfplumber, openpyxl, python-pptx e pyHanko. A interface visual também possui a tela **Documentos e PDF** no menu lateral: nela você envia PDFs e arquivos auxiliares, escolhe a operação, preenche os parâmetros e baixa os resultados. O processamento acontece localmente, sem envio a serviços externos.
+O extra instala pypdf, ReportLab, python-docx, Pillow, pypdfium2, pytesseract, pdfplumber, openpyxl, python-pptx e pyHanko. A interface visual possui a tela **Documentos e PDF** no menu lateral, com catálogo pesquisável por categoria, seleção de ferramentas, envio de vários arquivos, parâmetros e download dos resultados. O catálogo é montado a partir das ferramentas realmente registradas, sem botões fictícios. O processamento acontece localmente, sem envio a serviços externos.
 OCR gera PDF pesquisável (texto invisível sobre as páginas renderizadas) e/ou TXT. PDF para Excel extrai tabelas quando detectáveis e usa OCR como fallback de texto; PDF para Word usa OCR em páginas escaneadas; PDF para PowerPoint cria slides com imagens das páginas. O editor adiciona elementos em coordenadas, sem edição livre do conteúdo existente. Também requer o executável Tesseract e os pacotes de idioma no sistema operacional.
 Conversão Office/HTML para PDF requer LibreOffice. Alguns recursos avançados podem exigir
 ferramentas externas específicas; o Optimus informa a dependência ausente em vez de simular
@@ -20,9 +20,9 @@ uma operação concluída.
 
 | Categoria | Ferramentas |
 |---|---|
-| Organizar | \`pdf_juntar\`, \`pdf_dividir\`, \`pdf_extrair\`, \`pdf_remover\`, \`pdf_organizar\`, \`pdf_girar\` |
+| Organizar | \`pdf_juntar\`, \`pdf_unir_documentos\` (PDF + imagens + Office), \`pdf_dividir\`, \`pdf_extrair\`, \`pdf_remover\`, \`pdf_organizar\`, \`pdf_girar\` |
 | Otimizar | \`pdf_comprimir\`, \`pdf_reparar\`, \`pdf_ocr\` |
-| Converter para PDF | \`pdf_imagens_para_pdf\` (JPG/PNG/TIFF/BMP), conversão Office e \`pdf_html_para_pdf\` via LibreOffice |
+| Converter para PDF | \`pdf_imagens_para_pdf\` (JPG/PNG/TIFF/BMP), \`pdf_documento_para_pdf\` (DOC/DOCX/XLS/XLSX/PPT/PPTX/ODT/ODS/ODP/RTF/TXT/CSV) e \`pdf_html_para_pdf\` via LibreOffice |
 | Converter de PDF | \`pdf_converter\` (TXT/HTML/CSV/DOCX), \`pdf_para_imagens\` (JPG/PNG), \`pdf_para_markdown\` |
 | Editar | \`pdf_cortar\`, \`pdf_marca\`, \`pdf_numeros\`, \`pdf_girar\` |
 | Segurança | \`pdf_proteger\`, \`pdf_desbloquear\`, \`pdf_localizar_termos\`, \`pdf_censurar\` (bloqueada até haver redação segura) |
@@ -87,3 +87,11 @@ optimus pdf ocr escaneado.pdf --idioma por
 - Senhas e arquivos são processados localmente; não envie senhas para serviços de terceiros.
 
 Consulte o resultado da ferramenta e valide o arquivo final antes de utilizá-lo oficialmente.
+
+
+### Conversão Office e união de formatos mistos
+
+- Para converter DOC/DOCX, XLS/XLSX, PPT/PPTX, ODT/ODS/ODP, RTF, TXT ou CSV, use `pdf_documento_para_pdf`. É necessário ter LibreOffice instalado e acessível no PATH.
+- Para unir arquivos de tipos diferentes em uma única saída e manter a ordem selecionada, use `pdf_unir_documentos`. Aceita PDFs, imagens e os formatos Office suportados pelo LibreOffice.
+- A interface visual aceita esses formatos na etapa de envio e disponibiliza as operações no catálogo pesquisável.
+- Acesso externo via Cloudflare Tunnel exige senha; chamadas originadas no navegador local do próprio computador continuam locais e não exibem o pedido de senha.
