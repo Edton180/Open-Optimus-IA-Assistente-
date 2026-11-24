@@ -801,7 +801,7 @@ function desenharCelular(d) {
   const partes = [];
   if (d.dica) partes.push("⚠️ " + esc(d.dica));
   if (d.ligado) {
-    partes.push(`✅ Acesso pelo celular ligado. No celular (mesma rede Wi-Fi), leia o QR code ou abra <code>${esc(d.url)}</code> e entre com a senha.`);
+    partes.push(`✅ Acesso pela rede local ligado. Conecte o celular ao mesmo Wi-Fi, leia o QR Code ou abra <code>${esc(d.url)}</code> e entre com a senha. Para usar de fora de casa (4G/5G ou outro Wi-Fi), ative o Cloudflare Tunnel na seção Acesso externo abaixo.`);
     partes.push("Se o celular não abrir, libere o Optimus (Python) no firewall do computador para redes privadas.");
     if (!d.qr) partes.push("Para ver o QR code, instale: <code>pip install segno</code>");
   }
@@ -837,45 +837,78 @@ $("#desligar-celular").addEventListener("click", async () => {
 });
 
 // ---------- Acesso externo seguro (Cloudflare Tunnel) ----------
+let consultaTunelId = 0;
 function desenharTunel(d) {
   const estadoEl = $("#tunel-estado");
   const qr = $("#tunel-qr");
   const figura = (svg, legenda) => svg
-    ? `<figure class="qr">${svg}<figcaption>${esc(legenda)}</figcaption></figure>` : "";
+    ? "<figure class=\"qr\">" + svg + "<figcaption>" + esc(legenda) + "</figcaption></figure>" : "";
   qr.innerHTML = figura(d.qr, "Abrir Optimus pela internet") +
     figura(d.agenda_qr, "Assinar agenda pela internet");
   if (d.erro) estadoEl.textContent = "⚠️ " + d.erro;
-  else if (d.url) estadoEl.innerHTML = `✅ Acesso HTTPS ativo: <a href="${esc(d.url)}" target="_blank" rel="noopener">${esc(d.url)}</a><br>Use a senha forte configurada para entrar. O computador precisa permanecer ligado.`;
-  else if (d.iniciando) estadoEl.textContent = "⏳ Cloudflare está iniciando o túnel. Toque em Atualizar status em alguns segundos.";
+  else if (d.url) estadoEl.innerHTML = "✅ Acesso HTTPS ativo: <a href=\"" + esc(d.url) + "\" target=\"_blank\" rel=\"noopener noreferrer\">" + esc(d.url) + "</a><br>Leia o QR Code no celular e entre com a senha exclusiva. O endereço é temporário e o computador precisa permanecer ligado e conectado à internet.";
+  else if (d.iniciando) estadoEl.textContent = "⏳ Conectando ao Cloudflare… O Optimus verificará automaticamente até o endereço HTTPS e os QR Codes ficarem prontos.";
   else estadoEl.textContent = "Acesso externo desligado.";
   $("#desligar-tunel").classList.toggle("oculto", !d.ligado && !d.iniciando);
   $("#ligar-tunel").classList.toggle("oculto", !!d.ligado || !!d.iniciando);
 }
+async function acompanharTunel(id) {
+  let intervalo = 1000;
+  while (id === consultaTunelId) {
+    await new Promise(resolve => setTimeout(resolve, intervalo));
+    if (id !== consultaTunelId) return;
+    try {
+      const d = await api("/api/tunel");
+      if (id !== consultaTunelId) return;
+      desenharTunel(d);
+      if (!d.iniciando) return;
+      intervalo = Math.min(5000, Math.round(intervalo * 1.35));
+    } catch (e) {
+      if (id !== consultaTunelId) return;
+      $("#tunel-estado").textContent = "⚠️ " + e.message + " Tentarei novamente automaticamente.";
+      intervalo = Math.min(5000, Math.round(intervalo * 1.5));
+    }
+  }
+}
 async function mostrarTunel() {
-  const el = $("#tunel-estado"); el.textContent = "Verificando acesso externo…";
-  try { desenharTunel(await api("/api/tunel")); }
-  catch (e) { el.textContent = "⚠️ " + e.message; }
+  const id = ++consultaTunelId;
+  const el = $("#tunel-estado");
+  el.textContent = "Verificando acesso externo…";
+  try {
+    const d = await api("/api/tunel");
+    if (id !== consultaTunelId) return;
+    desenharTunel(d);
+    if (d.iniciando) void acompanharTunel(id);
+  } catch (e) {
+    if (id === consultaTunelId) el.textContent = "⚠️ " + e.message;
+  }
 }
 $("#ligar-tunel").addEventListener("click", async () => {
   const campo = $("#tunel-senha"), valor = campo.value;
   const el = $("#tunel-estado");
   if (valor.length < 12) { el.textContent = "Use uma senha exclusiva com pelo menos 12 caracteres."; return; }
-  $("#ligar-tunel").disabled = true; el.textContent = "Preparando o Cloudflare Tunnel, verificando o instalador e conectando…";
+  const id = ++consultaTunelId;
+  $("#ligar-tunel").disabled = true;
+  el.textContent = "Iniciando Cloudflare Tunnel…";
   try {
     const d = await api("/api/tunel", { method: "POST", json: { senha: valor }, tempo: 90000 });
+    if (id !== consultaTunelId) return;
     senha = valor;
     try { sessionStorage.setItem("optimus_senha", senha); } catch (e) {}
     campo.value = "";
     desenharTunel(d);
+    if (d.iniciando) void acompanharTunel(id);
   } catch (e) {
-    // O servidor pode já ter ativado a autenticação mesmo se o binário do túnel falhar.
+    if (id !== consultaTunelId) return;
     senha = valor;
     try { sessionStorage.setItem("optimus_senha", senha); } catch (err) {}
     el.textContent = "⚠️ " + e.message;
   } finally { $("#ligar-tunel").disabled = false; }
 });
 $("#desligar-tunel").addEventListener("click", async () => {
-  const el = $("#tunel-estado"); el.textContent = "Encerrando túnel…";
+  ++consultaTunelId;
+  const el = $("#tunel-estado");
+  el.textContent = "Encerrando túnel…";
   try { desenharTunel(await api("/api/tunel/desligar", { method: "POST", json: {} })); }
   catch (e) { el.textContent = "⚠️ " + e.message; }
 });
