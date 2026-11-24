@@ -81,3 +81,18 @@ def test_diagnostico_nao_altera_estado_de_dispositivos(monkeypatch, tmp_path):
     monkeypatch.setattr(casa.httpx, "get", lambda *a, **k: RespostaFake([]))
     resultado = casa.casa_diagnostico(_ctx(tmp_path))
     assert resultado["home_assistant_conectado"] is True
+
+def test_casa_diagnostico_configuracao_incompleta_nao_tenta_conectar(monkeypatch, tmp_path):
+    monkeypatch.setattr(casa.webcam, "listar", lambda: [])
+    contexto = _ctx(tmp_path, ha=False)
+    contexto.config.definir("casa", "url", "http://homeassistant.local:8123")
+
+    def proibido(*args, **kwargs):
+        raise AssertionError("não deve chamar a API sem token")
+
+    monkeypatch.setattr(casa.httpx, "get", proibido)
+    resultado = casa.casa_diagnostico(contexto)
+
+    assert resultado["home_assistant_configurado"] is False
+    assert resultado["home_assistant_conectado"] is False
+    assert "erro_home_assistant" not in resultado
