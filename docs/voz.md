@@ -82,3 +82,22 @@ reconhecimento aceita variações comuns de pronúncia.
 - Windows: Configurações > Privacidade > Microfone > permitir aplicativos da área de trabalho.
 - Navegador: na primeira vez, permita o microfone no ícone de cadeado da barra de endereço. Fora do
   próprio PC, o navegador só libera o microfone em `localhost` ou HTTPS.
+
+
+## Perfil pessoal Edton Braz
+
+A entrada **Edton Braz** que já existia no catálogo era uma voz pública da ElevenLabs
+(Mat(h)eus), não uma clonagem da voz pessoal do proprietário. Para criar o perfil pessoal,
+abra **Estúdio > Vozes > Clonar uma voz**, mantenha o nome sugerido **Edton Braz**, escolha
+uma gravação própria/autorizada e confirme a declaração de consentimento.
+
+O pipeline aceita áudio ou vídeo, prepara a amostra em WAV mono a 24 kHz e exige de 5 a
+90 segundos de fala. Prefira 10–30 segundos limpos, sem música, com voz natural. Ao salvar
+o perfil com esse nome, ele substitui o item público de mesmo identificador. A conversa e
+a fala do Optimus passam a usar a amostra pessoal via OmniVoice local quando o perfil
+estiver disponível. Instale o extra opcional `omnivoice` para síntese; o modelo será
+carregado sob demanda. Sem uma amostra pessoal salva, o comportamento anterior permanece.
+
+Os vídeos de referência do proprietário não são baixados automaticamente pelo Optimus.
+É necessário importar os arquivos MP4 ou áudio extraído dos vídeos. Não se declara
+percentual de similaridade sem uma avaliação objetiva e auditiva.
