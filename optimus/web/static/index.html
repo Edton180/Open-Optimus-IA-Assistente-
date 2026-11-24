@@ -571,6 +571,10 @@
         <div class="linha entre"><div><h3>📖 Leitor Kiwix</h3><p class="sutil">Abre um arquivo ZIM local em um servidor restrito ao próprio computador.</p></div>
           <span id="zim-kiwix-status" class="selo">Verificando Kiwix…</span></div>
         <div class="linha">
+          <button type="button" class="botao primario" id="zim-instalar-kiwix">⬇ Instalar Kiwix automaticamente</button>
+          <span id="zim-instalacao-status" class="sutil" role="status" aria-live="polite">O instalador oficial será baixado para a pasta privada do Optimus, sem alterar o PATH.</span>
+        </div>
+        <div class="linha">
           <label style="flex:1">Biblioteca ZIM
             <select id="zim-arquivo" class="campo"><option value="">Selecione um arquivo ZIM</option></select>
           </label>
@@ -581,13 +585,30 @@
         <p id="zim-leitor-link" class="sutil"></p>
       </div>
       <div class="cartao">
+        <h3>🔎 Busca unificada: ZIM + documentos</h3>
+        <p class="sutil">Pesquisa nos índices de texto completo dos ZIMs e na biblioteca de documentos do Optimus. Resultados mostram a fonte e o trecho disponível; arquivos ZIM sem índice de texto completo não podem ser pesquisados.</p>
+        <form id="zim-busca-form" class="formulario">
+          <label>O que deseja encontrar?
+            <input id="zim-busca-termo" class="campo" type="search" minlength="2" maxlength="300" placeholder="Ex.: primeiros socorros, segurança do trabalho…" required>
+          </label>
+          <div class="linha">
+            <label>Fonte
+              <select id="zim-busca-fonte" class="campo"><option value="todas">Todas as fontes</option><option value="zim">Somente ZIM</option><option value="documentos">Somente documentos</option></select>
+            </label>
+            <button type="submit" class="botao primario" id="zim-buscar">Pesquisar</button>
+          </div>
+        </form>
+        <p id="zim-busca-status" class="sutil" role="status" aria-live="polite">A busca é local. O Optimus não envia seus arquivos para a internet.</p>
+        <div id="zim-busca-resultados" class="lista" aria-live="polite"></div>
+      </div>
+      <div class="cartao">
         <h3>Como adicionar conteúdo</h3>
         <ol>
           <li>Coloque seus arquivos <code>.zim</code> na pasta <code>biblioteca_zim</code> dentro da pasta de dados do Optimus.</li>
           <li>Use “Atualizar biblioteca” para reler o catálogo.</li>
           <li>Somente arquivos locais regulares são listados; links simbólicos e outros formatos são ignorados.</li>
         </ol>
-        <p class="sutil">O leitor Kiwix é opcional: instale o pacote kiwix-tools no sistema. O Optimus inicia somente o processo que ele próprio criou, em 127.0.0.1, e não encerra outros processos Kiwix.</p>
+        <p class="sutil">O Kiwix Tools é instalado pelo Optimus em uma pasta privada, sem PATH global nem privilégios administrativos. O Optimus só encerra processos que ele próprio iniciou; processos Kiwix de terceiros nunca são interrompidos. O conteúdo ZIM deve ser obtido de fontes legítimas e adicionado por você.</p>
       </div>
     </section>
     <section id="tela-modulos" class="tela">
