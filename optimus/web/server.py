@@ -16,6 +16,7 @@ import subprocess
 import threading
 import time
 import uuid
+import urllib.error
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -482,6 +483,18 @@ class Manipulador(BaseHTTPRequestHandler):
             from optimus import kiwix, zim
             if metodo == "GET" and ident == "kiwix":
                 return self._json(kiwix.estado())
+            if metodo == "GET" and ident == "buscar":
+                termo = str((consulta.get("q") or [""])[0]).strip()
+                arquivo = str((consulta.get("arquivo") or [""])[0]).strip()
+                try:
+                    return self._json(kiwix.buscar(termo, arquivo, limite=20))
+                except (ValueError, RuntimeError) as erro:
+                    return self._json({"erro": str(erro)}, 400)
+            if metodo == "POST" and ident == "instalar":
+                try:
+                    return self._json(kiwix.instalar())
+                except (RuntimeError, OSError, urllib.error.URLError) as erro:
+                    return self._json({"erro": f"Não foi possível instalar o Kiwix Tools: {erro}"}, 502)
             if metodo == "GET" and not ident:
                 dados = zim.listar_zim()
                 dados["kiwix"] = kiwix.estado()

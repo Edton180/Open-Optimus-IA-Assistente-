@@ -200,16 +200,21 @@ function atualizarEstadoKiwix(dados) {
   const link = $("#zim-leitor-link");
   if (!badge || !status || !link) return;
   badge.textContent = dados.executando ? "Leitor em execução" :
-    dados.instalado ? "Kiwix instalado" : "Kiwix não instalado";
+    dados.instalado ? (dados.gerenciado ? "Kiwix gerenciado" : "Kiwix do sistema") : "Kiwix não instalado";
   status.textContent = dados.executando
     ? "Leitura ativa: " + (dados.arquivo || "arquivo ZIM") + ". O servidor está disponível somente neste computador."
-    : dados.instalado ? "Pronto para iniciar sob demanda." :
-      "Instale kiwix-tools no sistema para habilitar a leitura. Nenhum serviço foi iniciado.";
+    : dados.instalado ? "Pronto para iniciar sob demanda · " + (dados.versao || "versão do sistema")
+      : (dados.erro || "Instale o Kiwix Tools automaticamente para habilitar a leitura.");
   link.innerHTML = dados.executando && dados.url
     ? '<a href="' + esc(dados.url) + '" target="_blank" rel="noopener noreferrer">Abrir leitor Kiwix em nova aba ↗</a>'
     : "";
   $("#zim-fechar").disabled = !dados.executando;
   $("#zim-abrir").disabled = !dados.instalado || !!dados.executando || !$("#zim-arquivo")?.value;
+  const instalar = $("#zim-instalar-kiwix");
+  if (instalar) {
+    instalar.disabled = !dados.suportado || !!dados.gerenciado;
+    instalar.textContent = dados.gerenciado ? "✓ Kiwix instalado pelo Optimus" : "⬇ Instalar Kiwix automaticamente";
+  }
   if (dados.executando && $("#zim-arquivo")) $("#zim-arquivo").value = dados.arquivo || "";
 }
 $("#zim-atualizar")?.addEventListener("click", carregarZim);
@@ -218,6 +223,20 @@ $("#zim-arquivo")?.addEventListener("change", () => {
   $("#zim-abrir").disabled = !$("#zim-arquivo").value ||
     badge?.textContent === "Kiwix não instalado" ||
     badge?.textContent === "Leitor em execução";
+});
+$("#zim-instalar-kiwix")?.addEventListener("click", async () => {
+  const botao = $("#zim-instalar-kiwix");
+  const status = $("#zim-instalacao-status");
+  botao.disabled = true;
+  status.textContent = "Baixando e validando o pacote oficial Kiwix Tools. Isso pode levar alguns minutos…";
+  try {
+    const dados = await api("/api/zim/instalar", { method: "POST", json: {}, tempo: 180000 });
+    status.textContent = dados.mensagem || "Kiwix instalado.";
+    await carregarZim();
+  } catch (erro) {
+    status.textContent = "Instalação não concluída: " + erro.message;
+    botao.disabled = false;
+  }
 });
 $("#zim-abrir")?.addEventListener("click", async () => {
   const botao = $("#zim-abrir");
@@ -245,6 +264,53 @@ $("#zim-fechar")?.addEventListener("click", async () => {
     $("#zim-leitor-status").textContent = "Falha ao encerrar o leitor: " + erro.message;
     botao.disabled = false;
   }
+});
+$("#zim-busca-form")?.addEventListener("submit", async (evento) => {
+  evento.preventDefault();
+  const termo = $("#zim-busca-termo").value.trim();
+  const fonte = $("#zim-busca-fonte").value;
+  const status = $("#zim-busca-status");
+  const lista = $("#zim-busca-resultados");
+  const botao = $("#zim-buscar");
+  if (termo.length < 2) return;
+  botao.disabled = true;
+  status.textContent = "Pesquisando localmente nos índices disponíveis…";
+  lista.innerHTML = "";
+  const tarefas = [];
+  if (fonte !== "documentos") tarefas.push(api("/api/zim/buscar?q=" + encodeURIComponent(termo))
+    .then((d) => ({ tipo: "zim", dados: d })).catch((erro) => ({ tipo: "zim", erro })));
+  if (fonte !== "zim") tarefas.push(api("/api/biblioteca?q=" + encodeURIComponent(termo))
+    .then((d) => ({ tipo: "documentos", dados: d })).catch((erro) => ({ tipo: "documentos", erro })));
+  try {
+    const respostas = await Promise.all(tarefas);
+    const itens = [];
+    const avisos = [];
+    for (const resposta of respostas) {
+      if (resposta.erro) { avisos.push(resposta.tipo + ": " + resposta.erro.message); continue; }
+      if (resposta.tipo === "zim") {
+        itens.push(...(resposta.dados.resultados || []));
+        avisos.push(...(resposta.dados.erros || []));
+        if (resposta.dados.aviso) avisos.push(resposta.dados.aviso);
+      } else {
+        itens.push(...(resposta.dados.resultados || []).map((r) => ({
+          titulo: r.titulo || "Documento", trecho: r.trecho || "",
+          citacao: r.citacao || r.fonte || "Documento local",
+          fonte: r.fonte || "", tipo_fonte: "Documento"
+        })));
+      }
+    }
+    lista.innerHTML = itens.length ? itens.map((r) =>
+      '<li><div><b>' + esc(r.titulo || "Resultado") + '</b><small class="sutil"> ' +
+      esc(r.tipo_fonte || "Fonte") + ' · ' + esc(r.citacao || r.arquivo_zim || "") +
+      '</small><p>' + esc(r.trecho || "Trecho não fornecido pelo índice.") + '</p>' +
+      (r.url ? '<a href="' + esc(r.url) + '" target="_blank" rel="noopener noreferrer">Abrir fonte local ↗</a>' : "") +
+      '</div></li>'
+    ).join("") : '<li class="sutil">Nenhum resultado encontrado nas fontes selecionadas.</li>';
+    status.textContent = itens.length + " resultado(s) · busca textual local. " +
+      (avisos.length ? avisos.slice(0, 3).join(" · ") : "As citações indicam a origem do trecho.");
+  } catch (erro) {
+    status.textContent = "Falha na busca: " + erro.message;
+  } finally { botao.disabled = false; }
 });
 
 // ---------- Command Center: inventário local de integrações ----------
