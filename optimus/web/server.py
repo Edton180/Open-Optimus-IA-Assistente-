@@ -863,8 +863,7 @@ def iniciar_tunel(porta: int, senha: str) -> dict[str, str | bool]:
     if estado_tunel().get("url"):
         return estado_tunel()
     return {"ligado": False, "iniciando": processo.poll() is None, "url": "",
-            "erro": _erro_tunel or
-            "O túnel ainda está iniciando. Atualize o status em alguns segundos."}
+            "erro": _erro_tunel if processo.poll() is not None else ""}
 
 def parar_tunel() -> None:
     global _processo_tunel, _url_tunel, _erro_tunel
@@ -932,6 +931,7 @@ def iniciar(host: str = "127.0.0.1", porta: int = 8765, abrir_navegador: bool = 
     if tunel:
         resultado = iniciar_tunel(servidor.server_address[1], senha)
         if resultado.get("erro"):
+            parar_tunel()
             servidor.server_close()
             raise SystemExit(str(resultado["erro"]))
         print(f"Acesso externo: {resultado.get('url') or 'túnel iniciando; consulte o painel'}")
