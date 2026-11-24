@@ -29,6 +29,8 @@ class Optimus:
 
         self.aviso_modelo = verificar_upgrade(self.config, self.hardware, self.perfil)
         base = cfg.pasta_base()
+        from optimus.smart_home.registry import RegistroDispositivos
+        self.registro_casa = RegistroDispositivos(base / "casa" / "dispositivos.json")
         self.banco = Banco(base / "optimus.db")
         self._iniciar_indexacao_conhecimento(base)
         self.auditoria = Auditoria(base / "registros" / "acoes.jsonl")

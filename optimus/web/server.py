@@ -712,6 +712,167 @@ class Manipulador(BaseHTTPRequestHandler):
                                  name="home-assistant-gerenciado").start()
                 return self._json({"ok": True, "mensagem": "Operação iniciada.",
                                    "estado": "executando"}, 202)
+        if recurso == "casa" and ident == "aparelhos" and metodo == "GET":
+            import httpx
+            from urllib.parse import urlsplit
+
+            url = str(optimus.config.get("casa", "url") or "").strip().rstrip("/")
+            token = str(optimus.config.get("casa", "token") or "").strip()
+            if not url or not token:
+                return self._json({"ok": False, "erro": "Conclua o primeiro acesso ao Home Assistant e salve o token de acesso para listar os aparelhos."}, 409)
+            partes_url = urlsplit(url)
+            if (partes_url.scheme not in ("http", "https") or not partes_url.hostname
+                    or partes_url.username or partes_url.password or partes_url.query
+                    or partes_url.fragment):
+                return self._json({"ok": False, "erro": "Endereço do Home Assistant inválido."}, 400)
+            try:
+                resposta = httpx.get(url + "/api/states",
+                    headers={"Authorization": "Bearer " + token}, timeout=12,
+                    follow_redirects=False)
+                if resposta.status_code == 401:
+                    return self._json({"ok": False, "erro": "Token recusado pelo Home Assistant. Atualize o token salvo."}, 401)
+                resposta.raise_for_status()
+                dados = resposta.json()
+                if not isinstance(dados, list):
+                    return self._json({"ok": False, "erro": "A API do Home Assistant retornou uma lista inválida."}, 502)
+                dominios = {"light", "switch", "fan", "cover", "climate", "lock", "media_player",
+                            "sensor", "binary_sensor", "camera", "person", "device_tracker",
+                            "weather", "alarm_control_panel", "humidifier", "water_heater",
+                            "vacuum", "button", "remote", "scene", "automation"}
+                entidades = []
+                for item in dados[:2000]:
+                    if not isinstance(item, dict):
+                        continue
+                    entity_id = str(item.get("entity_id") or "")
+                    dominio = entity_id.split(".", 1)[0] if "." in entity_id else ""
+                    if dominio not in dominios:
+                        continue
+                    atributos = item.get("attributes") if isinstance(item.get("attributes"), dict) else {}
+                    nome = str(atributos.get("friendly_name") or entity_id)
+                    estado_entidade = str(item.get("state") or "unknown")
+                    dispositivo = str(atributos.get("device_class") or "")
+                    entidade = {
+                        "entity_id": entity_id, "dominio": dominio, "nome": nome,
+                        "estado": estado_entidade,
+                        "unidade": str(atributos.get("unit_of_measurement") or ""),
+                        "dispositivo": dispositivo,
+                        "controlavel": dominio in {"light", "switch", "fan", "cover",
+                            "climate", "lock", "media_player", "humidifier", "water_heater",
+                            "vacuum", "alarm_control_panel"},
+                    }
+                    entidades.append(entidade)
+                    try:
+                        from optimus.smart_home.registry import Dispositivo
+                        capacidades = ["estado"]
+                        if entidade["controlavel"]:
+                            capacidades.append("controle")
+                        if dominio == "camera":
+                            capacidades.append("camera")
+                        optimus.registro_casa.salvar(Dispositivo(
+                            id="ha:" + entity_id, nome=nome, integracao="home_assistant",
+                            modelo=dispositivo, entity_id=entity_id,
+                            disponibilidade="offline" if estado_entidade in ("unavailable", "unknown")
+                                else "online",
+                            confianca_estado="confirmed", capacidades=capacidades,
+                        ))
+                    except (AttributeError, TypeError, ValueError, OSError):
+                        log.debug("Não foi possível sincronizar entidade HA no inventário local",
+                                  exc_info=True)
+                return self._json({"ok": True, "total": len(entidades), "aparelhos": entidades})
+            except httpx.HTTPStatusError as erro:
+                return self._json({"ok": False, "erro": f"Home Assistant respondeu HTTP {erro.response.status_code}."}, 502)
+            except httpx.TimeoutException:
+                return self._json({"ok": False, "erro": "O Home Assistant demorou para responder."}, 504)
+            except httpx.HTTPError as erro:
+                log.warning("Falha ao listar entidades Home Assistant: %s", type(erro).__name__)
+                return self._json({"ok": False, "erro": "Não foi possível consultar os aparelhos no Home Assistant."}, 502)
+        if recurso == "casa" and ident == "registro" and metodo == "GET":
+            registro = getattr(optimus, "registro_casa", None)
+            if registro is None:
+                return self._json({"ok": False, "erro": "Inventário local indisponível."}, 503)
+            integracao = str((consulta.get("integracao") or [""])[0]).strip()
+            return self._json({"ok": True, "dispositivos": registro.listar(integracao)})
+        if recurso == "casa" and ident == "registro" and metodo == "POST":
+            from optimus.smart_home.registry import Dispositivo
+            registro = getattr(optimus, "registro_casa", None)
+            if registro is None:
+                return self._json({"ok": False, "erro": "Inventário local indisponível."}, 503)
+            corpo = self._corpo()
+            try:
+                dispositivo = Dispositivo(
+                    id=str(corpo.get("id") or "").strip(),
+                    nome=str(corpo.get("nome") or "").strip(),
+                    integracao=str(corpo.get("integracao") or "manual").strip(),
+                    fabricante=str(corpo.get("fabricante") or "").strip()[:120],
+                    modelo=str(corpo.get("modelo") or "").strip()[:120],
+                    host=str(corpo.get("host") or "").strip()[:255],
+                    entity_id=str(corpo.get("entity_id") or "").strip(),
+                    comodo=str(corpo.get("comodo") or "").strip()[:120],
+                    capacidades=corpo.get("capacidades") if isinstance(corpo.get("capacidades"), list) else [],
+                    disponibilidade=str(corpo.get("disponibilidade") or "unknown"),
+                    confianca_estado=str(corpo.get("confianca_estado") or "unavailable"),
+                    ultimo_visto=str(corpo.get("ultimo_visto") or ""),
+                )
+                registro.salvar(dispositivo)
+                return self._json({"ok": True, "dispositivo": registro.obter(dispositivo.id)})
+            except (TypeError, ValueError, OSError) as erro:
+                return self._json({"ok": False, "erro": f"Dados do dispositivo inválidos: {erro}"}, 400)
+        if recurso == "casa" and ident == "registro-remover" and metodo == "POST":
+            registro = getattr(optimus, "registro_casa", None)
+            if registro is None:
+                return self._json({"ok": False, "erro": "Inventário local indisponível."}, 503)
+            dispositivo_id = str(self._corpo().get("id") or "").strip()
+            if not dispositivo_id or len(dispositivo_id) > 160:
+                return self._json({"ok": False, "erro": "ID do dispositivo inválido."}, 400)
+            return self._json({"ok": registro.remover(dispositivo_id)})
+        if recurso == "casa" and ident == "controle" and metodo == "POST":
+            import httpx
+            from urllib.parse import urlsplit
+
+            corpo = self._corpo()
+            entity_id = str(corpo.get("entity_id") or "").strip()
+            servico = str(corpo.get("servico") or "").strip().lower()
+            dominios_servicos = {
+                "light": {"turn_on", "turn_off", "toggle"},
+                "switch": {"turn_on", "turn_off", "toggle"},
+                "fan": {"turn_on", "turn_off", "toggle"},
+                "cover": {"open_cover", "close_cover", "stop_cover"},
+                "climate": {"turn_on", "turn_off", "toggle"},
+                "lock": {"lock", "unlock"},
+                "media_player": {"turn_on", "turn_off", "toggle"},
+                "humidifier": {"turn_on", "turn_off", "toggle"},
+                "water_heater": {"turn_on", "turn_off"},
+                "vacuum": {"start", "stop", "return_to_base"},
+            }
+            if "." not in entity_id:
+                return self._json({"ok": False, "erro": "Identificador de aparelho inválido."}, 400)
+            dominio = entity_id.split(".", 1)[0]
+            if dominio not in dominios_servicos or servico not in dominios_servicos[dominio]:
+                return self._json({"ok": False, "erro": "Ação não permitida para este tipo de aparelho."}, 400)
+            url = str(optimus.config.get("casa", "url") or "").strip().rstrip("/")
+            token = str(optimus.config.get("casa", "token") or "").strip()
+            if not url or not token:
+                return self._json({"ok": False, "erro": "Conecte o Home Assistant antes de controlar aparelhos."}, 409)
+            partes_url = urlsplit(url)
+            if (partes_url.scheme not in ("http", "https") or not partes_url.hostname
+                    or partes_url.username or partes_url.password or partes_url.query
+                    or partes_url.fragment):
+                return self._json({"ok": False, "erro": "Endereço do Home Assistant inválido."}, 400)
+            try:
+                resposta = httpx.post(url + f"/api/services/{dominio}/{servico}",
+                    headers={"Authorization": "Bearer " + token, "Content-Type": "application/json"},
+                    json={"entity_id": entity_id}, timeout=12, follow_redirects=False)
+                if resposta.status_code == 401:
+                    return self._json({"ok": False, "erro": "Token recusado pelo Home Assistant."}, 401)
+                resposta.raise_for_status()
+                return self._json({"ok": True, "mensagem": f"Ação {servico} enviada para {entity_id}."})
+            except httpx.HTTPStatusError as erro:
+                return self._json({"ok": False, "erro": f"Home Assistant respondeu HTTP {erro.response.status_code}."}, 502)
+            except httpx.TimeoutException:
+                return self._json({"ok": False, "erro": "O Home Assistant demorou para executar a ação."}, 504)
+            except httpx.HTTPError as erro:
+                log.warning("Falha no controle Home Assistant: %s", type(erro).__name__)
+                return self._json({"ok": False, "erro": "Não foi possível enviar a ação ao aparelho."}, 502)
         if recurso == "casa" and ident == "testar" and metodo == "POST":
             from urllib.parse import urlsplit
             import httpx

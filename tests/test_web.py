@@ -531,3 +531,81 @@ def test_api_zim_expoe_estado_do_leitor_e_rejeita_caminho(tmp_path, monkeypatch)
             assert erro.code == 400
     finally:
         httpd.shutdown()
+
+
+def test_home_assistant_gerenciado_rota_e_api_dispositivos(tmp_path, monkeypatch):
+    import httpx
+
+    httpd, base = _subir()
+    try:
+        estado = server.Manipulador.estado
+        from optimus.smart_home.registry import RegistroDispositivos
+        estado.optimus.registro_casa = RegistroDispositivos(tmp_path / "dispositivos.json")
+        # A rota do gerenciador deve existir mesmo quando Docker ainda não está instalado.
+        resposta = _req(base + "/api/casa/gerenciado")
+        assert "runtime" in resposta and "container" in resposta
+        # Sem onboarding/token, a API responde com instrução específica, nunca 404.
+        try:
+            _req(base + "/api/casa/aparelhos")
+            assert False, "a listagem exige token"
+        except urllib.error.HTTPError as erro:
+            assert erro.code == 409
+            assert "token" in json.loads(erro.read())["erro"].lower()
+
+        estado.optimus.config.definir("casa", "url", "http://127.0.0.1:8123")
+        estado.optimus.config.definir("casa", "token", "token-teste")
+
+        class Resposta:
+            status_code = 200
+            def json(self):
+                return [
+                    {"entity_id": "light.sala", "state": "on",
+                     "attributes": {"friendly_name": "Luz da sala"}},
+                    {"entity_id": "sensor.temperatura", "state": "25",
+                     "attributes": {"friendly_name": "Temperatura"}},
+                    {"entity_id": "switch.tomada", "state": "off",
+                     "attributes": {"friendly_name": "Tomada"}},
+                ]
+            def raise_for_status(self):
+                return None
+
+        chamadas = []
+        monkeypatch.setattr(httpx, "get", lambda *a, **k: (chamadas.append(("GET", a, k)) or Resposta()))
+        monkeypatch.setattr(httpx, "post", lambda *a, **k: (chamadas.append(("POST", a, k)) or Resposta()))
+
+        aparelhos = _req(base + "/api/casa/aparelhos")
+        assert aparelhos["total"] == 3
+        por_id = {x["entity_id"]: x for x in aparelhos["aparelhos"]}
+        assert set(por_id) == {"light.sala", "sensor.temperatura", "switch.tomada"}
+        assert por_id["sensor.temperatura"]["controlavel"] is False
+        assert por_id["light.sala"]["controlavel"] is True
+
+        inventario = _req(base + "/api/casa/registro")
+        assert len(inventario["dispositivos"]) == 3
+        assert {x["entity_id"] for x in inventario["dispositivos"]} == {
+            "light.sala", "sensor.temperatura", "switch.tomada"
+        }
+        assert all("token" not in x for x in inventario["dispositivos"])
+
+        manual = _req(base + "/api/casa/registro", {
+            "id": "manual:tomada-quarto", "nome": "Tomada do quarto",
+            "integracao": "manual", "comodo": "Quarto",
+            "capacidades": ["estado"]
+        })
+        assert manual["dispositivo"]["comodo"] == "Quarto"
+        removido = _req(base + "/api/casa/registro-remover", {"id": "manual:tomada-quarto"})
+        assert removido["ok"] is True
+
+        controle = _req(base + "/api/casa/controle",
+                        {"entity_id": "light.sala", "servico": "turn_off"})
+        assert controle["ok"]
+        assert chamadas[-1][2]["json"] == {"entity_id": "light.sala"}
+
+        try:
+            _req(base + "/api/casa/controle",
+                 {"entity_id": "light.sala", "servico": "delete"})
+            assert False, "serviços arbitrários devem ser bloqueados"
+        except urllib.error.HTTPError as erro:
+            assert erro.code == 400
+    finally:
+        httpd.shutdown()
