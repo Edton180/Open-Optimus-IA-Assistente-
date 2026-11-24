@@ -53,6 +53,12 @@ _ATRIBUTOS: list[tuple[tuple[str, ...], str]] = [
     (("indiano", "indiana"), "indian accent"),
     (("portugues", "portuguesa", "lusitano"), "portuguese accent"),
     (("brasileiro", "brasileira"), "brazilian accent"),
+    (("claro", "clara", "limpo", "limpa", "brilhante"), "clear bright voice"),
+    (("medio", "media"), "medium pitch"),
+    (("conversacional", "natural"), "conversational"),
+    (("expressiva", "expressivo", "dinamica", "dinamico"), "expressive"),
+    (("confiante", "segura", "seguro"), "confident"),
+    (("energica", "energico", "entusiasmada", "entusiasmado"), "energetic but controlled"),
 ]
 
 
