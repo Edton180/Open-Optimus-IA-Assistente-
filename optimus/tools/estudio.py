@@ -643,7 +643,7 @@ def estudio_instalar_todos_modelos(ctx):
     def trabalho(progresso, cancelado, **_):
         if cancelado and cancelado():
             return {"cancelado": True}
-        return modelos.instalar_todos(progresso)
+        return modelos.instalar_todos(progresso, cancelado=cancelado)
 
     return _na_fila(ctx, "modelo", "Instalar todos os motores e modelos", trabalho)
 
