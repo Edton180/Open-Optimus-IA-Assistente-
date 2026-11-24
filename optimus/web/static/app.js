@@ -1088,6 +1088,11 @@ async function atualizarHomeAssistantGerenciado() {
     }
     if (tarefa.estado === "falhou") status.textContent = "⚠️ " + (tarefa.erro || "A operação falhou.");
     else if (tarefa.estado === "concluido") status.textContent = "✅ " + (tarefa.mensagem || "Operação concluída.");
+    const logs = $("#ha-gerenciado-logs");
+    if (tarefa.resultado && tarefa.resultado.logs) {
+      logs.textContent = tarefa.resultado.logs;
+      logs.classList.remove("oculto");
+    }
     return false;
   } catch (e) {
     badge.textContent = "Falha no diagnóstico";
