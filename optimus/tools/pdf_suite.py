@@ -6,6 +6,7 @@ no momento do uso para que a instalação básica do Optimus continue leve.
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import subprocess
 import zipfile
@@ -406,6 +407,8 @@ def pdf_para_excel(ctx, arquivo: str, destino: str = ""):
         resumo = workbook.active
         resumo.title = "Conteudo"
         tabelas = 0
+        paginas_ocr = []
+        doc_ocr = None
         with pdfplumber.open(str(origem)) as pdf:
             for numero_pagina, page in enumerate(pdf.pages, 1):
                 achadas = page.extract_tables() or []
@@ -415,6 +418,18 @@ def pdf_para_excel(ctx, arquivo: str, destino: str = ""):
                     for linha in tabela:
                         sheet.append([celula or "" for celula in linha])
                 texto_pagina = page.extract_text() or ""
+                if not texto_pagina.strip() and not achadas:
+                    try:
+                        import pypdfium2 as pdfium
+                        import pytesseract
+                        if doc_ocr is None:
+                            doc_ocr = pdfium.PdfDocument(str(origem))
+                        imagem = doc_ocr[numero_pagina-1].render(scale=2).to_pil()
+                        texto_pagina = pytesseract.image_to_string(imagem, lang="por").strip()
+                        if texto_pagina:
+                            paginas_ocr.append(numero_pagina)
+                    except ImportError:
+                        pass
                 if texto_pagina:
                     resumo.append([f"Página {numero_pagina}"])
                     for linha in texto_pagina.splitlines():
@@ -425,8 +440,8 @@ def pdf_para_excel(ctx, arquivo: str, destino: str = ""):
         out.parent.mkdir(parents=True, exist_ok=True)
         workbook.save(out)
         return {"mensagem": "Conteúdo exportado para Excel.",
-                "destino": str(out), "tabelas_detectadas": tabelas,
-                "observacao": "Tabelas detectadas são aproximadas; confira células mescladas e layout."}
+                "destino": str(out), "tabelas_detectadas": tabelas, "paginas_processadas_por_ocr": paginas_ocr,
+                "observacao": "Tabelas detectadas são aproximadas; OCR de páginas escaneadas exporta texto por linha, não reconstrói tabelas complexas."}
     except Exception as exc:
         return {"erro": f"Falha ao exportar Excel: {exc}"}
 
