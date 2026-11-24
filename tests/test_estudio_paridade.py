@@ -152,13 +152,25 @@ def test_pausa_vira_silencio_no_audio(monkeypatch):
     assert np.max(np.abs(meio)) < 0.01
 
 
-def test_perfil_edton_braz_tem_parametros_de_narracao_ptbr():
+def test_perfil_edton_braz_tem_parametros_de_narracao_ptbr(monkeypatch, tmp_path):
     perfil = vozes.obter("Edton Braz")
     assert perfil.id == "edton-braz"
     assert perfil.idioma == "pt-BR" and perfil.genero == "masculina"
     assert perfil.base == "prime"
     assert 1.0 < perfil.velocidade <= 1.15
     assert perfil.descricao and "micro-pausas" in perfil.descricao
+
+    # Com pesos preparados, o perfil passa a usar o voice design do OmniVoice.
+    monkeypatch.setattr(vozes, "pasta_base", lambda: tmp_path)
+    marcador = tmp_path / "estudio" / "modelos" / ".prontos" / "omnivoice.ok"
+    marcador.parent.mkdir(parents=True)
+    marcador.write_text("ok", encoding="utf-8")
+    monkeypatch.setattr(omnivoice, "instalado", lambda: True)
+    dinamica = vozes.obter("Edton Braz")
+    assert dinamica.motor == "omnivoice"
+    assert "male" in dinamica.instrucao and "young adult" in dinamica.instrucao
+    assert "brazilian accent" in dinamica.instrucao
+    assert "conversational" in dinamica.instrucao and "expressive" in dinamica.instrucao
 
 
 # ------------------------------------------------------------------ Piper
