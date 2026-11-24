@@ -257,7 +257,8 @@ class Agente:
                     )
                 partes.append(
                     "\nAo usar essas evidências, cite no texto [Fonte ZIM N] e não invente "
-                    "títulos, artigos, páginas ou URLs. Se a evidência não sustentar a resposta, "
+                    "títulos, artigos, páginas, hashes ou URLs. Ao citar, acrescente uma seção Fontes "
+                    "com arquivo, caminho do artigo, URI e hash exatos. Se a evidência não sustentar a resposta, "
                     "diga que a biblioteca offline não contém informação suficiente."
                 )
         if com_ferramentas:
