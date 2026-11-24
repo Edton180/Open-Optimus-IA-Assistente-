@@ -318,15 +318,18 @@ async function atualizarStatusIndiceZim() {
   if (!alvo) return;
   try {
     const s = await api("/api/zim/status");
+    const vetores = Number(s.com_embeddings || 0);
     alvo.textContent = (s.artigos_indexados || 0) + " artigos · " +
-      (s.trechos || 0) + " trechos · " + (s.com_embeddings || 0) +
-      " vetores locais. A indexação pode ser retomada a qualquer momento.";
+      (s.trechos || 0) + " trechos · " + (vetores
+        ? vetores + " vetores locais."
+        : "sem embeddings; busca lexical ativa.") +
+      " A indexação pode ser retomada a qualquer momento.";
   } catch (erro) { alvo.textContent = "Índice ZIM ainda não disponível: " + erro.message; }
 }
 $("#zim-indexar")?.addEventListener("click", async () => {
   const botao = $("#zim-indexar"), status = $("#zim-index-status");
   botao.disabled = true;
-  status.textContent = "Indexando até 150 entradas. Aguarde…";
+  status.textContent = "Preparando a indexação. Se necessário, libzim e o modelo de embeddings leve serão instalados localmente; depois serão processadas até 150 entradas…";
   try {
     const resultado = await api("/api/zim/indexar", { method: "POST", json: { limite: 150 } });
     if (resultado.erro) throw new Error(resultado.erro);
@@ -335,6 +338,7 @@ $("#zim-indexar")?.addEventListener("click", async () => {
       (resultado.indexados || 0) + " artigos indexados · " +
       (resultado.trechos || 0) + " trechos atualizados · " +
       (resultado.embeddings_atualizados || 0) + " embeddings preenchidos." +
+      (resultado.modelo_embedding ? " Modelo: " + resultado.modelo_embedding + "." : " Modo lexical.") +
       (erros.length ? " Avisos: " + erros.slice(0, 2).map(e => e.erro).join(" | ") : "");
     await atualizarStatusIndiceZim();
   } catch (erro) {
