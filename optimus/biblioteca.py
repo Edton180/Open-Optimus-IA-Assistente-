@@ -159,9 +159,9 @@ def fontes(banco: Banco) -> list[dict]:
 
 
 def esquecer_pasta(banco: Banco, pasta: Path, estado_arq: Path | None = None) -> int:
+    # Esquecer é uma ação explícita: deve funcionar mesmo se o disco/pasta foi removido.
+    # A proteção contra pastas ausentes pertence à indexação, não à remoção solicitada.
     pasta = Path(pasta).expanduser().resolve()
-    if not pasta.is_dir():
-        raise FileNotFoundError(f"Pasta não encontrada ou inacessível: {pasta}")
     estado_arq = estado_arq or _estado_padrao()
     estado = _carregar_estado(estado_arq)
     removidos = 0
