@@ -166,3 +166,26 @@ Se a interface informar **API desta instalação desatualizada**, atualize o Opt
 integrado e reinicie o processo do servidor. O código atual registra explicitamente a rota
 `GET/POST /api/casa/gerenciado`; um processo antigo que ainda esteja rodando não recebe rotas novas
 apenas porque os arquivos do repositório foram atualizados.
+
+
+## Bluetooth no Home Assistant Container (Linux)
+
+A criação e a atualização do container pelo Optimus aplicam no Linux as capacidades
+Docker `NET_ADMIN` e `NET_RAW`, necessárias ao gerenciamento do adaptador Bluetooth,
+e montam `/run/dbus` como somente leitura quando o socket D-Bus do host existe.
+Isso evita conceder `--privileged` ao container inteiro. A atualização do Home Assistant
+recria o container com essas opções e mantém a pasta `home_assistant` (configuração,
+conta, integrações e dispositivos pareados).
+
+Se os logs ainda mostrarem `Missing NET_ADMIN/NET_RAW`, use **Atualizar Home Assistant**
+no painel gerenciado para recriar o container com as permissões corrigidas. Depois
+confirme no Linux que o serviço Bluetooth/BlueZ está ativo e que existe
+`/run/dbus/system_bus_socket`. Sem BlueZ, socket D-Bus ou adaptador compatível,
+o Home Assistant continua funcionando para integrações de rede, mas não poderá
+administrar o rádio Bluetooth.
+
+No Windows com Docker Desktop, o Bluetooth do host não é repassado automaticamente
+ao container Linux. O controle Bluetooth deve ser feito pelo próprio Optimus/Windows
+ou por um Home Assistant instalado em hardware/host Linux compatível. Zigbee e
+Z-Wave por USB também exigem passagem explícita do dispositivo serial ao container;
+não são habilitados apenas por instalar o Home Assistant.
