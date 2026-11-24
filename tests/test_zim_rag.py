@@ -312,3 +312,33 @@ def test_status_com_zim_sem_indexacao_nao_anuncia_busca_ativa(tmp_path, monkeypa
     assert estado["modo_busca"] == "indisponivel"
     assert estado["pronto"] is False
     assert "ainda não indexados" in estado["mensagem"]
+
+
+def test_status_nao_conta_trechos_de_zim_removido(tmp_path, monkeypatch):
+    from optimus import zim
+
+    monkeypatch.setattr(zim_rag, "_pasta", lambda: tmp_path / "indice-orfaos")
+    monkeypatch.setattr(zim, "listar_zim", lambda: {
+        "total": 0, "arquivos": [], "tamanho_total_bytes": 0,
+        "pasta_configurada": True,
+    })
+    con = zim_rag._db()
+    con.execute(
+        "INSERT INTO arquivos(nome,caminho,tamanho,mtime_ns,cursor,total,concluido,atualizado) "
+        "VALUES(?,?,?,?,?,?,?,?)",
+        ("apagado.zim", "/tmp/apagado.zim", 100, 1, 1, 1, 1, 1.0),
+    )
+    con.execute(
+        "INSERT INTO trechos(arquivo,caminho_artigo,titulo,url,posicao,texto,hash,embedding) "
+        "VALUES(?,?,?,?,?,?,?,?)",
+        ("apagado.zim", "artigo", "Título", "zim://apagado.zim/artigo", 0,
+         "conteúdo antigo suficiente para teste", "a" * 64, None),
+    )
+    con.commit()
+    con.close()
+
+    estado = zim_rag.status()
+    assert estado["trechos"] == 0
+    assert estado["artigos_indexados"] == 0
+    assert estado["modo_busca"] == "indisponivel"
+    assert estado["trechos_de_arquivos_ausentes"] == 1
