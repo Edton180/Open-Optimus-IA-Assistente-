@@ -198,8 +198,25 @@ def instalar_ambiente() -> dict[str, Any]:
             raise RuntimeError(f"Instalação do Docker Desktop falhou: {(p.stderr or p.stdout)[-1000:]}")
         exe = Path(os.environ.get("ProgramFiles", "C:/Program Files")) / "Docker/Docker/Docker Desktop.exe"
         if exe.is_file():
-            subprocess.Popen([str(exe)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        raise RuntimeError("Docker Desktop foi instalado e sua inicialização foi solicitada. Se o Windows pedir, reinicie o computador; conclua a configuração inicial do Docker Desktop e clique em 'Instalar / configurar automaticamente' novamente.")
+            subprocess.Popen([str(exe)], stdin=subprocess.DEVNULL,
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                             close_fds=True)
+        if p.returncode == 3010:
+            return {"ok": True, "reiniciar": True,
+                    "mensagem": "Docker Desktop instalado. O Windows solicitou reinicialização para concluir a instalação; reinicie e o Optimus continuará automaticamente na próxima abertura."}
+        limite = time.monotonic() + 240
+        ultimo = ""
+        while time.monotonic() < limite:
+            estado_runtime = _runtime()
+            if estado_runtime.get("docker_ativo") is True:
+                return {"ok": True, "mensagem": "Docker Desktop instalado e inicializado."}
+            ultimo = estado_runtime.get("observacao", "")
+            time.sleep(4)
+        detalhe = (" " + ultimo) if ultimo else ""
+        raise RuntimeError("Docker Desktop foi instalado e aberto, mas o motor ainda não ficou pronto. "
+                           "O Optimus aguardou 4 minutos. Verifique WSL 2/virtualização e conclua "
+                           "a configuração inicial do Docker Desktop; depois use Atualizar status."
+                           + detalhe)
     else:
         raise RuntimeError("Instalação automática do Docker não disponível neste sistema.")
     return {"ok": True, "mensagem": "Docker Engine instalado e iniciado."}
