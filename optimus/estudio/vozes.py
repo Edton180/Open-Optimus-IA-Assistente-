@@ -81,8 +81,11 @@ def _prontas() -> list[Perfil]:
     # para montar a instrução de voz quando os pesos já estão preparados.
     from optimus.estudio import omnivoice, piper
 
+    # O perfil Edton Braz do Estúdio é uma configuração própria (OmniVoice
+    # quando disponível, Prime como reserva). Não deixar a voz ElevenLabs
+    # homônima de tts.VOZES sombreá-lo na busca por id/nome.
     saida = [Perfil(v.id, v.nome, "pronta", "padrao", v.id, v.genero, "pt-BR",
-                    descricao=v.descricao) for v in tts.VOZES]
+                    descricao=v.descricao) for v in tts.VOZES if v.id != "edton-braz"]
     # Perfil de narração PT-BR do proprietário. Quando os pesos do OmniVoice estão
     # preparados localmente, usa voice design; caso contrário, cai para a voz Prime.
     pesos_omnivoice = pasta_base() / "estudio" / "modelos" / ".prontos" / "omnivoice.ok"
