@@ -625,24 +625,29 @@ def _extrair_xaddrs_onvif(payload: bytes | str) -> list[str]:
     return list(dict.fromkeys(encontrados))
 
 
+def _mensagem_probe_onvif() -> bytes:
+    """Monta um Probe WS-Discovery com MessageID UUID válido e único por requisição."""
+    return (
+        b'<?xml version="1.0" encoding="UTF-8"?>'
+        b'<e:Envelope xmlns:e="http://www.w3.org/2003/05/soap-envelope" '
+        b'xmlns:w="http://schemas.xmlsoap.org/ws/2004/08/addressing" '
+        b'xmlns:d="http://schemas.xmlsoap.org/ws/2005/04/discovery" '
+        b'xmlns:dn="http://www.onvif.org/ver10/network/wsdl">'
+        + f'<e:Header><w:MessageID>urn:uuid:{uuid.uuid4()}</w:MessageID>'.encode("ascii")
+        + b'<w:To>urn:schemas-xmlsoap-org:ws:2005:04:discovery</w:To>'
+        + b'<w:Action>http://schemas.xmlsoap.org/ws/2005/04/discovery/Probe</w:Action>'
+        + b'</e:Header><e:Body><d:Probe><d:Types>dn:NetworkVideoTransmitter</d:Types>'
+        + b'</d:Probe></e:Body></e:Envelope>'
+    )
+
+
 def descobrir_cameras_onvif(timeout: float = 3.0, max_respostas: int = 32) -> list[dict]:
     """Procura câmeras ONVIF na rede local via WS-Discovery (UDP multicast IPv4).
 
     A operação é somente leitura: não autentica, não altera câmera e não salva credenciais.
     O usuário deve confirmar/cadastrar manualmente os endpoints encontrados.
     """
-    mensagem = (
-        b'<?xml version="1.0" encoding="UTF-8"?>'
-        b'<e:Envelope xmlns:e="http://www.w3.org/2003/05/soap-envelope" '
-        b'xmlns:w="http://schemas.xmlsoap.org/ws/2004/08/addressing" '
-        b'xmlns:d="http://schemas.xmlsoap.org/ws/2005/04/discovery" '
-        b'xmlns:dn="http://www.onvif.org/ver10/network/wsdl">'
-        + f'<e:Header><w:MessageID>urn:uuid:{uuid.uuid4()}</w:MessageID>'.encode('ascii')
-        + b'<w:To>urn:schemas-xmlsoap-org:ws:2005:04:discovery</w:To>'
-        + b'<w:Action>http://schemas.xmlsoap.org/ws/2005/04/discovery/Probe</w:Action>'
-        + b'</e:Header><e:Body><d:Probe><d:Types>dn:NetworkVideoTransmitter</d:Types>'
-        + b'</d:Probe></e:Body></e:Envelope>'
-    )
+    mensagem = _mensagem_probe_onvif()
     resultados: dict[str, dict] = {}
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
     try:
