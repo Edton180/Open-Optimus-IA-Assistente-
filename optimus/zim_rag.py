@@ -12,8 +12,9 @@ import json
 import math
 import re
 import sqlite3
+import subprocess
+import sys
 import time
-import unicodedata
 from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any
@@ -179,14 +180,55 @@ def _embedding(url: str, modelo: str, texto: str) -> list[float] | None:
         return None
 
 
+def preparar_dependencia() -> dict[str, Any]:
+    """Instala libzim em diretório privado do Optimus, sem PATH nem privilégios."""
+    try:
+        from libzim.reader import Archive  # noqa: F401
+        return {"instalado": True, "origem": "ambiente"}
+    except ImportError:
+        pass
+    destino = _pasta().parent / "tools" / "python-packages"
+    destino.mkdir(parents=True, exist_ok=True)
+    comando = [sys.executable, "-m", "pip", "install", "--disable-pip-version-check",
+               "--only-binary=:all:", "--target", str(destino), "libzim>=4.1.0"]
+    try:
+        processo = subprocess.run(comando, capture_output=True, text=True,
+                                  timeout=300, check=False, shell=False)
+    except (OSError, subprocess.TimeoutExpired) as erro:
+        return {"instalado": False, "erro": f"Não foi possível preparar libzim: {erro}"}
+    if processo.returncode != 0:
+        detalhe = (processo.stderr or processo.stdout or "pip terminou com erro")[-1200:]
+        return {"instalado": False, "erro": detalhe}
+    if str(destino) not in sys.path:
+        sys.path.insert(0, str(destino))
+    import importlib
+    importlib.invalidate_caches()
+    try:
+        from libzim.reader import Archive  # noqa: F401
+    except ImportError as erro:
+        return {"instalado": False, "erro": f"Pacote instalado, mas não carregou: {erro}"}
+    return {"instalado": True, "origem": "diretorio_privado", "pasta": str(destino)}
+
+
+def _archive_class():
+    try:
+        from libzim.reader import Archive
+        return Archive
+    except ImportError:
+        resultado = preparar_dependencia()
+        if not resultado.get("instalado"):
+            raise RuntimeError(resultado.get("erro") or "Não foi possível preparar libzim.")
+        from libzim.reader import Archive
+        return Archive
+
+
 def indexar(arquivos: list[dict] | None = None, limite: int = 150,
             modelo_embedding: str = "", url_motor: str = "") -> dict[str, Any]:
     """Indexa até 'limite' artigos por execução e retoma pelo cursor salvo."""
     try:
-        from libzim.reader import Archive
-    except ImportError:
-        return {"erro": "Dependência libzim ausente. Instale o módulo de conhecimento offline.",
-                "dependencia": "libzim", "indexados": 0}
+        Archive = _archive_class()
+    except RuntimeError as erro:
+        return {"erro": str(erro), "dependencia": "libzim", "indexados": 0}
     from optimus import zim
     lista = arquivos if arquivos is not None else zim.listar_zim().get("arquivos", [])
     limite = max(1, min(int(limite), 1000))
