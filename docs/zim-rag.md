@@ -8,7 +8,9 @@ pip install "optimus-assistente[conhecimento]"
 ```
 
 A dependência publica wheels para Windows x64, Linux x86_64/aarch64 e macOS
-x86_64/arm64. O conteúdo permanece local. Se a dependência não estiver disponível, o botão de indexação
+x86_64/arm64. Para Python 3.11 ou superior, o Optimus usa libzim 4.1+; no Python
+3.10, usa a linha 3.13.x, que mantém compatibilidade com essa versão do Python. O
+adaptador usa o iterador eficiente novo ou o acesso por ID da API anterior. O conteúdo permanece local. Se a dependência não estiver disponível, o botão de indexação
 instala automaticamente o wheel oficial em uma pasta privada do Optimus usando o Python
 atual; não altera PATH, não usa privilégios administrativos e não modifica o ambiente global.
 
