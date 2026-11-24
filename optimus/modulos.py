@@ -30,7 +30,7 @@ def _processo(*termos: str) -> bool:
 def _http(url: str) -> bool:
     try:
         with urlopen(url, timeout=0.6) as resposta:
-            return 200 <= resposta.status < 500
+            return 200 <= resposta.status < 300
     except (OSError, URLError, TimeoutError):
         return False
 
@@ -40,7 +40,7 @@ def _servico(nome: str, descricao: str, executaveis: tuple[str, ...],
     executavel = next((shutil.which(item) for item in executaveis if shutil.which(item)), None)
     ativo = _http(url) if url else _processo(*processos) if processos else False
     if ativo:
-        estado, detalhe = "disponivel", f"Respondendo em {host}:{port}"
+        estado, detalhe = ("disponivel", f"Respondendo em {host}:{port}") if url else ("disponivel", "Processo ativo no sistema")
     elif executavel:
         estado, detalhe = "instalado_parado", f"Executável encontrado: {executavel}; serviço não respondeu"
     else:
