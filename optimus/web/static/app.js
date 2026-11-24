@@ -374,8 +374,8 @@ $("#zim-indexar")?.addEventListener("click", async () => {
     const resultado = await api("/api/zim/indexar", { method: "POST", json: { limite: 150 } });
     if (resultado.erro) throw new Error(resultado.erro);
     if (resultado.sem_arquivos) {
-      status.textContent = resultado.mensagem || "Adicione arquivos .zim antes de indexar.";
       await atualizarStatusIndiceZim();
+      status.textContent = resultado.mensagem || "Adicione arquivos .zim antes de indexar.";
       return;
     }
     const erros = resultado.erros || [];
