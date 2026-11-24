@@ -10,7 +10,7 @@ a um serviço externo.
 pip install "optimus-assistente[pdf]"
 \`\`\`
 
-O extra instala pypdf, ReportLab, python-docx, Pillow, pypdfium2 e o wrapper pytesseract.
+O extra instala pypdf, ReportLab, python-docx, Pillow, pypdfium2, pytesseract, pdfplumber, openpyxl, python-pptx e pyHanko.
 OCR gera PDF pesquisável (texto invisível sobre as páginas renderizadas) e/ou TXT. PDF para Excel extrai tabelas quando detectáveis; PDF para PowerPoint cria slides com imagens das páginas. O editor adiciona elementos em coordenadas, sem edição livre do conteúdo existente. Também requer o executável Tesseract e os pacotes de idioma no sistema operacional.
 Conversão Office/HTML para PDF requer LibreOffice. Alguns recursos avançados podem exigir
 ferramentas externas específicas; o Optimus informa a dependência ausente em vez de simular
@@ -71,10 +71,9 @@ optimus pdf ocr escaneado.pdf --idioma por
 - \`pdf_comprimir\` com pypdf faz otimização estrutural; recompressão de imagens depende de
   ferramentas externas e pode reduzir qualidade.
 - \`pdf_reparar\` é best-effort e não recupera bytes ou páginas já perdidos.
-- PDF/A exige conversor com perfil ICC e validação veraPDF/Ghostscript; não é anunciado como
-  PDF/A válido sem essa validação.
+- `pdf_pdfa` usa Ghostscript com perfil ICC fornecido e política estrita de compatibilidade. A validação formal só é declarada quando veraPDF está instalado e aprova o arquivo; sem ele, o resultado fica marcado como não verificado.
 - Formulários XFA, assinaturas digitais existentes e PDFs com conteúdo complexo podem ter
-  limitações. O arquivo original é preservado e as saídas devem ser verificadas.
+  limitações. O editor insere objetos sobre páginas, não é um editor livre de texto existente. O arquivo original é preservado e as saídas devem ser verificadas.
 - Senhas e arquivos são processados localmente; não envie senhas para serviços de terceiros.
 
 Consulte o resultado da ferramenta e valide o arquivo final antes de utilizá-lo oficialmente.
