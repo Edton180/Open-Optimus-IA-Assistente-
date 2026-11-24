@@ -314,7 +314,7 @@ def pdf_organizar(ctx, arquivo: str, paginas: str, destino: str = ""):
     leitor = PdfReader(str(caminho), strict=False)
     if leitor.is_encrypted:
         return {"erro": "PDF protegido."}
-    idxs = _paginas_parse(paginas, len(leitor.pages))
+    idxs = _ordem_paginas_parse(paginas, len(leitor.pages))
     if not idxs:
         return {"erro": "Ordem de páginas inválida."}
     writer = PdfWriter()
