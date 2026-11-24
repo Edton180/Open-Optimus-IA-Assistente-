@@ -467,11 +467,11 @@ class Manipulador(BaseHTTPRequestHandler):
                 dados = self.rfile.read(tamanho)
                 assinaturas = {
                     ".pdf": dados.startswith(b"%PDF-"),
-                    ".jpg": dados.startswith(b"\${seq}\${seq}\${seq}"),
-                    ".jpeg": dados.startswith(b"\${seq}\${seq}\${seq}"),
-                    ".png": dados.startswith(b"\${seq}PNG\${seq}\${seq}\${seq}\${seq}"),
-                    ".tif": dados.startswith((b"II*\${seq}", b"MM\${seq}*")),
-                    ".tiff": dados.startswith((b"II*\${seq}", b"MM\${seq}*")),
+                    ".jpg": dados.startswith(b"\xff\xd8\xff"),
+                    ".jpeg": dados.startswith(b"\xff\xd8\xff"),
+                    ".png": dados.startswith(b"\x89PNG\r\n\x1a\n"),
+                    ".tif": dados.startswith((b"II*\x00", b"MM\x00*")),
+                    ".tiff": dados.startswith((b"II*\x00", b"MM\x00*")),
                     ".bmp": dados.startswith(b"BM"),
                 }
                 if not assinaturas.get(extensao):
