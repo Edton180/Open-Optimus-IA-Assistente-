@@ -247,6 +247,8 @@ def atender(metodo: str, partes: list[str], consulta: dict, tipo: str, corpo: by
                 if partes[2] == "repetir":
                     nova = fila().repetir(tarefa.id)
                     return 200, {"tarefa": nova.id if nova else None}
+            if recurso == "modelos" and len(partes) == 2 and partes[1] == "instalar-todos":
+                return 200, _ferramenta("estudio_instalar_todos_modelos", {}, ctx)
             if recurso == "modelos" and len(partes) == 3:
                 from optimus.estudio import modelos
 
