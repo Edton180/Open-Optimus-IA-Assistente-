@@ -409,3 +409,23 @@ def test_api_casa_testar_valida_api_sem_salvar_token(monkeypatch):
     finally:
         httpd.shutdown()
         httpd.server_close()
+
+
+
+def test_api_descobrir_cameras_onvif_retorna_resultados(monkeypatch):
+    from optimus.tools import casa
+
+    monkeypatch.setattr(casa, "descobrir_cameras_onvif", lambda: [{
+        "ip": "192.168.1.40", "endpoints": ["http://192.168.1.40/onvif/device_service"],
+        "protocolo": "ONVIF", "estado": "descoberto",
+        "autenticacao": "nao_verificada",
+    }])
+    httpd, base = _subir()
+    try:
+        resultado = _req(base + "/api/cameras/descobrir", {})
+        assert resultado["total"] == 1
+        assert resultado["itens"][0]["ip"] == "192.168.1.40"
+        assert resultado["itens"][0]["autenticacao"] == "nao_verificada"
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
