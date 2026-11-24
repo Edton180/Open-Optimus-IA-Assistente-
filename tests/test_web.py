@@ -356,7 +356,8 @@ def test_biblioteca_pela_interface_indexa_lista_e_esquece(tmp_path, monkeypatch)
         assert listagem["total"] == 1
         assert listagem["documentos"][0]["titulo"] == "manual.md"
 
-        busca = _req(base + "/api/biblioteca?q=segurança+laboratório")
+        from urllib.parse import quote
+        busca = _req(base + "/api/biblioteca?q=" + quote("segurança laboratório"))
         assert busca["total"] == 1
         assert busca["resultados"][0]["titulo"] == "manual.md"
         assert "Manual de segurança" in busca["resultados"][0]["trecho"]
