@@ -78,7 +78,7 @@ def importar_conteudo_inicial_nomad() -> dict:
                           timeout=httpx.Timeout(180, connect=15)) as cliente:
             with cliente.stream("GET", url, headers={"User-Agent": "Open-Optimus-ZIM/1.0"}) as resposta:
                 resposta.raise_for_status()
-                digest.update(f"blob {tamanho_esperado}\\0".encode("ascii"))
+                digest.update(f"blob {tamanho_esperado}\0".encode("ascii"))
                 with parcial.open("wb") as saida:
                     for bloco in resposta.iter_bytes(1024 * 1024):
                         if not bloco:
@@ -98,9 +98,11 @@ def importar_conteudo_inicial_nomad() -> dict:
         return {"ok": True, "ja_existia": False, "arquivo": nome,
                 "tamanho_bytes": tamanho,
                 "mensagem": "Mini-Wikipédia inicial do Project NOMAD adicionada e validada."}
-    except Exception:
+    except Exception as erro:
         try:
             parcial.unlink(missing_ok=True)
         except OSError:
             pass
-        raise
+        if isinstance(erro, RuntimeError):
+            raise
+        raise RuntimeError(f"Falha ao baixar o conteúdo inicial do NOMAD: {erro}") from erro
