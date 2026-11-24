@@ -153,7 +153,7 @@ def test_pdf_para_markdown_preserva_paginas(tmp_path):
     destino = tmp_path / "texto.md"
     _criar_pdf(origem, ["PRIMEIRA PAGINA", "SEGUNDA PAGINA"])
 
-    resultado = pdf.pdf_suite.pdf_para_markdown(_ctx(tmp_path), str(origem), str(destino))
+    resultado = pdf_suite.pdf_para_markdown(_ctx(tmp_path), str(origem), str(destino))
 
     assert "erro" not in resultado
     conteudo = destino.read_text(encoding="utf-8")
@@ -168,7 +168,7 @@ def test_pdf_cortar_aplica_cropbox_sem_perder_paginas(tmp_path):
     destino = tmp_path / "cortado.pdf"
     _criar_pdf(origem, ["CONTEUDO"])
     antes = PdfReader(str(origem)).pages[0].cropbox
-    resultado = pdf.pdf_suite.pdf_cortar(
+    resultado = pdf_suite.pdf_cortar(
         _ctx(tmp_path), str(origem), 10, 12, 14, 16, "", str(destino)
     )
 
@@ -191,7 +191,7 @@ def test_pdf_metadados_remove_campos_de_metadados(tmp_path):
     with origem.open("wb") as arquivo:
         writer.write(arquivo)
 
-    resultado = pdf.pdf_suite.pdf_metadados(
+    resultado = pdf_suite.pdf_metadados(
         _ctx(tmp_path), str(origem), "remover", "", str(destino)
     )
 
@@ -205,7 +205,7 @@ def test_pdf_reparar_reconstroi_e_valida_pdf_legivel(tmp_path):
     destino = tmp_path / "reparado.pdf"
     _criar_pdf(origem, ["PAGINA UM", "PAGINA DOIS"])
 
-    resultado = pdf.pdf_suite.pdf_reparar(_ctx(tmp_path), str(origem), str(destino))
+    resultado = pdf_suite.pdf_reparar(_ctx(tmp_path), str(origem), str(destino))
 
     assert "erro" not in resultado
     leitor = PdfReader(str(destino), strict=True)
@@ -273,6 +273,7 @@ def test_pdf_assinar_digital_com_certificado_pkcs12(tmp_path):
     from datetime import datetime, timedelta, timezone
     from cryptography import x509
     from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.serialization import pkcs12
     from cryptography.hazmat.primitives.asymmetric import rsa
     from cryptography.x509.oid import NameOID
     from pypdf import PdfReader
@@ -291,7 +292,7 @@ def test_pdf_assinar_digital_com_certificado_pkcs12(tmp_path):
             .not_valid_after(agora + timedelta(days=1))
             .add_extension(x509.BasicConstraints(ca=True, path_length=None), critical=True)
             .sign(chave, hashes.SHA256()))
-    p12 = serialization.pkcs12.serialize_key_and_certificates(
+    p12 = pkcs12.serialize_key_and_certificates(
         b"Optimus Test", chave, cert, None,
         serialization.BestAvailableEncryption(senha.encode())
     )
