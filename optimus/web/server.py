@@ -481,13 +481,14 @@ class Manipulador(BaseHTTPRequestHandler):
                 if not isinstance(argumentos, dict):
                     return self._json({"erro": "Parâmetros inválidos."}, 400)
                 # Os arquivos de entrada só podem vir da pasta de documentos enviada pela interface.
-                chaves_arquivo = {"arquivo", "arquivos", "arquivo_a", "arquivo_b",
-                                  "certificado", "perfil_icc"}
+                chaves_arquivo = {chave for chave in ferramenta_pdf.parametros
+                                  if any(palavra in chave.lower()
+                                         for palavra in ("arquivo", "certificado", "perfil_icc"))}
                 for chave in chaves_arquivo:
                     valor = argumentos.get(chave)
                     if not valor:
                         continue
-                    valores = re.split(r"[,;]+", str(valor)) if chave == "arquivos" else [str(valor)]
+                    valores = re.split(r"[,;]+", str(valor)) if chave == "arquivos" or chave.endswith("arquivos") else [str(valor)]
                     for item in valores:
                         item = item.strip().strip('"')
                         if not item:
