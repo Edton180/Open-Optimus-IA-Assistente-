@@ -121,8 +121,8 @@ def indexar_pasta(banco: Banco, pasta: Path, recursivo: bool = True,
         vistos.add(chave)
         try:
             conteudo = _ler(caminho)
-        except (OSError, ValueError, RuntimeError) as erro:
-            erros.append({"arquivo": caminho.name, "erro": str(erro)})
+        except Exception as erro:  # noqa: BLE001 - falha em um documento não interrompe a pasta
+            erros.append({"arquivo": caminho.name, "erro": f"{type(erro).__name__}: {erro}"})
             continue
         if not conteudo.strip():
             ignorados += 1
