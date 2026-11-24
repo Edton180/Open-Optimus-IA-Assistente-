@@ -180,17 +180,25 @@ def _embedding(url: str, modelo: str, texto: str) -> list[float] | None:
         return None
 
 
+def _carregar_libzim():
+    destino = _pasta().parent / "tools" / "python-packages"
+    if destino.is_dir() and str(destino) not in sys.path:
+        sys.path.insert(0, str(destino))
+    from libzim.reader import Archive
+    return Archive
+
+
 def preparar_dependencia() -> dict[str, Any]:
     """Instala libzim em diretório privado do Optimus, sem PATH nem privilégios."""
     try:
-        from libzim.reader import Archive  # noqa: F401
+        _carregar_libzim()
         return {"instalado": True, "origem": "ambiente"}
     except ImportError:
         pass
     destino = _pasta().parent / "tools" / "python-packages"
     destino.mkdir(parents=True, exist_ok=True)
     comando = [sys.executable, "-m", "pip", "install", "--disable-pip-version-check",
-               "--only-binary=:all:", "--target", str(destino), "libzim>=4.1.0"]
+               "--only-binary=:all:", "--upgrade", "--target", str(destino), "libzim>=4.1.0"]
     try:
         processo = subprocess.run(comando, capture_output=True, text=True,
                                   timeout=300, check=False, shell=False)
@@ -199,12 +207,10 @@ def preparar_dependencia() -> dict[str, Any]:
     if processo.returncode != 0:
         detalhe = (processo.stderr or processo.stdout or "pip terminou com erro")[-1200:]
         return {"instalado": False, "erro": detalhe}
-    if str(destino) not in sys.path:
-        sys.path.insert(0, str(destino))
     import importlib
     importlib.invalidate_caches()
     try:
-        from libzim.reader import Archive  # noqa: F401
+        _carregar_libzim()
     except ImportError as erro:
         return {"instalado": False, "erro": f"Pacote instalado, mas não carregou: {erro}"}
     return {"instalado": True, "origem": "diretorio_privado", "pasta": str(destino)}
@@ -212,14 +218,12 @@ def preparar_dependencia() -> dict[str, Any]:
 
 def _archive_class():
     try:
-        from libzim.reader import Archive
-        return Archive
+        return _carregar_libzim()
     except ImportError:
         resultado = preparar_dependencia()
         if not resultado.get("instalado"):
             raise RuntimeError(resultado.get("erro") or "Não foi possível preparar libzim.")
-        from libzim.reader import Archive
-        return Archive
+        return _carregar_libzim()
 
 
 def indexar(arquivos: list[dict] | None = None, limite: int = 150,
