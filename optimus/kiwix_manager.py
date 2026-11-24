@@ -174,7 +174,7 @@ def _extrair_zip(arquivo: Path, destino: Path) -> None:
                 alvo = pacote.read(membro).decode("utf-8", errors="strict")
                 links.append((membro.filename, alvo))
                 continue
-            if not (stat.S_ISREG(modo) or modo == 0):
+            if stat.S_IFMT(modo) not in (0, stat.S_IFREG):
                 continue
             saida.parent.mkdir(parents=True, exist_ok=True)
             with pacote.open(membro) as origem, saida.open("wb") as f:
