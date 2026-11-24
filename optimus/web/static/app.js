@@ -157,7 +157,7 @@ function desenharParametrosPDF() {
     if (nome === "arquivo" && pdfEnviados[0]) valor = pdfEnviados[0].arquivo;
     if (nome === "arquivos" && pdfEnviados.length) valor = pdfEnviados.map((x) => x.arquivo).join(";");
     if ((nome === "arquivo_a" || nome === "arquivo1") && pdfEnviados[0]) valor = pdfEnviados[0].arquivo;
-    if ((nome === "arquivo_b" || nome === "arquivo2") && pdfEnviados[1]) valor = pdfEnviados[1].arquivo;
+    if ((nome === "arquivo_b" || nome === "arquivo2" || nome === "certificado" || nome === "perfil_icc") && pdfEnviados[1]) valor = pdfEnviados[1].arquivo;
     const obrigatorio = (f.obrigatorios || []).includes(nome);
     return `<label>${esc(nome.replaceAll("_", " "))}${obrigatorio ? " *" : ""}<input class="campo" data-pdf-param="${esc(nome)}" type="${tipo}" value="${esc(valor)}" placeholder="${esc(info.description || nome)}" ${obrigatorio && !valor ? "required" : ""}></label>`;
   }).join("");
@@ -169,7 +169,7 @@ $("#pdf-enviar").addEventListener("click", async () => {
   if (!arquivos.length) { $("#pdf-estado").textContent = "Selecione pelo menos um PDF."; return; }
   for (const arquivo of arquivos) {
     const extensao = arquivo.name.toLowerCase().split(".").pop();
-    if (!["pdf", "jpg", "jpeg", "png", "tif", "tiff", "bmp"].includes(extensao)) { $("#pdf-estado").textContent = "Envie PDF ou imagem JPG, PNG, TIFF ou BMP."; continue; }
+    if (!["pdf", "jpg", "jpeg", "png", "tif", "tiff", "bmp", "html", "htm", "p12", "pfx", "icc"].includes(extensao)) { $("#pdf-estado").textContent = "Envie PDF, imagem, HTML, certificado P12/PFX ou perfil ICC."; continue; }
     $("#pdf-estado").textContent = "Enviando " + arquivo.name + "…";
     try {
       const r = await api("/api/pdf/upload?nome=" + encodeURIComponent(arquivo.name), {
