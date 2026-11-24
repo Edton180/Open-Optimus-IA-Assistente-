@@ -193,7 +193,7 @@ $("#pdf-executar").addEventListener("click", async () => {
   const f = pdfAtual();
   if (!f) return;
   const argumentos = {};
-  for (const campo of $("[data-pdf-param]")) {
+  for (const campo of $$("[data-pdf-param]")) {
     const nome = campo.dataset.pdfParam;
     const valor = campo.value.trim();
     if (valor === "" && !(f.obrigatorios || []).includes(nome)) continue;
