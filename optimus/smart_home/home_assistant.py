@@ -169,8 +169,11 @@ def instalar_ambiente() -> dict[str, Any]:
     """Instala o runtime apenas após autorização do SO; no Windows inicia winget."""
     runtime = _runtime()
     if runtime["docker_instalado"]:
-        if not runtime["docker_ativo"]:
-            raise RuntimeError("Docker já está instalado. Abra/inicie o Docker Desktop ou o serviço Docker e tente novamente.")
+        if runtime["docker_ativo"] is not True:
+            try:
+                _executar(["version", "--format", "{{.Server.Version}}"], timeout=15, elevate=True)
+            except Exception as exc:
+                raise RuntimeError("Docker já está instalado, mas precisa ser iniciado ou autorizado. Abra o Docker Desktop ou autorize o serviço Docker e tente novamente.") from exc
         return {"ok": True, "mensagem": "Docker já está instalado e ativo."}
     if platform.system() == "Linux":
         _instalar_runtime_linux()
@@ -199,11 +202,14 @@ def instalar() -> dict[str, Any]:
     if not runtime["docker_instalado"]:
         instalar_ambiente()
         runtime = _runtime()
-    if not runtime["docker_ativo"]:
-        raise RuntimeError("Docker está instalado, mas não está ativo. Inicie o serviço e tente novamente.")
+    if runtime["docker_ativo"] is not True:
+        try:
+            _executar(["version", "--format", "{{.Server.Version}}"], timeout=15, elevate=True)
+        except Exception as exc:
+            raise RuntimeError("Docker está instalado, mas não está ativo ou requer autorização. Abra o Docker Desktop (Windows/macOS) ou autorize o serviço Docker (Linux) e tente novamente.") from exc
     dados = _pasta()
     _executar(["pull", IMAGEM], timeout=900, elevate=True)
-    existente = _container()
+    existente = _container(elevate=True)
     if existente["instalado"]:
         if existente["rodando"]:
             return {"ok": True, "mensagem": "Home Assistant já está em execução.", "url": f"http://127.0.0.1:{PORTA}"}
@@ -219,7 +225,7 @@ def instalar() -> dict[str, Any]:
     _executar(args, timeout=90, elevate=True)
     for _ in range(30):
         time.sleep(2)
-        st = _container()
+        st = _container(elevate=True)
         if st["rodando"]:
             return {"ok": True, "mensagem": "Home Assistant iniciado. A primeira inicialização pode levar alguns minutos.", "url": f"http://127.0.0.1:{PORTA}"}
     raise RuntimeError("O container foi criado, mas não confirmou estado ativo. Consulte os logs para identificar o problema.")
@@ -236,15 +242,15 @@ def acao(nome: str) -> dict[str, Any]:
         _executar(["restart", NOME], timeout=90, elevate=True)
     elif nome == "atualizar":
         dados = _pasta()
-        _executar(["pull", IMAGEM], timeout=900)
-        _executar(["stop", NOME], timeout=60, check=False)
-        _executar(["rm", "-f", NOME], timeout=30)
+        _executar(["pull", IMAGEM], timeout=900, elevate=True)
+        _executar(["stop", NOME], timeout=60, check=False, elevate=True)
+        _executar(["rm", "-f", NOME], timeout=30, elevate=True)
         args = ["run", "-d", "--name", NOME, "--restart", "unless-stopped",
                 "-e", f"TZ={os.environ.get('TZ', 'America/Sao_Paulo')}",
                 "-v", f"{dados.resolve()}:/config"]
         args += ["--network", "host"] if platform.system() == "Linux" else ["-p", f"{PORTA}:8123"]
         args += [IMAGEM]
-        _executar(args, timeout=90)
+        _executar(args, timeout=90, elevate=True)
     elif nome == "backup":
         destino = pasta_base() / "backups"
         destino.mkdir(parents=True, exist_ok=True)
