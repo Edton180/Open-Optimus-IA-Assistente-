@@ -19,10 +19,10 @@ Se o executável não for encontrado, o Optimus informa que o recurso está indi
 - O servidor é iniciado somente após ação explícita do usuário.
 - O processo recebe argumentos separados, sem shell ou interpolação de comandos.
 - O arquivo deve ser um arquivo regular `.zim` dentro da biblioteca gerenciada; caminhos externos, travessia de diretórios e links simbólicos são rejeitados.
-- O Kiwix escuta somente em `127.0.0.1:8766`, não na rede local nem na internet.
+- O Kiwix escuta somente em `127.0.0.1:8767`, não na rede local nem na internet.
 - O botão **Fechar leitor** encerra somente o processo criado por esta instância do Optimus. Outros processos Kiwix não são localizados nem encerrados.
 - Se o Kiwix terminar inesperadamente, atualize a biblioteca para atualizar o estado.
-- A porta 8766 precisa estar livre. O Optimus não tenta encerrar um serviço de terceiros que esteja usando essa porta.
+- A porta 8767 precisa estar livre. O Optimus não tenta encerrar um serviço de terceiros que esteja usando essa porta.
 
 ## Limitações desta etapa
 
