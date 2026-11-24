@@ -221,11 +221,18 @@ def test_gerenciador_de_modelos_lista_e_remove(monkeypatch):
     assert modelos.obter("piper-pt_BR-faber-medium").instalado()
     modelos.remover("piper-pt_BR-faber-medium")
     assert not piper.pasta_voz(v).exists()
+    import sys
+    from types import SimpleNamespace
+
     pip = []
+    downloads = []
+    monkeypatch.setitem(sys.modules, "huggingface_hub",
+                        SimpleNamespace(snapshot_download=lambda **kw: downloads.append(kw)))
     monkeypatch.setattr(modelos, "_pip", lambda *a: pip.append(a) or "")
     modelos.instalar("omnivoice")
     modelos.remover("sherpa-onnx")
     assert pip == [("install", "omnivoice"), ("uninstall", "-y", "sherpa-onnx")]
+    assert downloads == [{"repo_id": "k2-fsa/OmniVoice"}]
     with pytest.raises(ErroEstudio):
         modelos.obter("nao-existe")
 
