@@ -96,6 +96,7 @@ class Estado:
         self._falantes: dict[str, tts.Falante] = {}
         self._ouvinte = None
         self._motor_cache: tuple[float, bool, list[str]] = (0.0, False, [])
+        self._motor_destinos: list[dict[str, Any]] = []
         self._motor_lock = threading.Lock()
         self._motor_atualizando = False
         optimus.iniciar_lembretes(lambda l: self.avisos.append(
@@ -108,14 +109,16 @@ class Estado:
             motor = self.optimus.motor
             disponivel = motor.disponivel()
             modelos = motor.modelos() if disponivel else []
-            cache = (time.monotonic(), disponivel, modelos)
+            destinos = motor.estado() if isinstance(motor, MotorRede) else []
+            cache = (time.monotonic(), disponivel, modelos, destinos)
         except Exception:
             log.exception("Falha ao consultar disponibilidade do motor de IA")
-            cache = (time.monotonic(), False, [])
+            cache = (time.monotonic(), False, [], [])
         finally:
             # O cache é atualizado mesmo se o provedor externo falhar.
             with self._motor_lock:
-                self._motor_cache = cache
+                self._motor_cache = cache[:3]
+                self._motor_destinos = cache[3]
                 self._motor_atualizando = False
 
     def motor_status(self) -> tuple[bool, list[str]]:
@@ -132,6 +135,11 @@ class Estado:
                 threading.Thread(target=self._atualizar_motor_status, daemon=True,
                                  name="status-motor").start()
             return self._motor_cache[1], list(self._motor_cache[2])
+
+    def motor_destinos(self) -> list[dict[str, Any]]:
+        """Retorna destinos remotos do cache; nunca sonda a rede na thread HTTP."""
+        with self._motor_lock:
+            return list(self._motor_destinos)
 
     def falante(self, voz: str) -> tts.Falante:
         if voz not in self._falantes:
@@ -577,7 +585,7 @@ class Manipulador(BaseHTTPRequestHandler):
                 "motor": {"backend": optimus.config.get("motor", "backend"),
                           "disponivel": disponivel, "modelo": optimus.modelo_atual(),
                           "modelos": lista_modelos,
-                          "destinos": motor.estado() if isinstance(motor, MotorRede) else []},
+                          "destinos": estado.motor_destinos()},
                 "uso": {"cpu": psutil.cpu_percent(interval=None), "ram": memoria.percent,
                         "ram_livre_gb": round(memoria.available / 1024**3, 1)},
                 "modo": optimus.config.get("agente", "modo"),
