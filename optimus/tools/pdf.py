@@ -544,13 +544,16 @@ def pdf_numeros(ctx, arquivo: str, destino: str = ""):
     if leitor.is_encrypted:
         return {"erro": "PDF protegido."}
     writer = PdfWriter()
-    for pagina in leitor.pages:
-        writer.add_page(pagina)
-    writer.add_metadata({"/PageLabels": f"1-{len(leitor.pages)}"})
+    try:
+        for i, pagina in enumerate(leitor.pages, start=1):
+            _sobrepor_texto(pagina, str(i), marca=False)
+            writer.add_page(pagina)
+    except RuntimeError as erro:
+        return {"erro": str(erro)}
     out = _caminho(ctx, destino or f"{caminho.stem}_numerado.pdf")
-    with open(out, "wb") as f:
-        writer.write(f)
-    return {"mensagem": f"Numeração preparada para {len(leitor.pages)} páginas.", "destino": str(out)}
+    _salvar_pdf(writer, out)
+    return {"mensagem": f"Numeração visível inserida em {len(leitor.pages)} página(s).",
+            "destino": str(out), "paginas_numeradas": len(leitor.pages)}
 
 
 @ferramenta(
