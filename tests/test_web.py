@@ -480,3 +480,24 @@ def test_laboratorio_visual_e_api_executam_transformacao_local():
     finally:
         httpd.shutdown()
         httpd.server_close()
+
+
+
+def test_api_biblioteca_zim_lista_arquivos_locais(tmp_path, monkeypatch):
+    from optimus import zim
+
+    pasta = tmp_path / "zim"
+    pasta.mkdir()
+    (pasta / "wikipedia_pt.zim").write_bytes(b"zim")
+    (pasta / "ignorar.txt").write_text("nao", encoding="utf-8")
+    monkeypatch.setattr(zim, "pasta_biblioteca", lambda: pasta)
+    httpd, base = _subir()
+    try:
+        dados = _req(base + "/api/zim")
+        assert dados["total"] == 1
+        assert dados["arquivos"][0]["nome"] == "wikipedia_pt.zim"
+        assert dados["tamanho_total_bytes"] == 3
+        assert str(tmp_path) not in str(dados)
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
