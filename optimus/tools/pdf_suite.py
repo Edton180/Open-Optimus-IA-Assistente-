@@ -744,14 +744,15 @@ def censurar_por_rasterizacao(ctx, arquivo: str, texto: str, destino: str = "",
                 desenho = ImageDraw.Draw(imagem)
                 for caixa in caixas:
                     desenho.rectangle(caixa, fill="black")
-                # Não gravar se o OCR ainda conseguir reconhecer o termo após a tarja.
-                depois = pytesseract.image_to_data(
-                    imagem, lang=idioma or "por", output_type=pytesseract.Output.DICT
-                )
-                texto_depois = "".join(normalizar(x) for x in depois.get("text", []))
-                if any(termo in texto_depois for _, termo in termos_norm):
-                    temp.unlink(missing_ok=True)
-                    return {"erro": f"Não consegui confirmar a remoção OCR na página {numero}; nenhum resultado foi salvo."}
+            # Verificar todas as páginas, inclusive aquelas em que a primeira passada não detectou
+            # o termo. Se o OCR ainda encontrar qualquer alvo, a operação inteira é abortada.
+            depois = pytesseract.image_to_data(
+                imagem, lang=idioma or "por", output_type=pytesseract.Output.DICT
+            )
+            texto_depois = "".join(normalizar(x) for x in depois.get("text", []))
+            if any(termo in texto_depois for _, termo in termos_norm):
+                temp.unlink(missing_ok=True)
+                return {"erro": f"Não consegui confirmar a remoção OCR na página {numero}; nenhum resultado foi salvo."}
             largura_pt = imagem.width * 72 / (72 * fator)
             altura_pt = imagem.height * 72 / (72 * fator)
             pdf_saida.setPageSize((largura_pt, altura_pt))
