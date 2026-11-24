@@ -253,7 +253,8 @@ class Agente:
                 for i, item in enumerate(evidencias, 1):
                     partes.append(
                         f"\n[Fonte ZIM {i}] {item['titulo']} | arquivo={item['arquivo']} "
-                        f"| artigo={item['artigo']} | URI={item['url']}\n{item['trecho'][:1100]}"
+                        f"| artigo={item['artigo']} | URI={item['url']} "
+                        f"| SHA-256 do trecho={item['hash_trecho']}\\n{item['trecho'][:1100]}"
                     )
                 partes.append(
                     "\nAo usar essas evidências, cite no texto [Fonte ZIM N] e não invente "
