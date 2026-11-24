@@ -103,18 +103,54 @@ def _baixar(url: str, destino: Path) -> None:
             raise RuntimeError("Download incompleto do Kiwix Tools.")
 
 
+def _destino_membro(destino: Path, nome: str) -> Path:
+    caminho = PurePosixPath(nome.replace("\\\\", "/"))
+    if caminho.is_absolute() or ".." in caminho.parts or (caminho.parts and ":" in caminho.parts[0]):
+        raise RuntimeError("Pacote Kiwix rejeitado: caminho inseguro no arquivo.")
+    return destino.joinpath(*caminho.parts)
+
+
+def _criar_links_seguros(destino: Path, links: list[tuple[str, str]]) -> None:
+    raiz = destino.resolve()
+    for nome, alvo in links:
+        saida = _destino_membro(destino, nome)
+        relativo = posixpath.normpath(posixpath.join(posixpath.dirname(nome), alvo))
+        if relativo == ".." or relativo.startswith("../") or relativo.startswith("/"):
+            raise RuntimeError("Pacote Kiwix rejeitado: link aponta para fora da pasta.")
+        origem = _destino_membro(destino, relativo)
+        saida.parent.mkdir(parents=True, exist_ok=True)
+        if not origem.exists() or not origem.resolve().is_relative_to(raiz):
+            raise RuntimeError("Pacote Kiwix rejeitado: destino de link ausente ou externo.")
+        if saida.exists() or saida.is_symlink():
+            continue
+        try:
+            os.symlink(os.path.relpath(origem, saida.parent), saida)
+        except (OSError, NotImplementedError):
+            if origem.is_file():
+                shutil.copy2(origem, saida)
+            else:
+                raise RuntimeError("Este sistema não permite criar o link simbólico exigido pelo pacote Kiwix.")
+
+
 def _extrair_tar(arquivo: Path, destino: Path) -> None:
+    links: list[tuple[str, str]] = []
     with tarfile.open(arquivo, "r:gz") as pacote:
-        for membro in pacote.getmembers():
-            caminho = PurePosixPath(membro.name)
-            if caminho.is_absolute() or ".." in caminho.parts:
-                raise RuntimeError("Pacote Kiwix rejeitado: caminho inseguro no arquivo.")
+        membros = pacote.getmembers()
+        for membro in membros:
+            saida = _destino_membro(destino, membro.name)
             if membro.isdir():
+                saida.mkdir(parents=True, exist_ok=True)
+                continue
+            if membro.issym():
+                links.append((membro.name, membro.linkname))
+                continue
+            if membro.islnk():
+                # Hardlinks são recriados como cópia segura após extrair os arquivos regulares.
+                links.append((membro.name, membro.linkname))
                 continue
             if not membro.isfile():
-                # Não materializa links simbólicos, hardlinks, dispositivos ou FIFOs.
+                # Não materializa dispositivos, FIFOs ou outros tipos especiais.
                 continue
-            saida = destino.joinpath(*caminho.parts)
             saida.parent.mkdir(parents=True, exist_ok=True)
             origem = pacote.extractfile(membro)
             if origem is None:
@@ -122,23 +158,30 @@ def _extrair_tar(arquivo: Path, destino: Path) -> None:
             with origem, saida.open("wb") as f:
                 shutil.copyfileobj(origem, f)
             saida.chmod(0o755 if membro.mode & 0o111 else 0o644)
+    _criar_links_seguros(destino, links)
 
 
 def _extrair_zip(arquivo: Path, destino: Path) -> None:
+    links: list[tuple[str, str]] = []
     with zipfile.ZipFile(arquivo) as pacote:
         for membro in pacote.infolist():
-            caminho = PurePosixPath(membro.filename.replace("\\", "/"))
-            if caminho.is_absolute() or ".." in caminho.parts:
-                raise RuntimeError("Pacote Kiwix rejeitado: caminho inseguro no arquivo.")
+            saida = _destino_membro(destino, membro.filename)
             if membro.is_dir():
+                saida.mkdir(parents=True, exist_ok=True)
                 continue
-            saida = destino.joinpath(*caminho.parts)
+            modo = (membro.external_attr >> 16) & 0xFFFF
+            if stat.S_ISLNK(modo):
+                alvo = pacote.read(membro).decode("utf-8", errors="strict")
+                links.append((membro.filename, alvo))
+                continue
+            if not (stat.S_ISREG(modo) or modo == 0):
+                continue
             saida.parent.mkdir(parents=True, exist_ok=True)
             with pacote.open(membro) as origem, saida.open("wb") as f:
                 shutil.copyfileobj(origem, f)
-            modo = (membro.external_attr >> 16) & 0o777
             if modo & 0o111:
                 saida.chmod(0o755)
+    _criar_links_seguros(destino, links)
 
 
 def instalar() -> dict:
