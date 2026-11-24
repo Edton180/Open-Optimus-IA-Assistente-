@@ -19,7 +19,7 @@ def test_instalar_todos_continua_apos_falha(monkeypatch, tmp_path):
     monkeypatch.setattr(modelos.shutil, "disk_usage", lambda _: Uso(10_000, 0, 10_000 * 1024 * 1024))
     chamados = []
 
-    def instalar(ident, progresso=None):
+    def instalar(ident, progresso=None, cancelado=None):
         chamados.append(ident)
         if ident == "b":
             raise RuntimeError("download interrompido")
@@ -74,7 +74,7 @@ def test_instalar_todos_interrompe_quando_cancelado(monkeypatch, tmp_path):
         return {"id": ident}
 
     monkeypatch.setattr(modelos, "instalar", instalar)
-    checks = iter([False, False, True])
+    checks = iter([False, True])
     resultado = modelos.instalar_todos(cancelado=lambda: next(checks, True))
     assert chamados == ["a"]
     assert resultado["cancelado"] is True
