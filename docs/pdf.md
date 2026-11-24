@@ -94,3 +94,11 @@ Consulte o resultado da ferramenta e valide o arquivo final antes de utilizá-lo
 - Para unir arquivos de tipos diferentes em uma única saída e manter a ordem selecionada, use `pdf_unir_documentos`. Aceita PDFs, imagens e os formatos Office suportados pelo LibreOffice.
 - A interface visual aceita esses formatos na etapa de envio e disponibiliza as operações no catálogo pesquisável.
 - Acesso externo via Cloudflare Tunnel exige senha; chamadas originadas no navegador local do próprio computador continuam locais e não exibem o pedido de senha.
+
+
+### Separar, economizar papel e imprimir livreto
+
+- `pdf_dividir_pares_impares`: cria arquivos separados com as páginas ímpares e pares. Mantém texto selecionável e elementos vetoriais.
+- `pdf_paginas_por_folha`: organiza 2, 4, 6 ou 9 páginas em cada folha, preservando o conteúdo vetorial.
+- `pdf_imprimir_livreto`: faz a imposição de páginas para impressão frente e verso, duas páginas por lado. Na impressora, selecione frente e verso com virada pela borda curta e confira uma folha de teste antes de imprimir a tiragem.
+- Essas operações não alteram o PDF de origem. A ordem do livreto é preparada para folhas dobradas; a configuração física da impressora pode variar.

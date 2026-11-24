@@ -163,6 +163,8 @@ const PDF_CATEGORIAS = ["Todas", "Criar e converter", "Organizar páginas", "Edi
 const PDF_ROTULOS = {
   pdf_info:"Informações do PDF", pdf_ler:"Extrair texto", pdf_juntar:"Unir PDFs",
   pdf_unir_documentos:"Unir PDFs, imagens e Office", pdf_documento_para_pdf:"Word, Excel e PowerPoint para PDF",
+  pdf_dividir_pares_impares:"Separar páginas pares e ímpares", pdf_paginas_por_folha:"Várias páginas por folha",
+  pdf_imprimir_livreto:"Preparar impressão em livreto",
   pdf_extrair:"Extrair páginas", pdf_remover:"Eliminar páginas", pdf_organizar:"Ordenar páginas",
   pdf_dividir:"Dividir PDF", pdf_girar:"Girar páginas", pdf_proteger:"Proteger com senha",
   pdf_desbloquear:"Desbloquear PDF", pdf_comprimir:"Comprimir PDF", pdf_marca:"Adicionar marca d'água",
@@ -181,7 +183,7 @@ const PDF_ROTULOS = {
   pdf_criar_formulario:"Criar formulário preenchível", pdf_workflow:"Automatizar fluxo de PDF"
 };
 function pdfCategoria(nome) {
-  if (["pdf_juntar","pdf_unir_documentos","pdf_dividir","pdf_extrair","pdf_remover","pdf_organizar","pdf_girar"].includes(nome)) return "Organizar páginas";
+  if (["pdf_juntar","pdf_unir_documentos","pdf_dividir","pdf_dividir_pares_impares","pdf_extrair","pdf_remover","pdf_organizar","pdf_girar","pdf_paginas_por_folha","pdf_imprimir_livreto"].includes(nome)) return "Organizar páginas";
   if (["pdf_imagens_para_pdf","pdf_documento_para_pdf","pdf_para_imagens","pdf_converter","pdf_html_para_pdf","pdf_para_word_ocr","pdf_para_excel","pdf_para_powerpoint","pdf_para_markdown","pdf_pdfa"].includes(nome)) return "Criar e converter";
   if (["pdf_cortar","pdf_marca","pdf_numeros","pdf_editar"].includes(nome)) return "Editar e anotar";
   if (["pdf_comprimir","pdf_reparar","pdf_ocr"].includes(nome)) return "Otimizar e reparar";
