@@ -77,6 +77,9 @@ def _slug(nome: str) -> str:
 # ---------------------------------------------------------------------- vozes prontas
 def _prontas() -> list[Perfil]:
     from optimus.voice import tts
+    # Importar antes de consultar o estado do motor; o módulo também é usado
+    # para montar a instrução de voz quando os pesos já estão preparados.
+    from optimus.estudio import omnivoice, piper
 
     saida = [Perfil(v.id, v.nome, "pronta", "padrao", v.id, v.genero, "pt-BR",
                     descricao=v.descricao) for v in tts.VOZES]
@@ -103,8 +106,6 @@ def _prontas() -> list[Perfil]:
     saida.append(Perfil("mordomo", "Mordomo", "pronta", "padrao", "nexus", "masculina",
                         velocidade=0.92, tom=-1.5,
                         descricao="Original do Optimus: mordomo calmo, formal e grave"))
-    from optimus.estudio import omnivoice, piper
-
     if piper.instalado():
         saida += [Perfil(v.perfil_id, v.nome, "pronta", "piper", v.id, v.genero, v.idioma,
                          descricao=f"Offline e leve (Piper, {v.licenca}); baixa "
