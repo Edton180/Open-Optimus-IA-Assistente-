@@ -24,3 +24,25 @@ def test_aparece_no_estudio():
     from optimus.estudio import vozes
 
     assert any(p.nome == "Edton Braz" for p in vozes.listar())
+
+
+
+def test_perfil_pessoal_edton_substitui_voz_publica_na_conversa(monkeypatch, tmp_path):
+    from types import SimpleNamespace
+    from optimus.estudio import omnivoice, vozes
+
+    amostra = tmp_path / "amostra.wav"
+    amostra.write_bytes(b"amostra autorizada")
+    perfil = SimpleNamespace(tipo="clonada", caminho_amostra=lambda: amostra)
+    monkeypatch.setattr(vozes, "obter", lambda nome: perfil)
+    chamadas = []
+    monkeypatch.setattr(omnivoice, "gerar",
+                        lambda texto, **kwargs: chamadas.append((texto, kwargs)) or [0.1, -0.1])
+    monkeypatch.setattr(tts, "_wav_bytes", lambda onda, taxa: b"wav-pessoal")
+
+    falante = tts.Falante("edton-braz", config=Config({"voz": {}}))
+    audio, formato = falante.sintetizar("Olá, este é um teste.")
+
+    assert formato == "wav"
+    assert audio == b"wav-pessoal"
+    assert chamadas and chamadas[0][1]["amostra"] == amostra
