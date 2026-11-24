@@ -39,9 +39,13 @@ class Item:
     def instalado(self) -> bool:
         if self.forma == "pacote":
             try:
-                return importlib.util.find_spec(self.modulo) is not None
+                presente = importlib.util.find_spec(self.modulo) is not None
             except (ImportError, ValueError):
                 return False
+            # Pacote instalado sem os pesos não é um motor pronto para uso offline.
+            if self.id in {"omnivoice", "chatterbox", "faster-whisper", "demucs", "kokoro"}:
+                return presente and _marcador(self.id).is_file()
+            return presente
         return bool(self.pastas) and all(p.exists() for p in self.pastas)
 
     def ocupado_mb(self) -> float:
@@ -58,6 +62,10 @@ class Item:
                 "tamanho_mb": self.tamanho_mb, "descricao": self.descricao,
                 "forma": self.forma, "pacote": self.pacote, "instalado": self.instalado(),
                 "ocupado_mb": self.ocupado_mb() if self.forma == "arquivo" else None}
+
+
+def _marcador(ident: str) -> Path:
+    return pasta_estudio() / "modelos" / ".prontos" / f"{ident}.ok"
 
 
 def catalogo() -> list[Item]:
@@ -129,12 +137,34 @@ def instalar(ident: str, progresso=None) -> dict:
         (progresso or (lambda *a: None))(0.05, f"Instalando {item.nome} (pip)…")
         _pip("install", item.pacote)
         importlib.invalidate_caches()
+        # Pré-carrega os pesos agora, não apenas na primeira utilização do recurso.
+        if item.id == "omnivoice":
+            from optimus.estudio import omnivoice
+
+            omnivoice.modelo()
+        elif item.id == "chatterbox":
+            from chatterbox.mtl_tts import ChatterboxMultilingualTTS
+
+            ChatterboxMultilingualTTS.from_pretrained(device="cpu")
+        elif item.id == "faster-whisper":
+            from optimus.voice.stt import Ouvinte
+
+            Ouvinte("small")._carregar()
+        elif item.id == "demucs":
+            from demucs.pretrained import get_model
+
+            get_model(name="htdemucs")
+        elif item.id == "kokoro":
+            from optimus.voice import tts
+
+            if not tts.baixar_kokoro(progresso):
+                raise ErroEstudio("Não foi possível baixar os pesos do Kokoro.")
+        if item.id in {"omnivoice", "chatterbox", "faster-whisper", "demucs", "kokoro"}:
+            marcador = _marcador(item.id)
+            marcador.parent.mkdir(parents=True, exist_ok=True)
+            marcador.write_text("ok", encoding="utf-8")
     elif item.baixar:
         item.baixar(progresso)
-    if item.id == "kokoro":
-        from optimus.voice import tts
-
-        tts.baixar_kokoro(progresso)
     return item.para_dict()
 
 
