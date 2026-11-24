@@ -240,3 +240,25 @@ def test_status_do_motor_nao_bloqueia_resposta_da_api(monkeypatch):
     finally:
         liberar.set()
 
+
+
+def test_boot_nao_pode_ficar_preso_e_arquivos_estaticos_nao_sao_cacheados():
+    # Este teste valida somente arquivos estáticos; não precisa iniciar hardware, banco ou IA.
+    httpd = ThreadingHTTPServer(("127.0.0.1", 0), server.Manipulador)
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    base = f"http://127.0.0.1:{httpd.server_address[1]}"
+    try:
+        with urllib.request.urlopen(base + "/", timeout=5) as resposta:
+            pagina = resposta.read().decode()
+        assert "boot-failsafe-aviso" in pagina
+        assert "__optimusLiberarBoot" in pagina
+        assert "/app.js" in pagina and "/hud.js" in pagina
+
+        for recurso in ("app.js", "hud.js", "estudio.js", "style.css"):
+            with urllib.request.urlopen(base + "/" + recurso, timeout=5) as resposta:
+                assert resposta.status == 200
+                assert "no-store" in resposta.headers.get("Cache-Control", "")
+                assert resposta.read()
+    finally:
+        httpd.shutdown()
+        httpd.server_close()

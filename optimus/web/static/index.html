@@ -16,6 +16,43 @@
   <div class="boot-barra"><i></i></div>
   <ul id="boot-linhas"></ul>
 </div>
+<script>
+/* Recuperação independente dos demais scripts: nenhum erro JS pode prender a tela no logo. */
+(() => {
+  let encerrado = false;
+  const boot = () => document.getElementById("boot");
+  function liberar(mensagem) {
+    if (encerrado) return;
+    encerrado = true;
+    const tela = boot();
+    if (tela) tela.remove();
+    if (!mensagem) return;
+    let aviso = document.getElementById("boot-failsafe-aviso");
+    if (!aviso) {
+      aviso = document.createElement("div");
+      aviso.id = "boot-failsafe-aviso";
+      aviso.setAttribute("role", "alert");
+      aviso.style.cssText = "position:fixed;z-index:9999;left:16px;right:16px;bottom:16px;padding:14px 18px;border:1px solid #d99b45;border-radius:10px;background:#20190f;color:#ffe2b5;font:14px/1.5 system-ui;box-shadow:0 8px 32px #0009";
+      document.body.appendChild(aviso);
+    }
+    aviso.textContent = mensagem + " Atualize a página com Ctrl+Shift+R. Se persistir, envie este aviso e o log do terminal ao suporte.";
+  }
+  window.addEventListener("error", (evento) => {
+    const alvo = evento.target;
+    if (alvo && alvo !== window && alvo.tagName !== "SCRIPT") return;
+    const origem = evento.filename ? " (" + evento.filename.split("/").pop() + ":" + (evento.lineno || 0) + ")" : "";
+    liberar("Falha ao iniciar a interface: " + (evento.message || "um script não carregou") + origem);
+  }, true);
+  window.addEventListener("unhandledrejection", (evento) => {
+    const motivo = evento.reason;
+    liberar("Falha assíncrona ao iniciar: " + (motivo && motivo.message ? motivo.message : String(motivo || "erro desconhecido")));
+  });
+  window.setTimeout(() => {
+    if (boot()) liberar("A inicialização ultrapassou 10 segundos. A tela foi liberada para evitar bloqueio infinito.");
+  }, 10000);
+  window.__optimusLiberarBoot = liberar;
+})();
+</script>
 <div id="app">
   <aside id="lateral">
     <div class="marca">
