@@ -460,13 +460,22 @@ class Manipulador(BaseHTTPRequestHandler):
                     return self._json({"erro": "Envie um arquivo de até 200 MB."}, 413)
                 nome_original = unquote((consulta.get("nome") or ["documento.pdf"])[0])
                 nome = re.sub(r"[^\w.() -]", "_", Path(nome_original).name).strip(" .") or "documento.pdf"
-                if not nome.lower().endswith(".pdf") and not Path(nome).suffix:
-                    nome += ".pdf"
-                if not nome.lower().endswith(".pdf"):
-                    return self._json({"erro": "Selecione um arquivo PDF válido."}, 415)
+                extensao = Path(nome).suffix.lower()
+                permitidas = {".pdf", ".jpg", ".jpeg", ".png", ".tif", ".tiff", ".bmp"}
+                if extensao not in permitidas:
+                    return self._json({"erro": "Envie PDF ou imagem JPG, PNG, TIFF ou BMP."}, 415)
                 dados = self.rfile.read(tamanho)
-                if not dados.startswith(b"%PDF-"):
-                    return self._json({"erro": "O arquivo enviado não possui assinatura PDF válida."}, 415)
+                assinaturas = {
+                    ".pdf": dados.startswith(b"%PDF-"),
+                    ".jpg": dados.startswith(b"\\xff\\xd8\\xff"),
+                    ".jpeg": dados.startswith(b"\\xff\\xd8\\xff"),
+                    ".png": dados.startswith(b"\\x89PNG\\r\\n\\x1a\\n"),
+                    ".tif": dados.startswith((b"II*\\x00", b"MM\\x00*")),
+                    ".tiff": dados.startswith((b"II*\\x00", b"MM\\x00*")),
+                    ".bmp": dados.startswith(b"BM"),
+                }
+                if not assinaturas.get(extensao):
+                    return self._json({"erro": "O conteúdo do arquivo não corresponde ao formato informado."}, 415)
                 alvo = pasta_pdf / f"{uuid.uuid4().hex[:8]}_{nome}"
                 alvo.write_bytes(dados)
                 return self._json({"arquivo": str(alvo), "nome": nome,
