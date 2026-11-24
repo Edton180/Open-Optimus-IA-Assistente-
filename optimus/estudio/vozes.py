@@ -80,6 +80,25 @@ def _prontas() -> list[Perfil]:
 
     saida = [Perfil(v.id, v.nome, "pronta", "padrao", v.id, v.genero, "pt-BR",
                     descricao=v.descricao) for v in tts.VOZES]
+    # Perfil de narração PT-BR do proprietário. Quando os pesos do OmniVoice estão
+    # preparados localmente, usa voice design; caso contrário, cai para a voz Prime.
+    pesos_omnivoice = pasta_base() / "estudio" / "modelos" / ".prontos" / "omnivoice.ok"
+    motor_edton = "omnivoice" if omnivoice.instalado() and pesos_omnivoice.is_file() else "padrao"
+    descricao_edton = ("Narrador jovem-adulto de ciência e tecnologia; PT-BR urbano neutro, "
+                       "dicção nítida e coloquial, timbre médio/médio-agudo claro, projeção "
+                       "próxima e seca, ritmo ágil sem atropelar, micro-pausas estratégicas, "
+                       "perguntas curiosas, ênfase controlada em números e contrastes, "
+                       "fechamentos firmes e amigáveis.")
+    instrucao_edton = omnivoice.instrucao(
+        "narrador masculino jovem brasileiro, voz clara e brilhante, timbre médio-agudo, "
+        "estilo educativo de ciência e tecnologia, conversacional e confiante, ritmo ágil, "
+        "dicção precisa e entonação expressiva", "masculina"
+    ) if motor_edton == "omnivoice" else ""
+    saida.append(Perfil(
+        "edton-braz", "Edton Braz", "pronta", motor_edton,
+        "" if motor_edton == "omnivoice" else "prime", "masculina", "pt-BR",
+        velocidade=1.08, tom=0.5, expressividade=0.75,
+        descricao=descricao_edton, instrucao=instrucao_edton))
     # Voz original do Optimus: um mordomo calmo e formal (não imita nenhuma voz existente).
     saida.append(Perfil("mordomo", "Mordomo", "pronta", "padrao", "nexus", "masculina",
                         velocidade=0.92, tom=-1.5,

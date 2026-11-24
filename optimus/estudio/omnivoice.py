@@ -1,4 +1,4 @@
-"""Motor OmniVoice (k2-fsa, licença Apache-2.0): clonagem, criação de voz por descrição e
+"""Motor OmniVoice (código Apache-2.0; pesos oficiais CC-BY-NC-4.0): clonagem, criação de voz por descrição e
 mais de 600 idiomas num modelo só.
 
 - **Clonar**: alguns segundos de amostra bastam; a "impressão" da voz é calculada uma vez e
@@ -53,6 +53,12 @@ _ATRIBUTOS: list[tuple[tuple[str, ...], str]] = [
     (("indiano", "indiana"), "indian accent"),
     (("portugues", "portuguesa", "lusitano"), "portuguese accent"),
     (("brasileiro", "brasileira"), "brazilian accent"),
+    (("claro", "clara", "limpo", "limpa", "brilhante"), "clear bright voice"),
+    (("medio", "media"), "medium pitch"),
+    (("conversacional", "natural"), "conversational"),
+    (("expressiva", "expressivo", "dinamica", "dinamico"), "expressive"),
+    (("confiante", "segura", "seguro"), "confident"),
+    (("energica", "energico", "entusiasmada", "entusiasmado"), "energetic but controlled"),
 ]
 
 
