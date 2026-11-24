@@ -26,6 +26,8 @@ voz = ["faster-whisper>=1.0", "sounddevice>=0.4", "numpy>=1.24", "kokoro-onnx>=0
 # Casa inteligente: Bluetooth direto e leitura de PDF na base de conhecimento
 casa = ["bleak>=0.22"]
 documentos = ["pypdf>=4.0", "reportlab>=4.0", "python-docx>=1.1"]
+# Leitura e indexação incremental de arquivos ZIM (wheels oficiais Windows/Linux/macOS)
+conhecimento = ["libzim>=4.0"]
 # Suite PDF local: conversão de imagens e renderização de páginas (Tesseract é instalado no SO)
 pdf = [
     "pypdf>=4.0", "reportlab>=4.0", "python-docx>=1.1", "Pillow>=10.0",
