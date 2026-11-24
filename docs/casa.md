@@ -122,3 +122,13 @@ A descoberta depende de multicast permitido pela rede; VLANs, isolamento de clie
 firewalls e alguns roteadores podem bloquear WS-Discovery. A ausência de resultados não prova que
 não existam câmeras na rede. O suporte a streaming contínuo, gravação, timeline e gestão de
 credenciais ONVIF ainda é uma etapa separada.
+
+
+## Registro unificado (fundação interna)
+
+O pacote `optimus.smart_home.registry` fornece um inventário local versionado de dispositivos,
+com integração, fabricante/modelo, cômodo, capacidades, disponibilidade e nível de confiança do
+estado (`confirmed`, `estimated` ou `unavailable`). O arquivo é gravado atomicamente e não possui
+campos para tokens ou senhas. Esta fundação ainda não substitui o cadastro pela interface nem
+migra automaticamente as câmeras e entidades já existentes; isso será integrado nas próximas
+etapas sem apagar a configuração atual.
