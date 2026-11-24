@@ -245,7 +245,7 @@ def preparar_dependencia() -> dict[str, Any]:
         pass
     destino = _pasta().parent / "tools" / "python-packages"
     destino.mkdir(parents=True, exist_ok=True)
-    requisito = "libzim>=4.1.0" if sys.version_info >= (3, 11) else "libzim>=3.13.1,<4"
+    requisito = "libzim>=3.8.0" if sys.version_info >= (3, 11) else "libzim>=3.13.1,<4"
     comando = [sys.executable, "-m", "pip", "install", "--disable-pip-version-check",
                "--only-binary=:all:", "--upgrade", "--target", str(destino), requisito]
     try:
