@@ -572,8 +572,27 @@ def test_home_assistant_gerenciado_rota_e_api_dispositivos(tmp_path, monkeypatch
         monkeypatch.setattr(httpx, "post", lambda *a, **k: (chamadas.append(("POST", a, k)) or Resposta()))
 
         aparelhos = _req(base + "/api/casa/aparelhos")
-        assert aparelhos["total"] == 2
-        assert {x["entity_id"] for x in aparelhos["aparelhos"]} == {"light.sala", "switch.tomada"}
+        assert aparelhos["total"] == 3
+        por_id = {x["entity_id"]: x for x in aparelhos["aparelhos"]}
+        assert set(por_id) == {"light.sala", "sensor.temperatura", "switch.tomada"}
+        assert por_id["sensor.temperatura"]["controlavel"] is False
+        assert por_id["light.sala"]["controlavel"] is True
+
+        inventario = _req(base + "/api/casa/registro")
+        assert len(inventario["dispositivos"]) == 3
+        assert {x["entity_id"] for x in inventario["dispositivos"]} == {
+            "light.sala", "sensor.temperatura", "switch.tomada"
+        }
+        assert all("token" not in x for x in inventario["dispositivos"])
+
+        manual = _req(base + "/api/casa/registro", {
+            "id": "manual:tomada-quarto", "nome": "Tomada do quarto",
+            "integracao": "manual", "comodo": "Quarto",
+            "capacidades": ["estado"]
+        })
+        assert manual["dispositivo"]["comodo"] == "Quarto"
+        removido = _req(base + "/api/casa/registro-remover", {"id": "manual:tomada-quarto"})
+        assert removido["ok"] is True
 
         controle = _req(base + "/api/casa/controle",
                         {"entity_id": "light.sala", "servico": "turn_off"})
