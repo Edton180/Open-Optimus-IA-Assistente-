@@ -1,5 +1,4 @@
 import json
-import re
 import threading
 import time
 import urllib.request
@@ -266,9 +265,12 @@ def test_boot_nao_pode_ficar_preso_e_arquivos_estaticos_nao_sao_cacheados():
 
 
 def test_seletor_do_menu_nao_interrompe_a_inicializacao():
-    """O menu usa querySelectorAll, pois vários botões precisam receber eventos."""
+    """Os dois usos do menu precisam selecionar uma coleção, não um elemento único."""
     codigo = (server.ESTATICOS / "app.js").read_text(encoding="utf-8")
-    seletor_singular = r"(?<!\\$)\\$\\(\\s*['\\"]\\.menu button['\\"]\\s*\\)\\s*\\.forEach\\s*\\("
-    seletor_coletivo = r"\\$\\$\\(\\s*['\\"]\\.menu button['\\"]\\s*\\)\\s*\\.forEach\\s*\\("
-    assert re.search(seletor_singular, codigo) is None
-    assert re.search(seletor_coletivo, codigo) is not None
+    seletores_menu = [
+        linha.strip()
+        for linha in codigo.splitlines()
+        if '".menu button"' in linha and ".forEach(" in linha
+    ]
+    assert len(seletores_menu) == 2
+    assert all(linha.startswith('$$(".menu button")') for linha in seletores_menu)
