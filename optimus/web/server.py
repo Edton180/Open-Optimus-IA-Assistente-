@@ -478,12 +478,12 @@ class Manipulador(BaseHTTPRequestHandler):
         recurso = partes[0] if partes else ""
         ident = partes[1] if len(partes) > 1 else ""
 
-        if recurso == "modulos" and metodo == "GET":
-            from optimus import modulos
-            return self._json({"modulos": modulos.inventario()})
         if recurso == "modulos" and ident == "recursos" and metodo == "GET":
             from optimus import modulos
             return self._json({"recursos": modulos.recursos()})
+        if recurso == "modulos" and metodo == "GET":
+            from optimus import modulos
+            return self._json({"modulos": modulos.inventario()})
         if recurso == "pdf":
             from optimus.tools import pdf as _pdf  # noqa: F401
             from optimus.tools import pdf_suite as _pdf_suite  # noqa: F401
