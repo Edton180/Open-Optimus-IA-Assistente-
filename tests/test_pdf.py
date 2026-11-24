@@ -452,3 +452,54 @@ def test_pdf_documento_para_pdf_informa_libreoffice_ausente(tmp_path, monkeypatc
     resultado = pdf_suite.pdf_documento_para_pdf(_ctx(tmp_path), str(arquivo))
 
     assert "LibreOffice" in resultado["erro"]
+
+def test_pdf_dividir_pares_impares_preserva_texto(tmp_path):
+    origem = tmp_path / "origem.pdf"
+    impares = tmp_path / "impares.pdf"
+    pares = tmp_path / "pares.pdf"
+    _criar_pdf(origem, ["PAGINA UM", "PAGINA DOIS", "PAGINA TRES", "PAGINA QUATRO"])
+
+    resultado = pdf_suite.pdf_dividir_pares_impares(
+        _ctx(tmp_path), str(origem), str(impares), str(pares)
+    )
+
+    assert "erro" not in resultado
+    assert resultado["paginas_impares"] == 2
+    assert resultado["paginas_pares"] == 2
+    assert [p.extract_text().strip() for p in PdfReader(impares).pages] == [
+        "PAGINA UM", "PAGINA TRES"
+    ]
+    assert [p.extract_text().strip() for p in PdfReader(pares).pages] == [
+        "PAGINA DOIS", "PAGINA QUATRO"
+    ]
+
+
+def test_pdf_paginas_por_folha_preserva_texto_e_reduz_folhas(tmp_path):
+    origem = tmp_path / "origem.pdf"
+    destino = tmp_path / "duas_por_folha.pdf"
+    _criar_pdf(origem, ["PAGINA UM", "PAGINA DOIS", "PAGINA TRES"])
+
+    resultado = pdf_suite.pdf_paginas_por_folha(
+        _ctx(tmp_path), str(origem), 2, str(destino)
+    )
+
+    assert "erro" not in resultado
+    leitor = PdfReader(destino)
+    assert len(leitor.pages) == 2
+    assert all(p.extract_text().strip() for p in leitor.pages)
+
+
+def test_pdf_imprimir_livreto_cria_imposicao_frente_verso(tmp_path):
+    origem = tmp_path / "origem.pdf"
+    destino = tmp_path / "livreto.pdf"
+    _criar_pdf(origem, ["PAGINA UM", "PAGINA DOIS", "PAGINA TRES", "PAGINA QUATRO"])
+
+    resultado = pdf_suite.pdf_imprimir_livreto(_ctx(tmp_path), str(origem), str(destino))
+
+    assert "erro" not in resultado
+    leitor = PdfReader(destino)
+    assert len(leitor.pages) == 2
+    assert "PAGINA QUATRO" in leitor.pages[0].extract_text()
+    assert "PAGINA UM" in leitor.pages[0].extract_text()
+    assert "PAGINA DOIS" in leitor.pages[1].extract_text()
+    assert "PAGINA TRES" in leitor.pages[1].extract_text()
