@@ -62,10 +62,20 @@ test("instalador e busca unificada têm ações reais e citações", async ({ pa
     await route.fulfill({ json: { instalado: true, gerenciado: true, versao: "3.8.2",
       mensagem: "Kiwix Tools instalado no diretório gerenciado do Optimus." } });
   });
-  await page.route("**/api/zim/buscar?**", async (route) => route.fulfill({ json: {
-    consulta: "segurança", total: 1, erros: [],
-    resultados: [{ titulo: "Segurança", trecho: "Trecho do artigo", arquivo_zim: "wikipedia_pt.zim",
-      citacao: "wikipedia_pt.zim · Segurança", tipo_fonte: "ZIM", url: "http://127.0.0.1:8767/content/wikipedia_pt/Seguranca" }]
+  let indexado = false;
+  await page.route("**/api/zim/status", async (route) => route.fulfill({ json: {
+    artigos_indexados: indexado ? 1 : 0, trechos: indexado ? 2 : 0,
+    com_embeddings: 0, arquivos: []
+  }}));
+  await page.route("**/api/zim/indexar", async (route) => {
+    indexado = true;
+    await route.fulfill({ json: { indexados: 1, artigos_processados: 1, trechos: 2,
+      embeddings_atualizados: 0, erros: [], estado: { artigos_indexados: 1, trechos: 2 } } });
+  });
+  await page.route("**/api/zim/rag**", async (route) => route.fulfill({ json: {
+    resultados: [{ titulo: "Segurança", trecho: "Trecho do artigo", arquivo: "wikipedia_pt.zim",
+      artigo: "Seguranca", citacao: "Segurança — wikipedia_pt.zim#Seguranca",
+      tipo_fonte: "ZIM", url: "zim://wikipedia_pt.zim/Seguranca" }]
   }}));
   await page.route("**/api/biblioteca?**", async (route) => route.fulfill({ json: {
     consulta: "segurança", total: 1,
@@ -82,5 +92,7 @@ test("instalador e busca unificada têm ações reais e citações", async ({ pa
   await expect(page.locator("#zim-busca-resultados")).toContainText("Segurança");
   await expect(page.locator("#zim-busca-resultados")).toContainText("Manual interno");
   await expect(page.locator("#zim-busca-resultados")).toContainText("wikipedia_pt.zim");
+  await page.locator("#zim-indexar").click();
+  await expect(page.locator("#zim-index-status")).toContainText("1 artigos");
   expect(erros).toEqual([]);
 });

@@ -490,6 +490,30 @@ class Manipulador(BaseHTTPRequestHandler):
                     return self._json(kiwix.buscar(termo, arquivo, limite=20))
                 except (ValueError, RuntimeError) as erro:
                     return self._json({"erro": str(erro)}, 400)
+            if metodo == "GET" and ident == "rag":
+                from optimus import zim_rag
+                modelo = str((consulta.get("modelo") or [""])[0]).strip()
+                return self._json({"resultados": zim_rag.buscar(
+                    str((consulta.get("q") or [""])[0]), limite=10,
+                    modelo_embedding=modelo, url_motor=getattr(optimus.motor, "url", ""))})
+            if metodo == "GET" and ident == "status":
+                from optimus import zim_rag
+                return self._json(zim_rag.status())
+            if metodo == "POST" and ident == "indexar":
+                from optimus import zim_rag
+                corpo = self._corpo()
+                modelo = str(corpo.get("modelo_embedding") or "").strip()
+                try:
+                    url_motor = getattr(optimus.motor, "url", "")
+                    preparo = zim_rag.preparar_embedding(url_motor, modelo)
+                    modelo = preparo.get("modelo") or modelo
+                    resultado = zim_rag.indexar(
+                        limite=int(corpo.get("limite") or 150),
+                        modelo_embedding=modelo, url_motor=url_motor)
+                    resultado["preparacao_embedding"] = preparo
+                    return self._json(resultado)
+                except (ValueError, RuntimeError, OSError) as erro:
+                    return self._json({"erro": str(erro)}, 400)
             if metodo == "POST" and ident == "instalar":
                 try:
                     return self._json(kiwix.instalar())

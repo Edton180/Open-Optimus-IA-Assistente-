@@ -156,6 +156,13 @@ function irPara(tela) {
 }
 
 // ---------- Biblioteca local ZIM ----------
+function mensagemErroZim(erro) {
+  const mensagem = String(erro?.message || erro || "erro desconhecido");
+  if (/rota não encontrada/i.test(mensagem)) {
+    return "A API em execução não oferece as rotas da biblioteca ZIM. Atualize o Optimus pela opção de atualização e reinicie o programa; a interface e o servidor precisam estar na mesma versão.";
+  }
+  return mensagem;
+}
 async function carregarZim() {
   const status = $("#zim-status");
   const lista = $("#zim-lista");
@@ -189,7 +196,7 @@ async function carregarZim() {
     }
     atualizarEstadoKiwix(dados.kiwix || {});
   } catch (erro) {
-    status.textContent = "Falha ao consultar a biblioteca: " + erro.message;
+    status.textContent = "Falha ao consultar a biblioteca: " + mensagemErroZim(erro);
     lista.innerHTML = "";
     resumo.innerHTML = "";
   }
@@ -234,7 +241,7 @@ $("#zim-instalar-kiwix")?.addEventListener("click", async () => {
     status.textContent = dados.mensagem || "Kiwix instalado.";
     await carregarZim();
   } catch (erro) {
-    status.textContent = "Instalação não concluída: " + erro.message;
+    status.textContent = "Instalação não concluída: " + mensagemErroZim(erro);
     botao.disabled = false;
   }
 });
@@ -249,7 +256,7 @@ $("#zim-abrir")?.addEventListener("click", async () => {
     const dados = await api("/api/zim/iniciar", { method: "POST", json: { arquivo }, tempo: 15000 });
     atualizarEstadoKiwix(dados);
   } catch (erro) {
-    status.textContent = "Não foi possível iniciar o leitor: " + erro.message;
+    status.textContent = "Não foi possível iniciar o leitor: " + mensagemErroZim(erro);
     botao.disabled = false;
   }
 });
@@ -277,7 +284,7 @@ $("#zim-busca-form")?.addEventListener("submit", async (evento) => {
   status.textContent = "Pesquisando localmente nos índices disponíveis…";
   lista.innerHTML = "";
   const tarefas = [];
-  if (fonte !== "documentos") tarefas.push(api("/api/zim/buscar?q=" + encodeURIComponent(termo))
+  if (fonte !== "documentos") tarefas.push(api("/api/zim/rag?q=" + encodeURIComponent(termo))
     .then((d) => ({ tipo: "zim", dados: d })).catch((erro) => ({ tipo: "zim", erro })));
   if (fonte !== "zim") tarefas.push(api("/api/biblioteca?q=" + encodeURIComponent(termo))
     .then((d) => ({ tipo: "documentos", dados: d })).catch((erro) => ({ tipo: "documentos", erro })));
@@ -289,8 +296,7 @@ $("#zim-busca-form")?.addEventListener("submit", async (evento) => {
       if (resposta.erro) { avisos.push(resposta.tipo + ": " + resposta.erro.message); continue; }
       if (resposta.tipo === "zim") {
         itens.push(...(resposta.dados.resultados || []));
-        avisos.push(...(resposta.dados.erros || []));
-        if (resposta.dados.aviso) avisos.push(resposta.dados.aviso);
+        if (!resposta.dados.resultados?.length) avisos.push("Indexe os arquivos ZIM para habilitar o RAG local.");
       } else {
         itens.push(...(resposta.dados.resultados || []).map((r) => ({
           titulo: r.titulo || "Documento", trecho: r.trecho || "",
@@ -302,16 +308,53 @@ $("#zim-busca-form")?.addEventListener("submit", async (evento) => {
     lista.innerHTML = itens.length ? itens.map((r) =>
       '<li><div><b>' + esc(r.titulo || "Resultado") + '</b><small class="sutil"> ' +
       esc(r.tipo_fonte || "Fonte") + ' · ' + esc(r.citacao || r.arquivo_zim || "") +
+      (r.hash_trecho ? ' · SHA-256 ' + esc(r.hash_trecho.slice(0, 12)) : '') +
       '</small><p>' + esc(r.trecho || "Trecho não fornecido pelo índice.") + '</p>' +
-      (r.url ? '<a href="' + esc(r.url) + '" target="_blank" rel="noopener noreferrer">Abrir fonte local ↗</a>' : "") +
+      (r.url && r.url.startsWith("http://127.0.0.1") ? '<a href="' + esc(r.url) + '" target="_blank" rel="noopener noreferrer">Abrir fonte local ↗</a>' : "") +
       '</div></li>'
     ).join("") : '<li class="sutil">Nenhum resultado encontrado nas fontes selecionadas.</li>';
-    status.textContent = itens.length + " resultado(s) · busca textual local. " +
+    status.textContent = itens.length + " resultado(s) · recuperação híbrida ZIM + documentos locais. " +
       (avisos.length ? avisos.slice(0, 3).join(" · ") : "As citações indicam a origem do trecho.");
   } catch (erro) {
     status.textContent = "Falha na busca: " + erro.message;
   } finally { botao.disabled = false; }
 });
+
+// ---------- Indexação incremental e RAG ZIM ----------
+async function atualizarStatusIndiceZim() {
+  const alvo = $("#zim-index-status");
+  if (!alvo) return;
+  try {
+    const s = await api("/api/zim/status");
+    const vetores = Number(s.com_embeddings || 0);
+    alvo.textContent = (s.artigos_indexados || 0) + " artigos · " +
+      (s.trechos || 0) + " trechos · " + (vetores
+        ? vetores + " vetores locais."
+        : "sem embeddings; busca lexical ativa.") +
+      " A indexação pode ser retomada a qualquer momento.";
+  } catch (erro) { alvo.textContent = "Índice ZIM ainda não disponível: " + erro.message; }
+}
+$("#zim-indexar")?.addEventListener("click", async () => {
+  const botao = $("#zim-indexar"), status = $("#zim-index-status");
+  botao.disabled = true;
+  status.textContent = "Preparando a indexação. Se necessário, libzim e o modelo de embeddings leve serão instalados localmente; depois serão processadas até 150 entradas…";
+  try {
+    const resultado = await api("/api/zim/indexar", { method: "POST", json: { limite: 150 } });
+    if (resultado.erro) throw new Error(resultado.erro);
+    const erros = resultado.erros || [];
+    status.textContent = (resultado.artigos_processados || 0) + " entradas processadas · " +
+      (resultado.indexados || 0) + " artigos indexados · " +
+      (resultado.trechos || 0) + " trechos atualizados · " +
+      (resultado.embeddings_atualizados || 0) + " embeddings preenchidos." +
+      (resultado.modelo_embedding ? " Modelo: " + resultado.modelo_embedding + "." : " Modo lexical.") +
+      (resultado.preparacao_embedding?.erro ? " Embeddings: " + resultado.preparacao_embedding.erro : "") +
+      (erros.length ? " Avisos: " + erros.slice(0, 2).map(e => e.erro).join(" | ") : "");
+    await atualizarStatusIndiceZim();
+  } catch (erro) {
+    status.textContent = "Não foi possível indexar: " + erro.message;
+  } finally { botao.disabled = false; }
+});
+atualizarStatusIndiceZim();
 
 // ---------- Command Center: inventário local de integrações ----------
 async function carregarModulos() {
