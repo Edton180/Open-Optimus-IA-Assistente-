@@ -12,6 +12,8 @@ import logging
 import mimetypes
 import queue
 import re
+import shutil
+import subprocess
 import threading
 import time
 import uuid
@@ -767,8 +769,92 @@ def aquecer_modelos(optimus: Optimus) -> list[str]:
 # ---------------------------------------------------------------------- acesso pelo celular
 # Quando a interface roda só neste PC (127.0.0.1), o celular entra por uma segunda porta,
 # aberta na rede de casa e sempre protegida pela senha de [web] senha.
+
 _servidor_celular: ThreadingHTTPServer | None = None
 _trava_celular = threading.Lock()
+_trava_tunel = threading.RLock()
+_processo_tunel: subprocess.Popen | None = None
+_url_tunel = ""
+_erro_tunel = ""
+
+
+def estado_tunel() -> dict[str, str | bool]:
+    with _trava_tunel:
+        processo = _processo_tunel
+        if processo is not None and processo.poll() is not None and not _url_tunel:
+            return {"ligado": False, "url": "", "erro": _erro_tunel or
+                    f"cloudflared encerrou com código {processo.returncode}."}
+        return {"ligado": bool(processo and processo.poll() is None and _url_tunel),
+                "iniciando": bool(processo and processo.poll() is None and not _url_tunel),
+                "url": _url_tunel, "erro": _erro_tunel}
+
+
+def iniciar_tunel(porta: int, senha: str) -> dict[str, str | bool]:
+    """Inicia Cloudflare Quick Tunnel sem expor a porta local diretamente."""
+    global _processo_tunel, _url_tunel, _erro_tunel
+    if len(senha or "") < 12:
+        return {"erro": "Acesso externo exige senha com pelo menos 12 caracteres."}
+    executavel = shutil.which("cloudflared")
+    if not executavel:
+        return {"erro": "cloudflared não foi encontrado. Instale-o e tente novamente."}
+    with _trava_tunel:
+        if _processo_tunel is not None and _processo_tunel.poll() is None:
+            return estado_tunel()
+        _url_tunel = ""
+        _erro_tunel = ""
+        try:
+            _processo_tunel = subprocess.Popen(
+                [executavel, "tunnel", "--no-autoupdate", "--url",
+                 f"http://127.0.0.1:{int(porta)}"],
+                stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                text=True, encoding="utf-8", errors="replace", bufsize=1)
+        except OSError as erro:
+            _processo_tunel = None
+            _erro_tunel = str(erro)
+            return {"erro": f"Não foi possível iniciar o Cloudflare Tunnel: {erro}"}
+        processo = _processo_tunel
+
+        def ler_saida():
+            global _url_tunel
+            try:
+                for linha in processo.stdout or ():
+                    achado = re.search(r"https://[a-z0-9-]+[.]trycloudflare[.]com", linha, re.I)
+                    if achado:
+                        with _trava_tunel:
+                            _url_tunel = achado.group(0)
+            except (OSError, ValueError):
+                pass
+
+        threading.Thread(target=ler_saida, daemon=True, name="optimus-cloudflare-log").start()
+        limite = time.monotonic() + 10
+        while time.monotonic() < limite:
+            if processo.poll() is not None:
+                _erro_tunel = f"cloudflared encerrou com código {processo.returncode}."
+                break
+            if _url_tunel:
+                return estado_tunel()
+            time.sleep(0.1)
+        if _url_tunel:
+            return estado_tunel()
+        return {"ligado": False, "iniciando": processo.poll() is None, "url": "",
+                "erro": _erro_tunel or
+                "O túnel ainda está iniciando. Atualize o status em alguns segundos."}
+
+
+def parar_tunel() -> None:
+    global _processo_tunel, _url_tunel, _erro_tunel
+    with _trava_tunel:
+        processo = _processo_tunel
+        _processo_tunel = None
+        _url_tunel = ""
+        _erro_tunel = ""
+    if processo is not None and processo.poll() is None:
+        processo.terminate()
+        try:
+            processo.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            processo.kill()
+            processo.wait(timeout=2)
 
 
 def porta_celular(config, porta_principal: int) -> int:
