@@ -28,6 +28,7 @@ _LOCK = threading.RLock()
 _PROCESS: subprocess.Popen | None = None
 _URL = ""
 _ERROR = ""
+_VERIFICADO = False
 _READER: threading.Thread | None = None
 _URL_RE = re.compile(r"https://[a-z0-9-]+\.trycloudflare\.com", re.I)
 
@@ -116,14 +117,15 @@ def estado() -> dict[str, str | bool]:
         if processo is not None and not vivo and not _ERROR:
             return {"ligado": False, "iniciando": False, "url": "",
                     "erro": f"cloudflared encerrou com código {processo.returncode}."}
-        return {"ligado": bool(vivo and _URL), "iniciando": bool(vivo and not _URL),
-                "url": _URL if vivo else "", "erro": _ERROR}
+        return {"ligado": bool(vivo and _URL and _VERIFICADO),
+                "iniciando": bool(vivo and not _VERIFICADO),
+                "url": _URL if vivo and _VERIFICADO else "", "erro": _ERROR}
 
 
 def iniciar(porta: int, senha: str, *, instalador: Callable[[], str] = garantir_instalado,
             espera: float = 20.0) -> dict[str, str | bool]:
     """Inicia/reutiliza um Quick Tunnel apontando somente para localhost."""
-    global _PROCESS, _URL, _ERROR, _READER
+    global _PROCESS, _URL, _ERROR, _VERIFICADO, _READER
     if len(senha or "") < 12:
         return {"erro": "Acesso externo exige senha com pelo menos 12 caracteres."}
     if not 1 <= int(porta) <= 65535:
@@ -139,6 +141,7 @@ def iniciar(porta: int, senha: str, *, instalador: Callable[[], str] = garantir_
             return estado()
         _URL = ""
         _ERROR = ""
+        _VERIFICADO = False
         try:
             processo = subprocess.Popen(
                 [executavel, "tunnel", "--no-autoupdate", "--url",
@@ -166,25 +169,38 @@ def iniciar(porta: int, senha: str, *, instalador: Callable[[], str] = garantir_
     _READER = threading.Thread(target=ler_saida, daemon=True, name="optimus-cloudflared")
     _READER.start()
     limite = time.monotonic() + max(1.0, espera)
+    proxima_verificacao = 0.0
     while time.monotonic() < limite:
-        atual = estado()
-        if atual.get("url") or atual.get("erro"):
-            return atual
         if processo.poll() is not None:
             with _LOCK:
                 _ERROR = f"cloudflared encerrou com código {processo.returncode}."
             return estado()
-        time.sleep(0.1)
+        with _LOCK:
+            url = _URL
+        agora = time.monotonic()
+        if url and agora >= proxima_verificacao:
+            proxima_verificacao = agora + 2.0
+            try:
+                resposta = httpx.get(url, timeout=6.0, follow_redirects=True)
+                if resposta.status_code == 200 and "text/html" in (
+                        resposta.headers.get("content-type", "").lower()):
+                    with _LOCK:
+                        _VERIFICADO = True
+                    return estado()
+            except httpx.HTTPError:
+                pass
+        time.sleep(0.15)
     return estado()
 
 
 def parar() -> None:
-    global _PROCESS, _URL, _ERROR
+    global _PROCESS, _URL, _ERROR, _VERIFICADO
     with _LOCK:
         processo = _PROCESS
         _PROCESS = None
         _URL = ""
         _ERROR = ""
+        _VERIFICADO = False
     if processo is not None and processo.poll() is None:
         processo.terminate()
         try:
