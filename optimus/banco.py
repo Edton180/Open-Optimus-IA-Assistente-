@@ -266,7 +266,7 @@ class Banco:
 
     def consultar_biblioteca(self, consulta: str, limite: int = 20) -> list[dict[str, Any]]:
         """Consulta FTS5 limitando a candidatos da biblioteca antes do LIMIT."""
-        termos = [t for t in re.findall(r"\\w+", consulta) if len(t) > 2]
+        termos = [t for t in re.findall(r"\w+", consulta) if len(t) > 2]
         if not termos:
             return []
         expressao = " OR ".join(f'"{t.replace(chr(34), chr(34) * 2)}"' for t in termos)
