@@ -461,9 +461,9 @@ class Manipulador(BaseHTTPRequestHandler):
                 nome_original = unquote((consulta.get("nome") or ["documento.pdf"])[0])
                 nome = re.sub(r"[^\w.() -]", "_", Path(nome_original).name).strip(" .") or "documento.pdf"
                 extensao = Path(nome).suffix.lower()
-                permitidas = {".pdf", ".jpg", ".jpeg", ".png", ".tif", ".tiff", ".bmp"}
+                permitidas = {".pdf", ".jpg", ".jpeg", ".png", ".tif", ".tiff", ".bmp", ".html", ".htm", ".p12", ".pfx", ".icc"}
                 if extensao not in permitidas:
-                    return self._json({"erro": "Envie PDF ou imagem JPG, PNG, TIFF ou BMP."}, 415)
+                    return self._json({"erro": "Tipo de arquivo não suportado. Envie PDF, imagem, HTML, certificado P12/PFX ou perfil ICC."}, 415)
                 dados = self.rfile.read(tamanho)
                 assinaturas = {
                     ".pdf": dados.startswith(b"%PDF-"),
@@ -474,8 +474,10 @@ class Manipulador(BaseHTTPRequestHandler):
                     ".tiff": dados.startswith((b"II*\x00", b"MM\x00*")),
                     ".bmp": dados.startswith(b"BM"),
                 }
-                if not assinaturas.get(extensao):
+                if extensao in assinaturas and not assinaturas[extensao]:
                     return self._json({"erro": "O conteúdo do arquivo não corresponde ao formato informado."}, 415)
+                if extensao in {".html", ".htm"} and b"<" not in dados[:4096]:
+                    return self._json({"erro": "O arquivo HTML não parece válido."}, 415)
                 alvo = pasta_pdf / f"{uuid.uuid4().hex[:8]}_{nome}"
                 alvo.write_bytes(dados)
                 return self._json({"arquivo": str(alvo), "nome": nome,
