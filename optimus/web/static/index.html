@@ -31,6 +31,7 @@
       <button data-tela="prompts"><span>📚</span>Biblioteca de prompts</button>
       <button data-tela="memoria"><span>🧠</span>Memória e lembretes</button>
       <button data-tela="estudio"><span>🎙️</span>Estúdio de voz</button>
+      <button data-tela="pdf"><span>📄</span>Documentos e PDF</button>
       <button data-tela="casa"><span>🏠</span>Casa inteligente</button>
       <button data-tela="acoes"><span>🛡️</span>Ações e segurança</button>
       <button data-tela="config"><span>⚙️</span>Configurações</button>
@@ -111,6 +112,48 @@
           <button data-modo="programar" title="Modo programador">💻 Programar</button>
         </div>
         <div class="rodape-sutil" id="rodape-voz">O Optimus executa ações no seu PC. Ações críticas sempre pedem sua confirmação.</div>
+      </div>
+    </section>
+
+    <section id="tela-pdf" class="tela">
+      <div class="tela-cabecalho"><h2>📄 Documentos e PDF</h2>
+        <p>Organize, converta, proteja e analise documentos diretamente neste computador. Seus arquivos não são enviados a serviços externos.</p></div>
+      <div class="cartao pdf-upload">
+        <h3>1. Adicionar documentos</h3>
+        <div class="linha">
+          <input id="pdf-arquivos" type="file" accept=".pdf,application/pdf" multiple>
+          <button type="button" class="botao primario" id="pdf-enviar">Adicionar arquivos</button>
+        </div>
+        <p class="sutil">PDFs de até 200 MB por arquivo. Os arquivos enviados ficam na pasta local de documentos do Optimus.</p>
+        <div id="pdf-lista-arquivos" class="pdf-arquivos"></div>
+      </div>
+      <div class="cartao">
+        <h3>2. Escolher operação</h3>
+        <label>Ferramenta PDF
+          <select id="pdf-ferramenta" class="campo"><option value="">Carregando ferramentas…</option></select>
+        </label>
+        <p id="pdf-descricao" class="sutil"></p>
+        <div id="pdf-parametros" class="grade pdf-parametros"></div>
+        <div class="linha fim">
+          <button type="button" class="botao primario" id="pdf-executar" disabled>▶ Executar operação</button>
+          <span id="pdf-estado" class="sutil" role="status" aria-live="polite"></span>
+        </div>
+      </div>
+      <div class="cartao">
+        <h3>3. Resultado</h3>
+        <div id="pdf-resultado" class="pdf-resultado sutil">Selecione os arquivos e uma operação para começar.</div>
+      </div>
+      <div class="cartao">
+        <h3>Recursos disponíveis</h3>
+        <div class="pdf-categorias">
+          <div><b>Organizar</b><span>Juntar, dividir, extrair, remover, reordenar e girar páginas.</span></div>
+          <div><b>Otimizar</b><span>Comprimir, reparar e aplicar OCR.</span></div>
+          <div><b>Converter</b><span>PDF para Word, Excel, PowerPoint, imagens, texto e Markdown; imagens para PDF.</span></div>
+          <div><b>Editar</b><span>Cortar páginas, adicionar marca d'água, numeração e anotações.</span></div>
+          <div><b>Segurança</b><span>Proteger, desbloquear, localizar termos e gerenciar metadados.</span></div>
+          <div><b>Inteligência</b><span>Comparar documentos, resumir e trabalhar com formulários.</span></div>
+        </div>
+        <p class="sutil">Algumas operações exigem dependências opcionais, como Tesseract OCR, LibreOffice ou Ghostscript. O Optimus informa quando algo estiver ausente, sem simular sucesso.</p>
       </div>
     </section>
 
