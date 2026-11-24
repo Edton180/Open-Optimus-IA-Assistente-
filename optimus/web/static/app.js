@@ -18,24 +18,31 @@ let senha = "";
 try { senha = sessionStorage.getItem("optimus_senha") || ""; } catch (e) {}
 
 async function api(caminho, opcoes = {}) {
-  const cab = Object.assign({}, opcoes.headers || {});
+  const { tempo = 12000, json, ...fetchOpcoes } = opcoes;
+  const cab = Object.assign({}, fetchOpcoes.headers || {});
   if (senha) cab["X-Optimus-Senha"] = senha;
-  if (opcoes.json !== undefined) { cab["Content-Type"] = "application/json"; opcoes.body = JSON.stringify(opcoes.json); }
-  // `tempo` (ms): desiste do pedido em vez de esperar para sempre um servidor travado.
-  let controle = null, relogio = null;
-  if (opcoes.tempo) { controle = new AbortController(); relogio = setTimeout(() => controle.abort(), opcoes.tempo); }
-  let r;
-  try { r = await fetch(caminho, Object.assign({}, opcoes, { headers: cab }, controle ? { signal: controle.signal } : {})); }
-  finally { if (relogio) clearTimeout(relogio); }
-  if (r.status === 401) { pedirSenha(); throw new Error("senha"); }
-  const tipo = r.headers.get("Content-Type") || "";
-  if (tipo.includes("json")) {
-    const dados = await r.json();
-    if (!r.ok) throw new Error(dados.erro || r.statusText);
-    return dados;
+  if (json !== undefined) { cab["Content-Type"] = "application/json"; fetchOpcoes.body = JSON.stringify(json); }
+  // O prazo cobre conexão E leitura do corpo. Sem prazo, uma resposta parcial podia
+  // deixar o status inicial preso em "carregando…" indefinidamente.
+  const controle = new AbortController();
+  const relogio = tempo > 0 ? setTimeout(() => controle.abort(), tempo) : null;
+  try {
+    const r = await fetch(caminho, { ...fetchOpcoes, headers: cab, signal: controle.signal });
+    if (r.status === 401) { pedirSenha(); throw new Error("senha"); }
+    const tipo = r.headers.get("Content-Type") || "";
+    if (tipo.includes("json")) {
+      const dados = await r.json();
+      if (!r.ok) throw new Error(dados.erro || r.statusText);
+      return dados;
+    }
+    if (!r.ok) throw new Error(r.statusText || ("HTTP " + r.status));
+    return r;
+  } catch (erro) {
+    if (erro && erro.name === "AbortError") throw new Error("Tempo esgotado ao acessar " + caminho + ". Verifique se o servidor do Optimus está respondendo.");
+    throw erro;
+  } finally {
+    if (relogio) clearTimeout(relogio);
   }
-  if (!r.ok) throw new Error(r.statusText);
-  return r;
 }
 
 function pedirSenha() {
@@ -1076,12 +1083,37 @@ $("#botao-baixar").onclick = async () => {
 // ---------- Início ----------
 async function iniciar() {
   Hud.iniciar($("#hud-orbe")); Hud.relogio();
-  if (window.innerWidth <= 760) { entrada.placeholder = "Fale com o Optimus…"; $("#botao-ao-vivo").title = "Ao vivo"; } irPara(modoHud ? "hud" : "chat");
-  Hud.boot();
-  await Promise.all([atualizarSistema(), carregarPersonas(), carregarConversas()]);
-  if ("Notification" in window && Notification.permission === "default") Notification.requestPermission();
+  if (window.innerWidth <= 760) { entrada.placeholder = "Fale com o Optimus…"; $("#botao-ao-vivo").title = "Ao vivo"; }
+  irPara(modoHud ? "hud" : "chat");
+
+  // A animação nunca pode bloquear a aplicação. Mesmo se algum script de HUD falhar,
+  // removemos a camada de abertura e deixamos a interface apresentar o erro real.
+  const boot = document.getElementById("boot");
+  const liberarBoot = () => { if (boot && boot.isConnected) boot.remove(); };
+  const watchdogBoot = setTimeout(liberarBoot, 4000);
+  try { await Promise.race([Promise.resolve(Hud.boot()), new Promise(resolve => setTimeout(resolve, 2500))]); }
+  catch (erro) { console.error("Falha na animação de inicialização:", erro); }
+  finally { clearTimeout(watchdogBoot); liberarBoot(); }
+
+  // Uma API indisponível não pode impedir o carregamento das demais partes da tela.
+  const resultados = await Promise.allSettled([
+    atualizarSistema(), carregarPersonas(), carregarConversas()
+  ]);
+  const falhas = resultados.filter(x => x.status === "rejected");
+  if (falhas.length) {
+    console.error("Falha parcial na inicialização do Optimus:", falhas.map(x => x.reason));
+    if (falhas.length === resultados.length) definirEstado("erro", "Servidor sem resposta — verifique a conexão");
+    else if ($("#estado-texto").textContent === "Pronto") definirEstado("erro", "Inicialização parcial — consulte a conexão");
+  }
+  if ("Notification" in window && Notification.permission === "default") {
+    try { await Notification.requestPermission(); } catch (erro) { console.debug("Notificações indisponíveis:", erro); }
+  }
 }
-iniciar();
+iniciar().catch(erro => {
+  console.error("Falha crítica ao iniciar o Optimus:", erro);
+  const boot = document.getElementById("boot"); if (boot) boot.remove();
+  definirEstado("erro", "Falha ao iniciar: " + (erro.message || "erro inesperado"));
+});
 setInterval(atualizarSistema, 4000);
 
 // ---------- Gestos pela câmera (veja gestos.js) ----------
