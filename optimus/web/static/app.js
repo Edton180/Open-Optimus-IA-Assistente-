@@ -339,6 +339,7 @@ $("#zim-indexar")?.addEventListener("click", async () => {
       (resultado.trechos || 0) + " trechos atualizados · " +
       (resultado.embeddings_atualizados || 0) + " embeddings preenchidos." +
       (resultado.modelo_embedding ? " Modelo: " + resultado.modelo_embedding + "." : " Modo lexical.") +
+      (resultado.preparacao_embedding?.erro ? " Embeddings: " + resultado.preparacao_embedding.erro : "") +
       (erros.length ? " Avisos: " + erros.slice(0, 2).map(e => e.erro).join(" | ") : "");
     await atualizarStatusIndiceZim();
   } catch (erro) {
