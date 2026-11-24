@@ -98,3 +98,26 @@ def test_incremental_index_resume_and_complete(tmp_path, monkeypatch):
     segunda = zim_rag.indexar(limite=1)
     assert segunda["estado"]["arquivos"][0]["concluido"] == 1
     assert segunda["estado"]["artigos_indexados"] == 1
+
+
+def test_libzim_3x_iterator_fallback_uses_entry_id():
+    class ArchiveAntigo:
+        entry_count = 3
+
+        def get_entry_by_id(self, indice):
+            return f"artigo-{indice}"
+
+    assert list(zim_rag._iterar_entradas(ArchiveAntigo())) == [
+        "artigo-0", "artigo-1", "artigo-2"
+    ]
+
+
+def test_libzim_4x_prefers_efficient_iterator():
+    class ArchiveNovo:
+        def iter_efficient(self):
+            return iter(["a", "b"])
+
+        def __iter__(self):
+            raise AssertionError("deve usar o iterador eficiente")
+
+    assert list(zim_rag._iterar_entradas(ArchiveNovo())) == ["a", "b"]
