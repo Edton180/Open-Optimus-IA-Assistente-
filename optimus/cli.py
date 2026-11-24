@@ -120,10 +120,13 @@ def cmd_gui(args) -> int:
     from optimus.web.server import iniciar
 
     config = cfg.carregar()
-    host = "0.0.0.0" if args.rede else config.get("web", "host", "127.0.0.1")
+    if args.rede and args.tunel:
+        raise SystemExit("Use --rede ou --tunel, não os dois ao mesmo tempo.")
+    host = "0.0.0.0" if args.rede else ("127.0.0.1" if args.tunel else
+                                          config.get("web", "host", "127.0.0.1"))
     optimus = _criar(args)
     iniciar(host=host, porta=args.porta or config.get("web", "porta", 8765),
-            abrir_navegador=not args.sem_navegador, optimus=optimus)
+            abrir_navegador=not args.sem_navegador, optimus=optimus, tunel=args.tunel)
     return 0
 
 
@@ -518,7 +521,8 @@ def main(argv: list[str] | None = None) -> int:
     sub = parser.add_subparsers(dest="comando")
     sub.add_parser("chat", help="conversa no terminal").set_defaults(func=cmd_chat)
     p = sub.add_parser("gui", help="interface visual no navegador")
-    p.add_argument("--rede", action="store_true", help="liberar para celular/outros PCs da rede")
+    p.add_argument("--rede", action="store_true", help="liberar para celular/outros PCs da rede local")
+    p.add_argument("--tunel", action="store_true", help="criar acesso HTTPS externo via Cloudflare Tunnel")
     p.add_argument("--porta", type=int, default=0)
     p.add_argument("--sem-navegador", action="store_true")
     p.set_defaults(func=cmd_gui)
