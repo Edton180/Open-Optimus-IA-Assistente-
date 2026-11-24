@@ -156,6 +156,13 @@ function irPara(tela) {
 }
 
 // ---------- Biblioteca local ZIM ----------
+function mensagemErroZim(erro) {
+  const mensagem = String(erro?.message || erro || "erro desconhecido");
+  if (/rota não encontrada/i.test(mensagem)) {
+    return "A API em execução não oferece as rotas da biblioteca ZIM. Atualize o Optimus pela opção de atualização e reinicie o programa; a interface e o servidor precisam estar na mesma versão.";
+  }
+  return mensagem;
+}
 async function carregarZim() {
   const status = $("#zim-status");
   const lista = $("#zim-lista");
@@ -189,7 +196,7 @@ async function carregarZim() {
     }
     atualizarEstadoKiwix(dados.kiwix || {});
   } catch (erro) {
-    status.textContent = "Falha ao consultar a biblioteca: " + erro.message;
+    status.textContent = "Falha ao consultar a biblioteca: " + mensagemErroZim(erro);
     lista.innerHTML = "";
     resumo.innerHTML = "";
   }
@@ -234,7 +241,7 @@ $("#zim-instalar-kiwix")?.addEventListener("click", async () => {
     status.textContent = dados.mensagem || "Kiwix instalado.";
     await carregarZim();
   } catch (erro) {
-    status.textContent = "Instalação não concluída: " + erro.message;
+    status.textContent = "Instalação não concluída: " + mensagemErroZim(erro);
     botao.disabled = false;
   }
 });
@@ -249,7 +256,7 @@ $("#zim-abrir")?.addEventListener("click", async () => {
     const dados = await api("/api/zim/iniciar", { method: "POST", json: { arquivo }, tempo: 15000 });
     atualizarEstadoKiwix(dados);
   } catch (erro) {
-    status.textContent = "Não foi possível iniciar o leitor: " + erro.message;
+    status.textContent = "Não foi possível iniciar o leitor: " + mensagemErroZim(erro);
     botao.disabled = false;
   }
 });
