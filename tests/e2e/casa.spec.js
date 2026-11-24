@@ -30,8 +30,8 @@ test("Casa inteligente usa API real do painel sem chamar instaladores no CI", as
   });
   await page.route("**/api/casa/aparelhos", async (route) => route.fulfill({
     json: { ok: true, total: 2, aparelhos: [
-      { entity_id: "light.sala", dominio: "light", nome: "Luz da sala", estado: "on", unidade: "" },
-      { entity_id: "switch.tomada", dominio: "switch", nome: "Tomada", estado: "off", unidade: "" },
+      { entity_id: "light.sala", dominio: "light", nome: "Luz da sala", estado: "on", unidade: "", controlavel: true },
+      { entity_id: "switch.tomada", dominio: "switch", nome: "Tomada", estado: "off", unidade: "", controlavel: true },
       { entity_id: "sensor.temperatura", dominio: "sensor", nome: "Temperatura", estado: "25", unidade: "°C", controlavel: false }
     ]}
   }));
