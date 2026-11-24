@@ -456,3 +456,11 @@ body.modo-hud #lateral { background: rgba(4,11,20,.96); border-right-color: rgba
 #tela-pdf .cartao { margin-bottom: 16px; }
 #tela-pdf input[type="file"] { min-width: 0; max-width: 100%; }
 @media (max-width: 650px) { .pdf-arquivo { flex-wrap: wrap; } .pdf-arquivo span { min-width: 60%; } }
+
+
+/* Última barreira visual: funciona mesmo se nenhum JavaScript puder executar. */
+#boot { animation: optimus-boot-timeout 12s steps(1, end) forwards; }
+@keyframes optimus-boot-timeout {
+  0%, 99.9% { visibility: visible; }
+  100% { visibility: hidden; pointer-events: none; }
+}
