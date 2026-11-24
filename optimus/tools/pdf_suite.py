@@ -1382,3 +1382,79 @@ def pdf_imprimir_livreto(ctx, arquivo: str, destino: str = ""):
                 "lados_saida": len(escritor.pages), "impressao_frente_verso": True}
     except Exception as exc:
         return {"erro": f"Falha ao montar livreto: {exc}"}
+
+
+@ferramenta(
+    "pdf_ajustar_cores",
+    "Converte as páginas para escala de cinza ou inverte as cores. A saída é rasterizada; "
+    "o texto deixa de ser selecionável. O original é preservado.",
+    {"arquivo": texto("PDF de origem"), "modo": texto("cinza|inverter"),
+     "destino": texto("PDF de saída")},
+    grupo="pdf", risco=MODERADO, obrigatorios=["arquivo"],
+)
+def pdf_ajustar_cores(ctx, arquivo: str, modo: str = "cinza", destino: str = ""):
+    try:
+        import pypdfium2 as pdfium
+        from PIL import ImageOps
+        from reportlab.lib.utils import ImageReader
+        from reportlab.pdfgen import canvas
+    except ImportError:
+        return {"erro": 'Ajuste de cores requer pypdfium2, Pillow e reportlab. Instale: pip install "optimus-assistente[pdf]"'}
+    modo = (modo or "cinza").strip().lower()
+    if modo not in ("cinza", "inverter"):
+        return {"erro": "Modo deve ser cinza ou inverter."}
+    origem = _path(ctx, arquivo)
+    if not origem.is_file():
+        return {"erro": f"PDF não encontrado: {origem}"}
+    saida = _path(ctx, destino or f"{origem.stem}_{modo}.pdf")
+    saida.parent.mkdir(parents=True, exist_ok=True)
+    temporario = saida.with_name(saida.stem + ".tmp.pdf")
+    documento = None
+    try:
+        documento = pdfium.PdfDocument(str(origem))
+        if len(documento) == 0:
+            return {"erro": "O PDF não contém páginas."}
+        c = canvas.Canvas(str(temporario))
+        for pagina in documento:
+            largura, altura = pagina.get_size()
+            imagem = pagina.render(scale=1.5).to_pil().convert("RGB")
+            preparada = ImageOps.grayscale(imagem).convert("RGB") if modo == "cinza" else ImageOps.invert(imagem)
+            c.setPageSize((largura, altura))
+            c.drawImage(ImageReader(preparada), 0, 0, width=largura, height=altura)
+            c.showPage()
+            imagem.close()
+            preparada.close()
+        c.save()
+        temporario.replace(saida)
+        return {"mensagem": f"PDF convertido para {'escala de cinza' if modo == 'cinza' else 'cores invertidas'}.",
+                "destino": str(saida), "paginas": len(documento), "modo": modo,
+                "texto_selecionavel": False,
+                "aviso": "As páginas foram rasterizadas; revise a legibilidade e mantenha o original."}
+    except Exception as exc:
+        temporario.unlink(missing_ok=True)
+        return {"erro": f"Falha ao ajustar as cores do PDF: {exc}"}
+    finally:
+        if documento is not None:
+            documento.close()
+
+
+@ferramenta(
+    "pdf_gerar_senha",
+    "Gera uma senha aleatória forte para proteger um PDF. A senha é exibida uma única vez no resultado.",
+    {"tamanho": numero("Comprimento da senha, de 12 a 64 caracteres (padrão 20)")},
+    grupo="pdf", risco=LIVRE,
+)
+def pdf_gerar_senha(ctx, tamanho: int = 20):
+    import secrets
+    import string
+
+    quantidade = max(12, min(64, int(tamanho or 20)))
+    simbolos = "!@#$%&*+-_=?"
+    obrigatorios = [secrets.choice(string.ascii_lowercase),
+                    secrets.choice(string.ascii_uppercase),
+                    secrets.choice(string.digits), secrets.choice(simbolos)]
+    alfabeto = string.ascii_letters + string.digits + simbolos
+    senha = obrigatorios + [secrets.choice(alfabeto) for _ in range(quantidade - 4)]
+    secrets.SystemRandom().shuffle(senha)
+    return {"senha": "".join(senha), "tamanho": quantidade,
+            "mensagem": "Senha aleatória gerada. Guarde-a em local seguro."}
