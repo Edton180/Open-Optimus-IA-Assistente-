@@ -1250,7 +1250,10 @@ async function aguardarReinicioOptimus(estadoEl) {
   const inicio = Date.now();
   while (Date.now() - inicio < 90000) {
     try {
-      const resposta = await fetch("/api/versao", { cache: "no-store" });
+      const resposta = await fetch("/api/versao", {
+        cache: "no-store",
+        headers: senha ? { "X-Optimus-Senha": senha } : {}
+      });
       if (!resposta.ok) throw new Error("servidor reiniciando");
       const versao = await resposta.json();
       if (Number(versao.api_contrato) >= API_CONTRATO_MINIMO) {
