@@ -46,7 +46,19 @@ class Item:
             if self.id in {"omnivoice", "chatterbox", "faster-whisper", "demucs", "kokoro"}:
                 return presente and _marcador(self.id).is_file()
             return presente
-        return bool(self.pastas) and all(p.exists() for p in self.pastas)
+        if self.id.startswith("whisper-"):
+            pasta = self.pastas[0] if self.pastas else None
+            return bool(pasta and pasta.is_dir()
+                        and (list(pasta.glob("*-tokens.txt")) or (pasta / "tokens.txt").is_file())
+                        and list(pasta.glob("*encoder*.onnx"))
+                        and list(pasta.glob("*decoder*.onnx")))
+        if self.id.startswith("piper-"):
+            pasta = self.pastas[0] if self.pastas else None
+            return bool(pasta and pasta.is_dir()
+                        and any(pasta.glob("*.onnx"))
+                        and (pasta / "tokens.txt").is_file())
+        return bool(self.pastas) and all(p.is_file() and p.stat().st_size > 0
+                                         for p in self.pastas)
 
     def ocupado_mb(self) -> float:
         total = 0
@@ -197,7 +209,10 @@ def instalar_todos(progresso=None, ids: list[str] | None = None) -> dict:
         if progresso:
             progresso((indice - 1) / total, f"({indice}/{total}) Instalando {item.nome}…")
         try:
-            resultado = instalar(item.id)
+            callback = (lambda pct, msg: progresso(
+                ((indice - 1) + max(0.0, min(1.0, float(pct)))) / total, msg
+            )) if progresso else None
+            resultado = instalar(item.id, callback)
             resultados.append({"id": item.id, "nome": item.nome, "estado": "instalado",
                                 "detalhes": resultado})
         except Exception as erro:  # cada falha fica registrada; os outros modelos continuam
