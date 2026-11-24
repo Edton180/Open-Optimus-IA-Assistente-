@@ -47,16 +47,40 @@ async function api(caminho, opcoes = {}) {
 
 function pedirSenha() {
   $("#modal-senha").classList.remove("oculto");
+  const campo = $("#form-senha")?.elements.namedItem("senha");
+  if (campo) { campo.focus(); campo.setAttribute("autocomplete", "current-password"); }
 }
 $("#form-senha").addEventListener("submit", async (e) => {
   e.preventDefault();
-  senha = e.target.senha.value;
-  const r = await fetch("/api/entrar", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ senha }) });
-  if (r.ok) {
+  const formulario = e.currentTarget;
+  const campo = formulario.elements.namedItem("senha");
+  const botao = formulario.querySelector("button[type=submit], button");
+  const valor = String(campo?.value || "");
+  if (!valor) { if (campo) campo.placeholder = "Digite a senha configurada no PC"; return; }
+  if (botao) { botao.disabled = true; botao.textContent = "Verificando…"; }
+  try {
+    const resposta = await fetch("/api/entrar", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ senha: valor }),
+      cache: "no-store",
+    });
+    if (!resposta.ok) {
+      senha = "";
+      try { sessionStorage.removeItem("optimus_senha"); } catch (err) {}
+      if (campo) { campo.value = ""; campo.placeholder = resposta.status === 401 ? "Senha incorreta — tente novamente" : "Não foi possível validar a senha"; campo.focus(); }
+      return;
+    }
+    senha = valor;
     try { sessionStorage.setItem("optimus_senha", senha); } catch (err) {}
     $("#modal-senha").classList.add("oculto");
-    iniciar();
-  } else { e.target.senha.value = ""; e.target.senha.placeholder = "Senha errada"; }
+    await iniciar();
+  } catch (erro) {
+    console.error("Falha ao validar a senha do Optimus:", erro);
+    if (campo) { campo.placeholder = "Servidor indisponível — tente novamente"; campo.focus(); }
+  } finally {
+    if (botao) { botao.disabled = false; botao.textContent = "Entrar"; }
+  }
 });
 
 // ---------- Utilidades ----------
