@@ -199,6 +199,9 @@ PADRAO: dict[str, Any] = {
         "gemini_chave": "",
         "cerebras_chave": "",
         "openrouter_chave": "",
+        # Bearer Token opcional da API oficial do X para pesquisar posts públicos recentes.
+        # Guarde no cofre: optimus chaves definir provedores.x_api_chave
+        "x_api_chave": "",
         # Modelo de cada provedor: <nome>_modelo = "..." (vazio = o padrão do provedor)
         "groq_modelo": "",
         "gemini_modelo": "",
