@@ -167,3 +167,59 @@ def test_pdf_reparar_reconstroi_e_valida_pdf_legivel(tmp_path):
     leitor = PdfReader(str(destino), strict=True)
     assert len(leitor.pages) == 2
     assert "PAGINA UM" in leitor.pages[0].extract_text()
+
+
+def test_pdf_editar_insere_texto_real_na_pagina(tmp_path):
+    origem = tmp_path / "origem.pdf"
+    destino = tmp_path / "editado.pdf"
+    _criar_pdf(origem, ["TEXTO ORIGINAL"])
+
+    resultado = pdf_suite.pdf_editar(
+        _ctx(tmp_path), str(origem), "texto", "ANOTACAO", 100, 100, 180, 40, 1, str(destino)
+    )
+
+    assert "erro" not in resultado
+    texto = PdfReader(str(destino)).pages[0].extract_text()
+    assert "TEXTO ORIGINAL" in texto and "ANOTACAO" in texto
+
+
+def test_pdf_para_excel_cria_planilha_com_texto(tmp_path):
+    from openpyxl import load_workbook
+
+    origem = tmp_path / "origem.pdf"
+    destino = tmp_path / "saida.xlsx"
+    _criar_pdf(origem, ["DADO FINANCEIRO", "VALOR 100"])
+
+    resultado = pdf_suite.pdf_para_excel(_ctx(tmp_path), str(origem), str(destino))
+
+    assert "erro" not in resultado
+    planilha = load_workbook(destino, read_only=True)
+    valores = [celula for linha in planilha["Conteudo"].iter_rows(values_only=True)
+               for celula in linha if celula]
+    assert any("DADO FINANCEIRO" in str(valor) for valor in valores)
+
+
+def test_pdf_para_powerpoint_cria_um_slide_por_pagina(tmp_path):
+    from pptx import Presentation
+
+    origem = tmp_path / "origem.pdf"
+    destino = tmp_path / "saida.pptx"
+    _criar_pdf(origem, ["SLIDE UM", "SLIDE DOIS"])
+
+    resultado = pdf_suite.pdf_para_powerpoint(_ctx(tmp_path), str(origem), str(destino), 1)
+
+    assert "erro" not in resultado
+    assert len(Presentation(str(destino)).slides) == 2
+
+
+def test_pdf_comparar_retorna_diff_textual(tmp_path):
+    a = tmp_path / "a.pdf"
+    b = tmp_path / "b.pdf"
+    _criar_pdf(a, ["VERSAO ANTIGA"])
+    _criar_pdf(b, ["VERSAO NOVA"])
+
+    resultado = pdf.pdf_comparar(_ctx(tmp_path), str(a), str(b))
+
+    assert resultado["iguais"] is False
+    assert "VERSAO ANTIGA" in resultado["diff"]
+    assert "VERSAO NOVA" in resultado["diff"]
