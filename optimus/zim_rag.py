@@ -354,7 +354,14 @@ def indexar(arquivos: list[dict] | None = None, limite: int = 150,
             cursor = int(estado["cursor"]) if estado else 0
             try:
                 with Archive(str(caminho)) as arquivo:
-                    total = int(getattr(arquivo, "entry_count", arquivo.all_entry_count))
+                    total_entradas = getattr(arquivo, "entry_count", None)
+                    if total_entradas is None:
+                        total_entradas = getattr(arquivo, "all_entry_count", None)
+                    if total_entradas is None:
+                        total_entradas = getattr(arquivo, "entryCount", None)
+                    if total_entradas is None:
+                        raise RuntimeError("A versão de libzim não informa a quantidade de entradas.")
+                    total = int(total_entradas)
                     if estado is None:
                         con.execute("INSERT INTO arquivos(nome,caminho,tamanho,mtime_ns,cursor,total,concluido,atualizado) VALUES(?,?,?,?,0,?,0,?)",
                                     (nome, str(caminho), *assinatura, total, time.time()))
