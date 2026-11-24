@@ -151,7 +151,7 @@ function irPara(tela) {
   $$(".tela").forEach((t) => t.classList.toggle("ativa", t.id === "tela-" + tela));
   document.body.classList.toggle("fora-do-chat", tela !== "chat");
   app.classList.remove("lateral-aberta");
-  const carregar = { personas: carregarPersonas, prompts: carregarPrompts, memoria: carregarMemoria, biblioteca: carregarBiblioteca, acoes: carregarAcoes, config: carregarConfig, casa: carregarCasa, estudio: () => window.carregarEstudio && window.carregarEstudio(), pdf: carregarPDF, modulos: carregarModulos }[tela];
+  const carregar = { personas: carregarPersonas, prompts: carregarPrompts, memoria: carregarMemoria, biblioteca: carregarBiblioteca, acoes: carregarAcoes, config: carregarConfig, casa: carregarCasa, estudio: () => window.carregarEstudio && window.carregarEstudio(), pdf: carregarPDF, modulos: carregarModulos, laboratorio: () => {} }[tela];
   if (carregar) carregar();
 }
 // ---------- Command Center: inventário local de integrações ----------
@@ -176,6 +176,41 @@ async function carregarModulos() {
   }
 }
 $("#modulos-atualizar")?.addEventListener("click", carregarModulos);
+$("#lab-executar")?.addEventListener("click", async () => {
+  const estadoEl = $("#lab-estado");
+  const botao = $("#lab-executar");
+  const resultado = $("#lab-resultado");
+  if (!estadoEl || !botao || !resultado) return;
+  estadoEl.textContent = "Processando localmente…";
+  botao.disabled = true;
+  $("#lab-copiar").disabled = true;
+  try {
+    const dados = await api("/api/laboratorio", {
+      method: "POST", json: {
+        operacao: $("#lab-operacao").value,
+        texto: $("#lab-entrada").value
+      }
+    });
+    resultado.value = dados.resultado ?? "";
+    estadoEl.textContent = "Concluído neste computador.";
+    $("#lab-copiar").disabled = false;
+  } catch (erro) {
+    resultado.value = "";
+    estadoEl.textContent = "Falha: " + erro.message;
+  } finally { botao.disabled = false; }
+});
+$("#lab-limpar")?.addEventListener("click", () => {
+  $("#lab-entrada").value = "";
+  $("#lab-resultado").value = "";
+  $("#lab-estado").textContent = "";
+  $("#lab-copiar").disabled = true;
+});
+$("#lab-copiar")?.addEventListener("click", async () => {
+  try {
+    await navigator.clipboard.writeText($("#lab-resultado").value);
+    $("#lab-estado").textContent = "Resultado copiado.";
+  } catch (erro) { $("#lab-estado").textContent = "Não foi possível copiar: " + erro.message; }
+});
 
 // ---------- Central visual de documentos e PDF ----------
 let pdfFerramentas = [];
