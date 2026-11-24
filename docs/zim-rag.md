@@ -35,8 +35,11 @@ embedding estiver instalado, o Optimus baixa automaticamente `granite-embedding:
 local do Ollama. Esse download ocorre como parte da ação explícita de indexação; não há
 download em segundo plano durante conversas. Se o Ollama não estiver disponível, a indexação
 continua em modo lexical e informa a limitação. Se um modelo conhecido já estiver instalado,
-ele é detectado; embeddings ausentes podem ser preenchidos depois sem reler os artigos ZIM. Sem um modelo local, a recuperação continua
-funcionando em modo lexical e a interface deve identificar que não há vetores.
+ele é detectado; embeddings ausentes podem ser preenchidos depois sem reler os artigos ZIM.
+As chamadas de embedding usam lotes de 16 e `keep_alive=0` para liberar a memória do modelo
+após cada solicitação, evitando que ele permaneça carregado junto com o modelo gerador.
+Sem um modelo local, a recuperação continua funcionando em modo lexical e a interface
+identifica que não há vetores.
 
 ## RAG conectado ao agente
 
@@ -60,8 +63,9 @@ nunca como instrução.
 - A comparação de hash por trecho evita regravar conteúdo idêntico, mas uma substituição
   do arquivo ZIM reinicia o índice desse arquivo.
 - A busca vetorial é ativada somente quando um modelo de embedding local está instalado
-  e responde ao endpoint Ollama. Caso contrário, o sistema não finge que a busca lexical
-  é semântica.
+  e responde ao endpoint Ollama. O ranking vetorial avalia até 5.000 trechos por consulta
+  para manter o consumo de memória/CPU previsível; o índice lexical FTS5 continua cobrindo
+  todos os trechos. Caso não haja embeddings, o sistema não finge que a busca lexical é semântica.
 - Imagens, áudio, vídeo, scripts executáveis e anexos binários não são indexados como texto.
 - As citações apontam para o artigo e trecho local; a interface de leitura Kiwix pode ser
   usada para abrir o artigo quando o leitor estiver iniciado.
