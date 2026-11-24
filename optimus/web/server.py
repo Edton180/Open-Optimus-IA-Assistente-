@@ -13,7 +13,6 @@ import mimetypes
 import queue
 import re
 import subprocess
-import shutil
 import threading
 import time
 import uuid
