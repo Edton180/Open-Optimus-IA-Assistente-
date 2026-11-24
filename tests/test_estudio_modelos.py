@@ -79,3 +79,9 @@ def test_instalar_todos_interrompe_quando_cancelado(monkeypatch, tmp_path):
     assert chamados == ["a"]
     assert resultado["cancelado"] is True
     assert resultado["instalados"] == 1
+
+
+def test_catalogo_informa_licenca_nao_comercial_dos_pesos_omnivoice():
+    item = next(x for x in modelos.catalogo() if x.id == "omnivoice")
+    assert "CC-BY-NC-4.0" in item.licenca
+    assert "não comercial" in item.descricao
