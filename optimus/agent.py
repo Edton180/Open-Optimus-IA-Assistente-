@@ -46,7 +46,9 @@ _REGRAS_FERRAMENTAS = (
     "bem classificadas, prefira fontes primárias e confira data, entidade e contexto. Nunca "
     "abra URLs de redirecionamento de buscadores. Se não houver fontes relevantes ou os motores "
     "falharem, informe a limitação em vez de improvisar. Em pesquisas financeiras, identifique "
-    "empresa, ticker, bolsa, moeda e data antes de apresentar cotação ou notícia."
+    "empresa, ticker, bolsa, moeda e data antes de apresentar cotação ou notícia. Para posts, "
+    "tendências ou reações no X/Twitter, use pesquisar_x; se a API não estiver configurada, "
+    "explique que ela requer Bearer Token e não invente posts."
 )
 
 _REGRAS_CONTEUDO = (
