@@ -261,6 +261,15 @@
         <p id="biblioteca-status" class="sutil" role="status">Indexação local. Formatos: TXT, Markdown, CSV, HTML, JSON, YAML, PDF e DOCX.</p>
       </div>
       <div class="cartao">
+        <h3>Pesquisar nos documentos</h3>
+        <form id="form-biblioteca-busca" class="formulario">
+          <label>Pergunta ou termos para localizar
+            <input class="campo" name="q" placeholder="Ex.: procedimento de segurança em altura" required>
+          </label>
+          <button class="botao primario" type="submit">Pesquisar na biblioteca</button>
+        </form>
+        <p id="biblioteca-busca-status" class="sutil" role="status">Busca local por texto. Cada resultado mostra o arquivo e o trecho de origem.</p>
+        <div id="biblioteca-resultados" class="lista" aria-live="polite"></div>
         <div class="linha entre"><h3>Documentos indexados</h3><strong id="biblioteca-total">0</strong></div>
         <ul id="biblioteca-lista" class="lista"><li class="sutil">Carregando…</li></ul>
         <form id="form-biblioteca-esquecer" class="formulario">
