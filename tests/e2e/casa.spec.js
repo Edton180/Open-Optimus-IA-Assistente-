@@ -13,7 +13,7 @@ test("painel Casa apresenta estado real e todos os controles chamam a API", asyn
 
   await page.locator("#ha-gerenciado-atualizar").click();
   await page.locator("#ha-gerenciado-instalar").click();
-  for (const acao of ["iniciar", "parar", "reiniciar", "atualizar", "backup"]) {
+  for (const acao of ["iniciar", "parar", "reiniciar", "atualizar", "backup", "logs"]) {
     await page.locator('[data-ha-acao="' + acao + '"]').click();
   }
   page.once("dialog", (dialog) => dialog.accept());
@@ -23,7 +23,7 @@ test("painel Casa apresenta estado real e todos os controles chamam a API", asyn
     const respostaAcoes = await page.request.get("/api/casa/gerenciado");
     return (await respostaAcoes.json()).acoes;
   }).toEqual([
-    "instalar", "iniciar", "parar", "reiniciar", "atualizar", "backup", "desinstalar"
+    "instalar", "iniciar", "parar", "reiniciar", "atualizar", "backup", "logs", "desinstalar"
   ]);
   await expect(page.locator("#ha-gerenciado-status")).toContainText("Operação simulada");
   expect(errosPagina).toEqual([]);
