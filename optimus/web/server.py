@@ -578,6 +578,8 @@ class Manipulador(BaseHTTPRequestHandler):
                 config.definir("web", "senha", senha)
                 config.salvar()
                 Manipulador.senha = senha
+                if _servidor_celular is not None:
+                    _servidor_celular.RequestHandlerClass.senha = senha
                 resultado = iniciar_tunel(self.server.server_address[1], senha)
                 if resultado.get("erro"):
                     return self._json(resultado, 503)
