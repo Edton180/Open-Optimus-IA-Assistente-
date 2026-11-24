@@ -176,3 +176,16 @@ def test_docx_indexa_paragrafos_e_tabelas(tmp_path):
     assert resumo["indexados"] == 1
     assert banco.consultar("manutenção preventiva")
     assert banco.consultar("periodicidade seis meses")
+
+
+def test_esquecer_pasta_desconectada_remove_apenas_do_indice(tmp_path):
+    docs = tmp_path / "docs"
+    _doc(docs, "a.md", "conteúdo que deve ser esquecido")
+    banco = _banco(tmp_path)
+    estado = tmp_path / "estado.json"
+    biblioteca.indexar_pasta(banco, docs, estado_arq=estado)
+    import shutil
+    shutil.rmtree(docs)
+    assert biblioteca.esquecer_pasta(banco, docs, estado_arq=estado) == 1
+    assert biblioteca.fontes(banco) == []
+    assert not banco.consultar("conteúdo que deve ser esquecido")
