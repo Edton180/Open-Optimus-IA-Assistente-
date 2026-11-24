@@ -27,7 +27,7 @@ async function api(caminho, opcoes = {}) {
   const controle = new AbortController();
   const relogio = tempo > 0 ? setTimeout(() => controle.abort(), tempo) : null;
   try {
-    const r = await fetch(caminho, { ...fetchOpcoes, headers: cab, signal: controle.signal });
+    const r = await fetch(caminho, { cache: "no-store", ...fetchOpcoes, headers: cab, signal: controle.signal });
     if (r.status === 401) { pedirSenha(); throw new Error("senha"); }
     const tipo = r.headers.get("Content-Type") || "";
     if (tipo.includes("json")) {
@@ -1277,7 +1277,9 @@ async function atualizarHomeAssistantGerenciado() {
     return false;
   } catch (e) {
     badge.textContent = "Falha no diagnóstico";
-    diag.textContent = "Não foi possível consultar o gerenciador: " + e.message;
+    diag.textContent = e.message.toLowerCase().includes("rota não encontrada")
+      ? "A API desta instalação está desatualizada. Atualize o Optimus e reinicie o programa para carregar o gerenciador de Casa."
+      : "Não foi possível consultar o gerenciador: " + e.message;
     return false;
   }
 }
@@ -1321,6 +1323,7 @@ async function carregarCasa() {
     $("#cameras").innerHTML = c.cameras.map((x) => `<figure class="cartao camera"><img data-camera="${esc(x.id)}" alt="${esc(x.nome)}">${String(x.id).startsWith("ip:") ? `<button class="icone" data-apagar-camera="${esc(x.id)}" title="Remover câmera">🗑️</button>` : ""}<figcaption>${esc(x.nome)} <span class="sutil">prévia ~1,2 s</span></figcaption></figure>`).join("")
       || '<p class="sutil">Nenhuma câmera adicionada ainda. Adicione uma câmera Wi-Fi acima, ligue uma webcam no cabo USB, ou conecte o Home Assistant.</p>';
   } catch (e) { $("#cameras").innerHTML = `<p class="sutil">⚠️ ${esc(e.message)}</p>`; }
+  if (d.config.casa.token) await carregarAparelhosCasa();
   clearInterval(vigiaCameras);
   const atualizar = () => {
     if (!$("#tela-casa").classList.contains("ativa")) { clearInterval(vigiaCameras); return; }
