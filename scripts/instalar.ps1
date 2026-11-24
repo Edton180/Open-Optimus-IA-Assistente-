@@ -19,6 +19,25 @@ if (-not $python -or -not (& python -c "import sys; print(sys.version_info >= (3
 }
 Ok ("Python " + (& python --version))
 
+# 1.5. Suíte de escritório compatível (LibreOffice / OpenOffice)
+# O Optimus usa soffice para converter e abrir documentos Office.
+if (-not (Get-Command soffice -ErrorAction SilentlyContinue) -and
+    -not (Get-Command libreoffice -ErrorAction SilentlyContinue)) {
+    if (Get-Command winget -ErrorAction SilentlyContinue) {
+        Write-Host "Instalando o LibreOffice (integração de documentos do Optimus)..."
+        winget install -e --id TheDocumentFoundation.LibreOffice --accept-package-agreements --accept-source-agreements
+        $env:Path = [Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [Environment]::GetEnvironmentVariable("Path", "User")
+    } else {
+        Aviso "winget não encontrado. Consulte docs/openoffice.md para instalar a suíte compatível."
+    }
+}
+if ((Get-Command soffice -ErrorAction SilentlyContinue) -or
+    (Get-Command libreoffice -ErrorAction SilentlyContinue)) {
+    Ok "Suíte Office compatível encontrada"
+} else {
+    Aviso "Conversão Office/PDF ficará indisponível até instalar LibreOffice. Consulte docs/openoffice.md."
+}
+
 # 2. Ambiente do Optimus
 $Dados = Join-Path $env:LOCALAPPDATA "Optimus"
 New-Item -ItemType Directory -Force -Path $Dados | Out-Null
