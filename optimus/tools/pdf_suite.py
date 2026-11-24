@@ -855,3 +855,252 @@ def pdf_pdfa(ctx, arquivo: str, perfil_icc: str, versao: str = "2", destino: str
         return {"erro": f"Falha na conversão PDF/A: {exc}. Original preservado."}
     finally:
         definicao.unlink(missing_ok=True)
+
+
+@ferramenta(
+    "pdf_para_word_ocr",
+    "Converte PDF para DOCX usando texto nativo e OCR nas páginas digitalizadas.",
+    {"arquivo": texto("PDF de origem"), "idioma": texto("Idioma Tesseract (por, eng...)"),
+     "destino": texto("DOCX de saída")},
+    grupo="pdf", risco=MODERADO, obrigatorios=["arquivo"],
+)
+def pdf_para_word_ocr(ctx, arquivo: str, idioma: str = "por", destino: str = ""):
+    try:
+        from docx import Document
+        import pypdfium2 as pdfium
+        import pytesseract
+    except ImportError:
+        return {"erro": "PDF para Word com OCR requer python-docx, pypdfium2, pytesseract e Tesseract instalado."}
+    from pypdf import PdfReader
+    origem = _path(ctx, arquivo)
+    if not origem.is_file():
+        return {"erro": f"PDF não encontrado: {origem}"}
+    try:
+        reader = PdfReader(str(origem), strict=False)
+        doc_pdfium = pdfium.PdfDocument(str(origem))
+        docx = Document()
+        paginas_ocr = []
+        for i, page in enumerate(reader.pages):
+            conteudo = (page.extract_text() or "").strip()
+            if not conteudo:
+                imagem = doc_pdfium[i].render(scale=2).to_pil()
+                conteudo = pytesseract.image_to_string(imagem, lang=idioma or "por").strip()
+                paginas_ocr.append(i+1)
+            if i:
+                docx.add_page_break()
+            docx.add_heading(f"Página {i+1}", level=1)
+            docx.add_paragraph(conteudo or "[Nenhum texto reconhecido nesta página]")
+        out = _path(ctx, destino or f"{origem.stem}_editavel.docx")
+        if out.suffix.lower() != ".docx":
+            out = out.with_suffix(".docx")
+        out.parent.mkdir(parents=True, exist_ok=True)
+        docx.save(out)
+        return {"mensagem": "DOCX gerado com texto nativo e OCR quando necessário.",
+                "destino": str(out), "paginas": len(reader.pages),
+                "paginas_processadas_por_ocr": paginas_ocr,
+                "observacao": "O texto fica editável, mas a diagramação original não é preservada."}
+    except Exception as exc:
+        return {"erro": f"Falha ao converter PDF para Word: {exc}"}
+
+
+@ferramenta(
+    "pdf_extrair_imagens",
+    "Extrai imagens incorporadas em um PDF e gera um ZIP com os arquivos originais encontrados.",
+    {"arquivo": texto("PDF de origem"), "destino": texto("Pasta ou ZIP de saída")},
+    grupo="pdf", risco=MODERADO, obrigatorios=["arquivo"],
+)
+def pdf_extrair_imagens(ctx, arquivo: str, destino: str = ""):
+    deps = _pypdf()
+    if not deps:
+        return {"erro": 'Instale: pip install "optimus-assistente[pdf]"'}
+    PdfReader, _ = deps
+    origem = _path(ctx, arquivo)
+    if not origem.is_file():
+        return {"erro": f"PDF não encontrado: {origem}"}
+    out = _path(ctx, destino or f"{origem.stem}_imagens.zip")
+    pasta = out.with_suffix("")
+    try:
+        reader = PdfReader(str(origem), strict=False)
+        pasta.mkdir(parents=True, exist_ok=True)
+        arquivos = []
+        for num_pagina, page in enumerate(reader.pages, 1):
+            for indice, imagem in enumerate(page.images, 1):
+                nome = Path(imagem.name).name
+                extensao = Path(nome).suffix or ".bin"
+                alvo = pasta / f"pagina_{num_pagina:04d}_imagem_{indice:03d}{extensao}"
+                alvo.write_bytes(imagem.data)
+                arquivos.append(alvo)
+        if not arquivos:
+            return {"erro": "Nenhuma imagem incorporada foi encontrada no PDF."}
+        if out.suffix.lower() != ".zip":
+            out = out.with_suffix(".zip")
+        with zipfile.ZipFile(out, "w", compression=zipfile.ZIP_DEFLATED) as pacote:
+            for item in arquivos:
+                pacote.write(item, item.name)
+        return {"mensagem": f"Extraí {len(arquivos)} imagem(ns).",
+                "zip": str(out), "pasta": str(pasta), "arquivos": [x.name for x in arquivos]}
+    except Exception as exc:
+        return {"erro": f"Falha ao extrair imagens: {exc}"}
+
+
+@ferramenta(
+    "pdf_copiar",
+    "Cria uma cópia independente de um PDF, preservando o original.",
+    {"arquivo": texto("PDF de origem"), "destino": texto("Caminho da cópia")},
+    grupo="pdf", risco=MODERADO, obrigatorios=["arquivo", "destino"],
+)
+def pdf_copiar(ctx, arquivo: str, destino: str):
+    origem, out = _path(ctx, arquivo), _path(ctx, destino)
+    if not origem.is_file():
+        return {"erro": f"PDF não encontrado: {origem}"}
+    if origem.resolve() == out.resolve():
+        return {"erro": "O destino deve ser diferente do arquivo original."}
+    try:
+        out.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(origem, out)
+        return {"mensagem": "Cópia criada.", "destino": str(out),
+                "tamanho_bytes": out.stat().st_size}
+    except Exception as exc:
+        return {"erro": f"Falha ao copiar PDF: {exc}"}
+
+
+@ferramenta(
+    "pdf_criar_formulario",
+    "Cria PDF preenchível com campos de texto, caixas de seleção e listas de opções (AcroForm).",
+    {"campos": texto("JSON: lista de campos com nome, tipo, x, y, largura, altura, pagina e opções"),
+     "paginas": numero("Quantidade de páginas em branco"), "destino": texto("PDF preenchível")},
+    grupo="pdf", risco=MODERADO, obrigatorios=["campos"],
+)
+def pdf_criar_formulario(ctx, campos: str, paginas: int = 1, destino: str = ""):
+    try:
+        from reportlab.lib.pagesizes import A4
+        from reportlab.pdfgen import canvas
+    except ImportError:
+        return {"erro": 'Criação de formulários requer reportlab. Instale: pip install "optimus-assistente[pdf]"'}
+    try:
+        definicoes = json.loads(campos)
+        if not isinstance(definicoes, list) or not definicoes:
+            return {"erro": "campos deve ser uma lista JSON não vazia."}
+        total_paginas = max(1, min(int(paginas or 1), 100))
+        nomes, validados = set(), []
+        for campo in definicoes:
+            if not isinstance(campo, dict):
+                return {"erro": "Cada campo deve ser um objeto JSON."}
+            nome = str(campo.get("nome", "")).strip()
+            tipo = str(campo.get("tipo", "texto")).lower()
+            if not nome or nome in nomes or tipo not in ("texto", "checkbox", "lista"):
+                return {"erro": "Campos precisam de nomes únicos e tipo texto, checkbox ou lista."}
+            nomes.add(nome)
+            pagina = int(campo.get("pagina", 1))
+            if pagina < 1 or pagina > total_paginas:
+                return {"erro": f"Página inválida no campo {nome}."}
+            validados.append({**campo, "nome": nome, "tipo": tipo, "pagina": pagina})
+        out = _path(ctx, destino or "formulario_preenchivel.pdf")
+        out.parent.mkdir(parents=True, exist_ok=True)
+        c = canvas.Canvas(str(out), pagesize=A4)
+        form = c.acroForm
+        for numero_pagina in range(1, total_paginas+1):
+            for campo in (x for x in validados if x["pagina"] == numero_pagina):
+                x, y = float(campo.get("x", 72)), float(campo.get("y", 700))
+                w, h = max(12, float(campo.get("largura", 220))), max(12, float(campo.get("altura", 24)))
+                rotulo = str(campo.get("rotulo", campo["nome"]))[:120]
+                c.setFont("Helvetica", 9)
+                c.drawString(max(0, x), min(820, y+h+5), rotulo)
+                if campo["tipo"] == "texto":
+                    form.textfield(name=campo["nome"], x=x, y=y, width=w, height=h,
+                                   borderStyle="inset", forceBorder=True,
+                                   value=str(campo.get("valor", ""))[:500])
+                elif campo["tipo"] == "checkbox":
+                    form.checkbox(name=campo["nome"], x=x, y=y, size=min(w, h, 24),
+                                  checked=bool(campo.get("valor", False)), buttonStyle="check",
+                                  borderWidth=1, forceBorder=True)
+                else:
+                    opcoes = campo.get("opcoes", [])
+                    if not isinstance(opcoes, list) or not opcoes:
+                        return {"erro": f"O campo lista {campo['nome']} precisa de opcoes."}
+                    form.choice(name=campo["nome"], options=[str(v) for v in opcoes],
+                                x=x, y=y, width=w, height=h,
+                                value=str(campo.get("valor", opcoes[0])),
+                                borderStyle="solid", forceBorder=True)
+            c.showPage()
+        c.save()
+        from pypdf import PdfReader
+        leitor = PdfReader(str(out), strict=True)
+        campos_saida = leitor.get_fields() or {}
+        if len(campos_saida) != len(validados):
+            out.unlink(missing_ok=True)
+            return {"erro": "A validação não encontrou todos os campos criados."}
+        return {"mensagem": "Formulário PDF preenchível criado e validado.",
+                "destino": str(out), "paginas": len(leitor.pages),
+                "campos": list(campos_saida)}
+    except Exception as exc:
+        return {"erro": f"Falha ao criar formulário PDF: {exc}"}
+
+
+@ferramenta(
+    "pdf_workflow",
+    "Salva, lista e executa fluxos reutilizáveis de ferramentas PDF em sequência.",
+    {"acao": texto("salvar|listar|executar"), "nome": texto("Nome do fluxo"),
+     "etapas": texto("JSON: lista de objetos {ferramenta, argumentos}")},
+    grupo="pdf", risco=MODERADO, obrigatorios=["acao"],
+)
+def pdf_workflow(ctx, acao: str, nome: str = "", etapas: str = ""):
+    from optimus.tools.base import registradas
+    pasta = _path(ctx, ".optimus/pdf-workflows")
+    pasta.mkdir(parents=True, exist_ok=True)
+    acao = (acao or "").lower()
+    if acao == "listar":
+        return {"fluxos": sorted(x.stem for x in pasta.glob("*.json"))}
+    caminho_nome = re.sub(r"[^a-zA-Z0-9_-]", "_", nome or "").strip("_")
+    if not caminho_nome:
+        return {"erro": "Informe um nome de fluxo válido."}
+    arquivo_fluxo = pasta / f"{caminho_nome[:80]}.json"
+    if acao == "salvar":
+        try:
+            lista = json.loads(etapas)
+            if not isinstance(lista, list) or not lista:
+                return {"erro": "etapas deve ser uma lista JSON não vazia."}
+            registro = registradas()
+            for etapa in lista:
+                if not isinstance(etapa, dict) or etapa.get("ferramenta") not in registro:
+                    return {"erro": f"Ferramenta desconhecida na etapa: {etapa}"}
+                if registro[etapa["ferramenta"]].grupo != "pdf" or etapa["ferramenta"] == "pdf_workflow":
+                    return {"erro": "Fluxos só podem executar ferramentas PDF, sem recursão."}
+                if not isinstance(etapa.get("argumentos", {}), dict):
+                    return {"erro": "argumentos de cada etapa deve ser um objeto JSON."}
+            arquivo_fluxo.write_text(json.dumps(lista, ensure_ascii=False, indent=2), encoding="utf-8")
+            return {"mensagem": "Fluxo salvo.", "nome": caminho_nome, "etapas": len(lista)}
+        except Exception as exc:
+            return {"erro": f"Não foi possível salvar o fluxo: {exc}"}
+    if acao == "executar":
+        try:
+            lista = json.loads(etapas) if etapas.strip() else json.loads(arquivo_fluxo.read_text(encoding="utf-8"))
+            if not isinstance(lista, list) or not lista:
+                return {"erro": "O fluxo não contém etapas."}
+            registro = registradas()
+            resultados = []
+            for indice, etapa in enumerate(lista, 1):
+                nome_ferramenta = etapa.get("ferramenta")
+                ferramenta_pdf = registro.get(nome_ferramenta)
+                if not ferramenta_pdf or ferramenta_pdf.grupo != "pdf" or nome_ferramenta == "pdf_workflow":
+                    return {"erro": f"Etapa {indice}: ferramenta PDF não permitida.",
+                            "etapas_concluidas": resultados}
+                try:
+                    resultado = ferramenta_pdf.funcao(ctx, **etapa.get("argumentos", {}))
+                except Exception as exc:
+                    resultado = {"erro": f"{type(exc).__name__}: {exc}"}
+                if isinstance(resultado, str):
+                    try:
+                        resultado = json.loads(resultado)
+                    except ValueError:
+                        resultado = {"resultado": resultado}
+                resultados.append({"etapa": indice, "ferramenta": nome_ferramenta, "resultado": resultado})
+                if isinstance(resultado, dict) and resultado.get("erro"):
+                    return {"erro": f"Fluxo interrompido na etapa {indice}.",
+                            "etapas_concluidas": resultados}
+            return {"mensagem": "Fluxo concluído.", "etapas": resultados}
+        except FileNotFoundError:
+            return {"erro": f"Fluxo não encontrado: {caminho_nome}"}
+        except Exception as exc:
+            return {"erro": f"Falha ao executar fluxo: {exc}"}
+    return {"erro": "Ação deve ser salvar, listar ou executar."}
