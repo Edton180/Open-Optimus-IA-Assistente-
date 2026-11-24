@@ -12,7 +12,7 @@ module.exports = defineConfig({
     serviceWorkers: "block"
   },
   webServer: {
-    command: "python -m optimus --demo gui --sem-navegador --porta 8765",
+    command: "python tests/e2e/servidor.py",
     url: "http://127.0.0.1:8765",
     reuseExistingServer: !process.env.CI,
     timeout: 90000
