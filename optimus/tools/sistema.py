@@ -11,6 +11,7 @@ import os
 import shutil
 import subprocess
 import time
+import threading
 import webbrowser
 from typing import Any
 
@@ -18,6 +19,10 @@ import psutil
 
 from optimus.safety import CRITICO, LIVRE, MODERADO, Avaliacao, risco_comando
 from optimus.tools.base import ferramenta, numero, resolver, sistema, texto
+
+
+# Limite global de comandos em execução, inclusive entre sessões da interface.
+_COMANDOS_ATIVOS = threading.BoundedSemaphore(4)
 
 
 def _risco_comando(args, ctx) -> Avaliacao:
@@ -40,15 +45,21 @@ def executar_comando(ctx, comando: str, pasta: str = "", tempo_limite: int = 60)
         programa = ["powershell", "-NoProfile", "-NonInteractive", "-Command", comando]
     else:
         programa = [shutil.which("bash") or "/bin/sh", "-lc", comando]
+    if not _COMANDOS_ATIVOS.acquire(blocking=False):
+        return {"erro": "O limite de quatro comandos simultâneos foi atingido. Tente novamente "
+                "quando um comando terminar."}
     try:
-        resultado = subprocess.run(programa, capture_output=True, text=True, cwd=cwd,
-                                   timeout=max(1, min(int(tempo_limite or 60), 600)),
-                                   encoding="utf-8", errors="replace")
-    except subprocess.TimeoutExpired:
-        return {"erro": f"O comando passou de {tempo_limite}s e foi interrompido."}
-    saida = (resultado.stdout or "")[-12000:]
-    erros = (resultado.stderr or "")[-4000:]
-    return {"codigo": resultado.returncode, "saida": saida, "erros": erros}
+        try:
+            resultado = subprocess.run(programa, capture_output=True, text=True, cwd=cwd,
+                                       timeout=max(1, min(int(tempo_limite or 60), 600)),
+                                       encoding="utf-8", errors="replace")
+        except subprocess.TimeoutExpired:
+            return {"erro": f"O comando passou de {tempo_limite}s e foi interrompido."}
+        saida = (resultado.stdout or "")[-12000:]
+        erros = (resultado.stderr or "")[-4000:]
+        return {"codigo": resultado.returncode, "saida": saida, "erros": erros}
+    finally:
+        _COMANDOS_ATIVOS.release()
 
 
 @ferramenta(
@@ -66,6 +77,18 @@ def info_sistema(ctx):
     raiz = "C:\\" if sistema() == "windows" else "/"
     disco = psutil.disk_usage(raiz)
     bateria = psutil.sensors_battery() if hasattr(psutil, "sensors_battery") else None
+    try:
+        cargas = list(psutil.getloadavg())
+    except (AttributeError, OSError):
+        cargas = None
+    temperatura = None
+    try:
+        sensores = psutil.sensors_temperatures()
+        leituras = [s.current for grupo in sensores.values() for s in grupo
+                    if s.current is not None]
+        temperatura = round(max(leituras), 1) if leituras else None
+    except (AttributeError, OSError):
+        pass
     return {
         "sistema": f"{hw.sistema} {hw.versao_sistema}",
         "cpu": hw.cpu, "nucleos": hw.nucleos_fisicos, "threads": hw.nucleos_logicos,
@@ -73,6 +96,10 @@ def info_sistema(ctx):
         "ram_total_gb": hw.ram_total_gb, "ram_uso_pct": memoria.percent,
         "disco_total_gb": round(disco.total / 1024**3, 1),
         "disco_livre_gb": round(disco.free / 1024**3, 1),
+        "disco_uso_pct": round(disco.percent, 1),
+        "uptime_segundos": round(time.time() - psutil.boot_time()),
+        "carga_media": cargas,
+        "temperatura_max_c": temperatura,
         "placa_video": hw.placa.nome if hw.placa else "sem placa dedicada",
         "vram_gb": hw.placa.vram_gb if hw.placa else 0,
         "bateria_pct": round(bateria.percent) if bateria else None,
