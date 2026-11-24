@@ -26,7 +26,7 @@ def test_redes_locais_lista_somente_interfaces_privadas_ativas(monkeypatch):
     redes = rede_wifi.redes_locais()
 
     assert redes == [{"interface": "wifi", "ip_local": "192.168.1.10",
-                      "rede": "192.168.1.0/24"}]
+                      "rede": "192.168.1.0/24", "varredura_disponivel": True}]
 
 
 def test_validar_rede_restringe_a_subrede_privada_local():
@@ -59,3 +59,8 @@ def test_tool_rede_wifi_varrer_nao_varre_sem_interface_local(monkeypatch):
     resultado = rede_wifi.rede_wifi_varrer(None)
     assert "erro" in resultado
     assert resultado["interfaces"] == []
+
+def test_rede_maior_permite_escolher_subrede_local_limitada():
+    locais = [{"interface": "wifi", "ip_local": "10.0.1.10",
+               "rede": "10.0.0.0/16", "varredura_disponivel": False}]
+    assert str(rede_wifi.validar_rede("10.0.1.0/24", locais)) == "10.0.1.0/24"
