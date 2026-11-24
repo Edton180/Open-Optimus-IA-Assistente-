@@ -39,7 +39,7 @@ def _http(url: str) -> bool:
 def _servico(nome: str, descricao: str, executaveis: tuple[str, ...],
              host: str, port: int, url: str = "", processos: tuple[str, ...] = ()) -> dict:
     executavel = next((shutil.which(item) for item in executaveis if shutil.which(item)), None)
-    ativo = _http(url) if url else _processo(*processos) if processos else False
+    ativo = (_http(url) and (not processos or _processo(*processos))) if url else _processo(*processos) if processos else False
     if ativo:
         estado, detalhe = ("disponivel", f"Respondendo em {host}:{port}") if url else ("disponivel", "Processo ativo no sistema")
     elif executavel:
@@ -114,7 +114,8 @@ def inventario() -> list[dict]:
                  ("ollama",), "127.0.0.1", 11434, "http://127.0.0.1:11434/api/tags"),
         _kiwix(),
         _servico("Kolibri", "Plataforma de aprendizagem e conteúdo educacional offline.",
-                 ("kolibri",), "127.0.0.1", 8080, processos=("kolibri",)),
+                 ("kolibri",), "127.0.0.1", 8080, "http://127.0.0.1:8080/",
+                 processos=("kolibri",)),
         _servico("Qdrant", "Banco vetorial opcional para busca semântica avançada.",
                  ("qdrant",), "127.0.0.1", 6333, "http://127.0.0.1:6333/healthz"),
         _docker(),
