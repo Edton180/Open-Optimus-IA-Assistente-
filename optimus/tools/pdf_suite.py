@@ -158,7 +158,7 @@ def pdf_cortar(ctx, arquivo: str, esquerda: int = 0, inferior: int = 0,
                direita: int = 0, superior: int = 0, paginas: str = "", destino: str = ""):
     deps = _pypdf()
     if not deps:
-        return {"erro": 'Instale: pip install "optimus-assistente[documentos]"'}
+        return {"erro": 'Instale: pip install "optimus-assistente[pdf]"'}
     PdfReader, PdfWriter = deps
     from pypdf.generic import RectangleObject
     origem = _path(ctx, arquivo)
@@ -213,7 +213,7 @@ def pdf_cortar(ctx, arquivo: str, esquerda: int = 0, inferior: int = 0,
 def pdf_metadados(ctx, arquivo: str, acao: str = "ler", metadados: str = "", destino: str = ""):
     deps = _pypdf()
     if not deps:
-        return {"erro": 'Instale: pip install "optimus-assistente[documentos]"'}
+        return {"erro": 'Instale: pip install "optimus-assistente[pdf]"'}
     PdfReader, PdfWriter = deps
     origem = _path(ctx, arquivo)
     if not origem.is_file():
@@ -258,7 +258,7 @@ def pdf_metadados(ctx, arquivo: str, acao: str = "ler", metadados: str = "", des
 def pdf_reparar(ctx, arquivo: str, destino: str = ""):
     deps = _pypdf()
     if not deps:
-        return {"erro": 'Instale: pip install "optimus-assistente[documentos]"'}
+        return {"erro": 'Instale: pip install "optimus-assistente[pdf]"'}
     PdfReader, PdfWriter = deps
     origem = _path(ctx, arquivo)
     if not origem.is_file():
@@ -299,7 +299,7 @@ def pdf_reparar(ctx, arquivo: str, destino: str = ""):
 def pdf_para_markdown(ctx, arquivo: str, destino: str = ""):
     deps = _pypdf()
     if not deps:
-        return {"erro": 'Instale: pip install "optimus-assistente[documentos]"'}
+        return {"erro": 'Instale: pip install "optimus-assistente[pdf]"'}
     PdfReader, _ = deps
     origem = _path(ctx, arquivo)
     if not origem.is_file():
@@ -363,7 +363,7 @@ def pdf_html_para_pdf(ctx, arquivo: str, destino: str = ""):
 def pdf_formularios(ctx, arquivo: str, valores: str = "", destino: str = ""):
     deps = _pypdf()
     if not deps:
-        return {"erro": 'Instale: pip install "optimus-assistente[documentos]"'}
+        return {"erro": 'Instale: pip install "optimus-assistente[pdf]"'}
     PdfReader, PdfWriter = deps
     origem = _path(ctx, arquivo)
     if not origem.is_file():
@@ -568,7 +568,7 @@ def pdf_editar(ctx, arquivo: str, tipo: str, conteudo: str = "", x: int = 72, y:
                largura: int = 180, altura: int = 48, pagina: int = 1, destino: str = ""):
     deps = _pypdf()
     if not deps:
-        return {"erro": 'Instale: pip install "optimus-assistente[documentos]"'}
+        return {"erro": 'Instale: pip install "optimus-assistente[pdf]"'}
     try:
         from io import BytesIO
         from reportlab.pdfgen import canvas
