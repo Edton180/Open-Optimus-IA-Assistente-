@@ -284,7 +284,9 @@ def test_real_zim_archive_round_trip(tmp_path, monkeypatch):
 def test_status_distingue_biblioteca_vazia_de_busca_lexical(tmp_path, monkeypatch):
     from optimus import zim
 
-    monkeypatch.setattr(zim_rag, "_pasta", lambda: tmp_path / "indice-vazio")
+    pasta_indice = tmp_path / "indice-vazio"
+    pasta_indice.mkdir(parents=True)
+    monkeypatch.setattr(zim_rag, "_pasta", lambda: pasta_indice)
     monkeypatch.setattr(zim, "listar_zim", lambda: {
         "total": 0, "arquivos": [], "tamanho_total_bytes": 0,
         "pasta_configurada": True,
@@ -302,7 +304,9 @@ def test_status_distingue_biblioteca_vazia_de_busca_lexical(tmp_path, monkeypatc
 def test_status_com_zim_sem_indexacao_nao_anuncia_busca_ativa(tmp_path, monkeypatch):
     from optimus import zim
 
-    monkeypatch.setattr(zim_rag, "_pasta", lambda: tmp_path / "indice-pendente")
+    pasta_indice = tmp_path / "indice-pendente"
+    pasta_indice.mkdir(parents=True)
+    monkeypatch.setattr(zim_rag, "_pasta", lambda: pasta_indice)
     monkeypatch.setattr(zim, "listar_zim", lambda: {
         "total": 1, "arquivos": [{"nome": "wiki.zim"}],
         "tamanho_total_bytes": 100, "pasta_configurada": True,
@@ -317,7 +321,9 @@ def test_status_com_zim_sem_indexacao_nao_anuncia_busca_ativa(tmp_path, monkeypa
 def test_status_nao_conta_trechos_de_zim_removido(tmp_path, monkeypatch):
     from optimus import zim
 
-    monkeypatch.setattr(zim_rag, "_pasta", lambda: tmp_path / "indice-orfaos")
+    pasta_indice = tmp_path / "indice-orfaos"
+    pasta_indice.mkdir(parents=True)
+    monkeypatch.setattr(zim_rag, "_pasta", lambda: pasta_indice)
     monkeypatch.setattr(zim, "listar_zim", lambda: {
         "total": 0, "arquivos": [], "tamanho_total_bytes": 0,
         "pasta_configurada": True,
