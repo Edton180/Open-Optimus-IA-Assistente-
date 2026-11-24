@@ -55,10 +55,20 @@ def _executar(args: list[str], timeout: int = 45, check: bool = True) -> subproc
         p = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, check=False)
     except subprocess.TimeoutExpired as exc:
         raise RuntimeError("O comando Docker excedeu o tempo limite. Verifique se o Docker está iniciado.") from exc
+    detalhe = (p.stderr or p.stdout or "").strip()
+    if p.returncode and ("permission denied" in detalhe.lower() or "access is denied" in detalhe.lower()):
+        pkexec = shutil.which("pkexec") if platform.system() == "Linux" else None
+        if pkexec:
+            try:
+                p = subprocess.run([pkexec, *cmd], capture_output=True, text=True,
+                                   timeout=timeout, check=False)
+                detalhe = (p.stderr or p.stdout or "").strip()
+            except subprocess.TimeoutExpired as exc:
+                raise RuntimeError("A operação Docker autorizada excedeu o tempo limite.") from exc
     if p.returncode and check:
         detalhe = (p.stderr or p.stdout or "erro sem detalhes").strip()[-1200:]
         if "permission denied" in detalhe.lower() or "access is denied" in detalhe.lower():
-            raise RuntimeError("Docker está instalado, mas o usuário do Optimus não tem permissão para acessá-lo. Autorize o acesso ao serviço Docker e tente novamente.")
+            raise RuntimeError("Docker está instalado, mas não foi possível obter autorização para acessá-lo. Verifique as permissões do serviço Docker.")
         if "Cannot connect to the Docker daemon" in detalhe or "Is the docker daemon running" in detalhe:
             raise RuntimeError("O serviço Docker está parado. Inicie o Docker e tente novamente.")
         raise RuntimeError(f"Docker não concluiu a operação: {detalhe}")
@@ -163,11 +173,14 @@ def instalar_ambiente() -> dict[str, Any]:
         if not winget:
             raise RuntimeError("O Windows Package Manager (winget) não está disponível. Instale/atualize o App Installer da Microsoft e tente novamente.")
         p = subprocess.run([winget, "install", "--exact", "--id", "Docker.DockerDesktop",
-                            "--accept-package-agreements", "--accept-source-agreements",
-                            "--silent"], capture_output=True, text=True, timeout=1200, check=False)
+                            "--accept-package-agreements", "--accept-source-agreements"],
+                           capture_output=True, text=True, timeout=1200, check=False)
         if p.returncode not in (0, 3010):
             raise RuntimeError(f"Instalação do Docker Desktop falhou: {(p.stderr or p.stdout)[-1000:]}")
-        raise RuntimeError("Docker Desktop foi instalado. Reinicie o Windows se solicitado e abra Docker Desktop uma vez para concluir a inicialização; depois clique em 'Tentar novamente'.")
+        exe = Path(os.environ.get("ProgramFiles", "C:/Program Files")) / "Docker/Docker/Docker Desktop.exe"
+        if exe.is_file():
+            subprocess.Popen([str(exe)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        raise RuntimeError("Docker Desktop foi instalado e sua inicialização foi solicitada. Se o Windows pedir, reinicie o computador; conclua a configuração inicial do Docker Desktop e clique em 'Instalar / configurar automaticamente' novamente.")
     else:
         raise RuntimeError("Instalação automática do Docker não disponível neste sistema.")
     return {"ok": True, "mensagem": "Docker Engine instalado e iniciado."}
