@@ -589,8 +589,8 @@ def pdf_editar(ctx, arquivo: str, tipo: str, conteudo: str = "", x: int = 72, y:
                                 anchor="c", mask="auto")
             layer.save()
             buffer.seek(0)
-            page.merge_page(PdfReader(buffer).pages[0])
             writer.add_page(page)
+            writer.pages[-1].merge_page(PdfReader(buffer).pages[0])
             aplicadas += 1
         out = _path(ctx, destino or f"{origem.stem}_editado.pdf")
         out.parent.mkdir(parents=True, exist_ok=True)
