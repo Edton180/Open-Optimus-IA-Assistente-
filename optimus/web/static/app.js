@@ -58,23 +58,23 @@ function esc(t) {
 }
 function markdown(texto) {
   const blocos = [];
-  let t = String(texto || "").replace(/```([\\w-]*)\\r?\\n?([\\s\\S]*?)```/g, (_, linguagem, conteudo) => {
+  let t = String(texto || "").replace(/\x60{3}([\w-]*)\r?\n?([\s\S]*?)\x60{3}/g, (_, linguagem, conteudo) => {
     const marcador = "@@OPTIMUS_CODE_" + blocos.length + "@@";
     blocos.push(conteudo);
-    return "\\n" + marcador + "\\n";
+    return "\n" + marcador + "\n";
   });
   t = esc(t)
-    .replace(/`([^`]+)`/g, "<code>$1</code>")
-    .replace(/\\*\\*([^*]+)\\*\\*/g, "<strong>$1</strong>")
-    .replace(/(^|[^*])\\*([^*\\n]+)\\*/g, "$1<em>$2</em>")
-    .replace(/\\[([^\\]]+)\\]\\((https?:[^)\\s]+)\\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>')
-    .replace(/(^|[\\s(])(https?:\\/\\/[^\\s<)]+)/g, '$1<a href="$2" target="_blank" rel="noopener noreferrer">$2</a>')
+    .replace(/\x60([^\x60]+)\x60/g, "<code>$1</code>")
+    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+    .replace(/(^|[^*])\*([^*\n]+)\*/g, "$1<em>$2</em>")
+    .replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>')
+    .replace(/(^|[\s(])(https?:\/\/[^\s<)]+)/g, '$1<a href="$2" target="_blank" rel="noopener noreferrer">$2</a>')
     .replace(/^#{1,4} (.+)$/gm, "<strong>$1</strong>");
-  const linhas = t.split(/\\r?\\n/);
+  const linhas = t.split(/\r?\n/);
   let html = "";
   let lista = null;
   for (const linha of linhas) {
-    const item = linha.match(/^\\s*(?:[-*•]|(\\d+)[.)])\\s+(.*)/);
+    const item = linha.match(/^\s*(?:[-*•]|(\d+)[.)])\s+(.*)/);
     if (item) {
       const tipo = item[1] ? "ol" : "ul";
       if (lista !== tipo) {
@@ -89,7 +89,7 @@ function markdown(texto) {
     if (linha.trim()) html += "<p>" + linha + "</p>";
   }
   if (lista) html += "</" + lista + ">";
-  return html.replace(/@@OPTIMUS_CODE_(\\d+)@@/g, (_, indice) =>
+  return html.replace(/@@OPTIMUS_CODE_(\d+)@@/g, (_, indice) =>
     "<pre><code>" + esc(blocos[Number(indice)] || "") + "</code></pre>");
 }
 function quando(ts) {
