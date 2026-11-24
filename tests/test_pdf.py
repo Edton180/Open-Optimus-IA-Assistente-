@@ -408,3 +408,19 @@ def test_pdf_extrair_imagens_gera_zip(tmp_path):
     assert "erro" not in resultado
     with zipfile.ZipFile(resultado["zip"]) as pacote:
         assert len(pacote.namelist()) >= 1
+
+
+def test_pdf_imagens_para_pdf_modo_scan_preto_branco(tmp_path):
+    from PIL import Image
+
+    imagem = tmp_path / "foto.png"
+    destino = tmp_path / "digitalizado.pdf"
+    Image.new("RGB", (100, 140), (220, 220, 220)).save(imagem)
+
+    resultado = pdf_suite.pdf_imagens_para_pdf(
+        _ctx(tmp_path), str(imagem), str(destino), "auto", 18, "preto_branco"
+    )
+
+    assert "erro" not in resultado
+    assert resultado["modo"] == "preto_branco"
+    assert len(PdfReader(str(destino)).pages) == 1
