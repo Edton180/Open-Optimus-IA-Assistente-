@@ -123,3 +123,71 @@ def test_libzim_4x_prefers_efficient_iterator():
             raise AssertionError("deve usar o iterador eficiente")
 
     assert list(zim_rag._iterar_entradas(ArchiveNovo())) == ["a", "b"]
+
+
+
+def test_real_zim_roundtrip_and_article_index(tmp_path, monkeypatch):
+    import pytest
+
+    writer = pytest.importorskip("libzim.writer")
+    caminho = tmp_path / "biblioteca_zim"
+    caminho.mkdir()
+    zim_file = caminho / "fixture.zim"
+    indice = tmp_path / "indice"
+    indice.mkdir()
+    monkeypatch.setattr(zim_rag, "_pasta", lambda: indice)
+    monkeypatch.setattr("optimus.zim.pasta_biblioteca", lambda: caminho)
+    monkeypatch.setattr(zim_rag, "_modelo_auto", lambda *args: "")
+    monkeypatch.setattr(zim_rag, "_embedding", lambda *args: None)
+
+    class Artigo(writer.Item):
+        def __init__(self):
+            super().__init__()
+            self.path = "index"
+            self.title = "Guia de segurança"
+            self.conteudo = (
+                "<html><head><title>Guia</title></head><body>"
+                "<h1>Segurança do trabalho</h1>"
+                "<p>Use equipamento de proteção individual e siga o procedimento de bloqueio.</p>"
+                "</body></html>"
+            )
+
+        def get_path(self):
+            return self.path
+
+        def get_title(self):
+            return self.title
+
+        def get_mimetype(self):
+            return "text/html"
+
+        def get_contentprovider(self):
+            return writer.StringProvider(self.conteudo)
+
+        def get_hints(self):
+            hint = getattr(writer, "Hint", None)
+            return {hint.FRONT_ARTICLE: True} if hint else {}
+
+    creator = writer.Creator(str(zim_file))
+    configurar = getattr(creator, "config_indexing", None) or getattr(creator, "configIndexing", None)
+    if configurar:
+        configurar(True, "eng")
+    with creator:
+        creator.add_item(Artigo())
+        set_main = getattr(creator, "set_mainpath", None) or getattr(creator, "setMainPath", None)
+        if set_main:
+            set_main("index")
+
+    from optimus import zim
+    stat = zim_file.stat()
+    monkeypatch.setattr(zim, "listar_zim", lambda: {
+        "arquivos": [{"nome": "fixture.zim", "tamanho_bytes": stat.st_size,
+                      "modificado_em": int(stat.st_mtime)}]
+    })
+    resultado = zim_rag.indexar(limite=100)
+    assert resultado["indexados"] == 1
+    encontrados = zim_rag.buscar("equipamento proteção individual", limite=3)
+    assert encontrados
+    assert encontrados[0]["arquivo"] == "fixture.zim"
+    assert encontrados[0]["artigo"]
+    assert encontrados[0]["url"].startswith("zim://fixture.zim/")
