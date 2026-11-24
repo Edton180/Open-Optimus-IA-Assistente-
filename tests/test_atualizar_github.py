@@ -129,3 +129,49 @@ def test_falha_na_atualizacao_restaura_commit_anterior(ambiente, monkeypatch):
     assert chamadas[1].endswith(SHA_VELHO)
     assert autoatualizar.commit_instalado() == SHA_VELHO
 
+
+
+def test_api_rest_limitada_usa_feed_atom(monkeypatch):
+    import httpx
+
+    respostas = [
+        httpx.Response(403, request=httpx.Request(
+            "GET", "https://api.github.com/repos/exemplo/projeto/commits/main")),
+        httpx.Response(200, text="""<?xml version="1.0"?>
+        <feed xmlns="http://www.w3.org/2005/Atom">
+          <entry>
+            <id>tag:github.com,2008:Grit::Commit/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb</id>
+            <title>Correção do atualizador</title>
+            <updated>2026-11-24T18:00:00Z</updated>
+          </entry>
+        </feed>""", request=httpx.Request(
+            "GET", "https://github.com/exemplo/projeto/commits/main.atom"))
+    ]
+
+    def get(*args, **kwargs):
+        return respostas.pop(0)
+
+    monkeypatch.setattr(httpx, "get", get)
+    remoto = autoatualizar._commit_remoto_padrao("exemplo/projeto", "main")
+    assert remoto["sha"] == SHA_NOVO
+    assert remoto["data"] == "2026-11-24"
+    assert remoto["titulo"] == "Correção do atualizador"
+
+
+def test_feed_atom_sem_commit_valido_falha_com_seguranca(monkeypatch):
+    import httpx
+
+    respostas = [
+        httpx.Response(429, request=httpx.Request(
+            "GET", "https://api.github.com/repos/exemplo/projeto/commits/main")),
+        httpx.Response(200, text="<feed xmlns='http://www.w3.org/2005/Atom'/>",
+                       request=httpx.Request(
+                           "GET", "https://github.com/exemplo/projeto/commits/main.atom"))
+    ]
+
+    def get(*args, **kwargs):
+        return respostas.pop(0)
+
+    monkeypatch.setattr(httpx, "get", get)
+    with pytest.raises(httpx.HTTPStatusError):
+        autoatualizar._commit_remoto_padrao("exemplo/projeto", "main")
