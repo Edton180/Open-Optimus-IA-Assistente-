@@ -84,3 +84,86 @@ def test_pdf_converter_escapa_html_e_gera_docx_real(tmp_path):
     assert "erro" not in docx_result and docx_out.is_file()
     from docx import Document
     assert any("<script>" in p.text for p in Document(str(docx_out)).paragraphs)
+
+
+def test_pdf_imagens_para_pdf_cria_uma_pagina_por_imagem(tmp_path):
+    from PIL import Image
+
+    a = tmp_path / "a.png"
+    b = tmp_path / "b.png"
+    Image.new("RGB", (80, 120), "white").save(a)
+    Image.new("RGB", (120, 80), "black").save(b)
+    destino = tmp_path / "fotos.pdf"
+
+    resultado = pdf.pdf_suite.pdf_imagens_para_pdf(
+        _ctx(tmp_path), f"{a};{b}", str(destino), "auto", 18
+    )
+
+    assert "erro" not in resultado
+    assert resultado["paginas"] == 2
+    assert len(PdfReader(str(destino)).pages) == 2
+
+
+def test_pdf_para_markdown_preserva_paginas(tmp_path):
+    origem = tmp_path / "texto.pdf"
+    destino = tmp_path / "texto.md"
+    _criar_pdf(origem, ["PRIMEIRA PAGINA", "SEGUNDA PAGINA"])
+
+    resultado = pdf.pdf_suite.pdf_para_markdown(_ctx(tmp_path), str(origem), str(destino))
+
+    assert "erro" not in resultado
+    conteudo = destino.read_text(encoding="utf-8")
+    assert "## Página 1" in conteudo and "PRIMEIRA PAGINA" in conteudo
+    assert "## Página 2" in conteudo and "SEGUNDA PAGINA" in conteudo
+
+
+def test_pdf_cortar_aplica_cropbox_sem_perder_paginas(tmp_path):
+    from pypdf import PdfReader
+
+    origem = tmp_path / "origem.pdf"
+    destino = tmp_path / "cortado.pdf"
+    _criar_pdf(origem, ["CONTEUDO"])
+    antes = PdfReader(str(origem)).pages[0].cropbox
+    resultado = pdf.pdf_suite.pdf_cortar(
+        _ctx(tmp_path), str(origem), 10, 12, 14, 16, "", str(destino)
+    )
+
+    assert "erro" not in resultado
+    depois = PdfReader(str(destino)).pages[0].cropbox
+    assert float(depois.width) == float(antes.width) - 24
+    assert float(depois.height) == float(antes.height) - 28
+
+
+def test_pdf_metadados_remove_campos_de_metadados(tmp_path):
+    origem = tmp_path / "origem.pdf"
+    destino = tmp_path / "limpo.pdf"
+    _criar_pdf(origem, ["DOCUMENTO"])
+    from pypdf import PdfReader, PdfWriter
+    reader = PdfReader(str(origem))
+    writer = PdfWriter()
+    for page in reader.pages:
+        writer.add_page(page)
+    writer.add_metadata({"/Author": "Autor confidencial", "/Title": "Titulo"})
+    with origem.open("wb") as arquivo:
+        writer.write(arquivo)
+
+    resultado = pdf.pdf_suite.pdf_metadados(
+        _ctx(tmp_path), str(origem), "remover", "", str(destino)
+    )
+
+    assert "erro" not in resultado
+    metadata = PdfReader(str(destino)).metadata
+    assert not metadata or not metadata.get("/Author")
+
+
+def test_pdf_reparar_reconstroi_e_valida_pdf_legivel(tmp_path):
+    origem = tmp_path / "origem.pdf"
+    destino = tmp_path / "reparado.pdf"
+    _criar_pdf(origem, ["PAGINA UM", "PAGINA DOIS"])
+
+    resultado = pdf.pdf_suite.pdf_reparar(_ctx(tmp_path), str(origem), str(destino))
+
+    assert "erro" not in resultado
+    leitor = PdfReader(str(destino), strict=True)
+    assert len(leitor.pages) == 2
+    assert "PAGINA UM" in leitor.pages[0].extract_text()
