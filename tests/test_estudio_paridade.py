@@ -152,6 +152,15 @@ def test_pausa_vira_silencio_no_audio(monkeypatch):
     assert np.max(np.abs(meio)) < 0.01
 
 
+def test_perfil_edton_braz_tem_parametros_de_narracao_ptbr():
+    perfil = vozes.obter("Edton Braz")
+    assert perfil.id == "edton-braz"
+    assert perfil.idioma == "pt-BR" and perfil.genero == "masculina"
+    assert perfil.base == "prime"
+    assert 1.0 < perfil.velocidade <= 1.15
+    assert perfil.descricao and "micro-pausas" in perfil.descricao
+
+
 # ------------------------------------------------------------------ Piper
 def test_piper_baixa_e_gera_em_portugues(monkeypatch):
     baixados = []
