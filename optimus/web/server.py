@@ -298,7 +298,7 @@ class Manipulador(BaseHTTPRequestHandler):
         except json.JSONDecodeError:
             return {}
 
-    def _autorizado(self) -> bool:
+    def _credenciais_validas(self) -> bool:
         if not self.senha:
             return True
         enviada = self.headers.get("X-Optimus-Senha", "")
@@ -307,6 +307,25 @@ class Manipulador(BaseHTTPRequestHandler):
         if achado:
             enviada = enviada or achado.group(1)
         return hmac.compare_digest(enviada, self.senha)
+
+    def _exige_senha(self) -> bool:
+        """Protege clientes externos, sem pedir senha no navegador do próprio PC.
+
+        cloudflared encaminha a conexão localmente e preserva CF-Ray e
+        CF-Connecting-IP. O servidor da porta do celular, por sua vez, sempre
+        exige senha, inclusive nos testes e acessos via loopback.
+        """
+        if not self.senha:
+            return False
+        if self.server is _servidor_celular:
+            return True
+        endereco = str(self.client_address[0]) if self.client_address else ""
+        if endereco in ("127.0.0.1", "::1"):
+            return bool(self.headers.get("CF-Ray") and self.headers.get("CF-Connecting-IP"))
+        return True
+
+    def _autorizado(self) -> bool:
+        return not self._exige_senha() or self._credenciais_validas()
 
     # Roteamento
     def do_GET(self):
@@ -326,7 +345,8 @@ class Manipulador(BaseHTTPRequestHandler):
         if metodo == "GET" and not caminho.startswith("/api/"):
             return self._estatico(caminho)
         if caminho == "/api/entrar" and metodo == "POST":
-            ok = not self.senha or hmac.compare_digest(self._corpo().get("senha", ""), self.senha)
+            exige = self._exige_senha()
+            ok = not exige or hmac.compare_digest(self._corpo().get("senha", ""), self.senha)
             return self._json({"ok": ok}, 200 if ok else 401)
         if metodo == "GET" and caminho == "/api/agenda.ics":
             return self._agenda(parse_qs(url.query))
@@ -432,7 +452,7 @@ class Manipulador(BaseHTTPRequestHandler):
         optimus = self.estado.optimus
         chave = (consulta.get("chave") or [""])[0]
         token = optimus.config.get("web", "token_agenda", "") or ""
-        if not (self._autorizado() or (token and hmac.compare_digest(chave, token))):
+        if not (self._credenciais_validas() or (token and hmac.compare_digest(chave, token))):
             return self._json({"erro": "chave da agenda inválida"}, 401)
         ics = celular.agenda_ics(optimus.banco.lembretes(pendentes=True),
                                  nome=optimus.config.get("geral", "nome") or "Optimus")
@@ -486,9 +506,9 @@ class Manipulador(BaseHTTPRequestHandler):
                 nome_original = unquote((consulta.get("nome") or ["documento.pdf"])[0])
                 nome = re.sub(r"[^\w.() -]", "_", Path(nome_original).name).strip(" .") or "documento.pdf"
                 extensao = Path(nome).suffix.lower()
-                permitidas = {".pdf", ".jpg", ".jpeg", ".png", ".tif", ".tiff", ".bmp", ".html", ".htm", ".p12", ".pfx", ".icc"}
+                permitidas = {".pdf", ".jpg", ".jpeg", ".png", ".tif", ".tiff", ".bmp", ".html", ".htm", ".p12", ".pfx", ".icc", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".odt", ".ods", ".odp", ".rtf", ".txt", ".csv"}
                 if extensao not in permitidas:
-                    return self._json({"erro": "Tipo de arquivo não suportado. Envie PDF, imagem, HTML, certificado P12/PFX ou perfil ICC."}, 415)
+                    return self._json({"erro": "Tipo de arquivo não suportado. Envie PDF, imagem, documento Office/LibreOffice, HTML, certificado P12/PFX ou perfil ICC."}, 415)
                 dados = self.rfile.read(tamanho)
                 assinaturas = {
                     ".pdf": dados.startswith(b"%PDF-"),

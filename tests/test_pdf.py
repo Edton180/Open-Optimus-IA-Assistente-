@@ -424,3 +424,31 @@ def test_pdf_imagens_para_pdf_modo_scan_preto_branco(tmp_path):
     assert "erro" not in resultado
     assert resultado["modo"] == "preto_branco"
     assert len(PdfReader(str(destino)).pages) == 1
+
+
+def test_pdf_unir_documentos_aceita_pdf_e_imagem(tmp_path):
+    from PIL import Image
+
+    origem_pdf = tmp_path / "texto.pdf"
+    imagem = tmp_path / "foto.png"
+    destino = tmp_path / "unido.pdf"
+    _criar_pdf(origem_pdf, ["PAGINA PDF"])
+    Image.new("RGB", (80, 120), "white").save(imagem)
+
+    resultado = pdf_suite.pdf_unir_documentos(
+        _ctx(tmp_path), f"{origem_pdf};{imagem}", str(destino)
+    )
+
+    assert "erro" not in resultado
+    assert resultado["paginas"] == 2
+    assert len(PdfReader(str(destino)).pages) == 2
+
+
+def test_pdf_documento_para_pdf_informa_libreoffice_ausente(tmp_path, monkeypatch):
+    arquivo = tmp_path / "relatorio.docx"
+    arquivo.write_bytes(b"arquivo de teste")
+    monkeypatch.setattr(pdf_suite.shutil, "which", lambda nome: None)
+
+    resultado = pdf_suite.pdf_documento_para_pdf(_ctx(tmp_path), str(arquivo))
+
+    assert "LibreOffice" in resultado["erro"]

@@ -154,79 +154,143 @@ function irPara(tela) {
   const carregar = { personas: carregarPersonas, prompts: carregarPrompts, memoria: carregarMemoria, acoes: carregarAcoes, config: carregarConfig, casa: carregarCasa, estudio: () => window.carregarEstudio && window.carregarEstudio(), pdf: carregarPDF }[tela];
   if (carregar) carregar();
 }
-// ---------- Suite visual de PDF ----------
+// ---------- Central visual de documentos e PDF ----------
 let pdfFerramentas = [];
 let pdfEnviados = [];
-function pdfAtual() { return pdfFerramentas.find((x) => x.nome === $("#pdf-ferramenta").value); }
+let pdfCategoriaAtiva = "Todas";
+const PDF_CATEGORIAS = ["Todas", "Criar e converter", "Organizar páginas", "Editar e anotar",
+  "Otimizar e reparar", "Segurança e privacidade", "Verificar e analisar", "Formulários e assinatura"];
+const PDF_ROTULOS = {
+  pdf_info:"Informações do PDF", pdf_ler:"Extrair texto", pdf_juntar:"Unir PDFs",
+  pdf_unir_documentos:"Unir PDFs, imagens e Office", pdf_documento_para_pdf:"Word, Excel e PowerPoint para PDF",
+  pdf_extrair:"Extrair páginas", pdf_remover:"Eliminar páginas", pdf_organizar:"Ordenar páginas",
+  pdf_dividir:"Dividir PDF", pdf_girar:"Girar páginas", pdf_proteger:"Proteger com senha",
+  pdf_desbloquear:"Desbloquear PDF", pdf_comprimir:"Comprimir PDF", pdf_marca:"Adicionar marca d'água",
+  pdf_numeros:"Adicionar números de página", pdf_assinar:"Inserir assinatura visual",
+  pdf_localizar_termos:"Buscar texto sensível", pdf_censurar:"Censurar conteúdo",
+  pdf_comparar:"Comparar textos", pdf_ocr:"OCR de documentos escaneados",
+  pdf_converter:"Converter PDF", pdf_resumir:"Resumir documento",
+  pdf_imagens_para_pdf:"Imagens para PDF", pdf_para_imagens:"PDF para imagens",
+  pdf_cortar:"Recortar páginas", pdf_metadados:"Editar metadados", pdf_reparar:"Reparar PDF",
+  pdf_para_markdown:"PDF para Markdown", pdf_html_para_pdf:"HTML para PDF",
+  pdf_formularios:"Ler e preencher formulários", pdf_para_excel:"PDF para Excel",
+  pdf_para_powerpoint:"PDF para PowerPoint", pdf_comparar_visual:"Comparar visualmente",
+  pdf_editar:"Adicionar texto, formas ou imagem", pdf_assinar_digital:"Assinar com certificado digital",
+  pdf_pdfa:"Converter para PDF/A", pdf_para_word_ocr:"PDF para Word com OCR",
+  pdf_extrair_imagens:"Extrair imagens do PDF", pdf_copiar:"Criar cópia do PDF",
+  pdf_criar_formulario:"Criar formulário preenchível", pdf_workflow:"Automatizar fluxo de PDF"
+};
+function pdfCategoria(nome) {
+  if (["pdf_juntar","pdf_unir_documentos","pdf_dividir","pdf_extrair","pdf_remover","pdf_organizar","pdf_girar"].includes(nome)) return "Organizar páginas";
+  if (["pdf_imagens_para_pdf","pdf_documento_para_pdf","pdf_para_imagens","pdf_converter","pdf_html_para_pdf","pdf_para_word_ocr","pdf_para_excel","pdf_para_powerpoint","pdf_para_markdown","pdf_pdfa"].includes(nome)) return "Criar e converter";
+  if (["pdf_cortar","pdf_marca","pdf_numeros","pdf_editar"].includes(nome)) return "Editar e anotar";
+  if (["pdf_comprimir","pdf_reparar","pdf_ocr"].includes(nome)) return "Otimizar e reparar";
+  if (["pdf_proteger","pdf_desbloquear","pdf_assinar","pdf_assinar_digital","pdf_censurar","pdf_metadados"].includes(nome)) return "Segurança e privacidade";
+  if (["pdf_formularios","pdf_criar_formulario"].includes(nome)) return "Formulários e assinatura";
+  return "Verificar e analisar";
+}
+function pdfAtual() { return pdfFerramentas.find(x => x.nome === $("#pdf-ferramenta").value); }
+function desenharFiltrosPDF() {
+  const busca = ($("#pdf-busca")?.value || "").trim().toLocaleLowerCase("pt-BR");
+  const categorias = PDF_CATEGORIAS.filter(c => c === "Todas" || pdfFerramentas.some(f => pdfCategoria(f.nome) === c));
+  $("#pdf-filtros").innerHTML = categorias.map(c => {
+    const total = c === "Todas" ? pdfFerramentas.length : pdfFerramentas.filter(f => pdfCategoria(f.nome) === c).length;
+    return `<button type="button" class="pdf-filtro ${pdfCategoriaAtiva === c ? "ativo" : ""}" data-pdf-categoria="${esc(c)}">${esc(c)} <span>${total}</span></button>`;
+  }).join("");
+  const lista = pdfFerramentas.filter(f => {
+    const texto = [PDF_ROTULOS[f.nome] || f.nome, f.descricao, f.nome].join(" ").toLocaleLowerCase("pt-BR");
+    return (pdfCategoriaAtiva === "Todas" || pdfCategoria(f.nome) === pdfCategoriaAtiva) && (!busca || texto.includes(busca));
+  });
+  $("#pdf-ferramentas-grid").innerHTML = lista.length ? lista.map(f => {
+    const selecionada = $("#pdf-ferramenta").value === f.nome;
+    const icone = {"Criar e converter":"⇄","Organizar páginas":"▤","Editar e anotar":"✎","Otimizar e reparar":"◈","Segurança e privacidade":"♢","Formulários e assinatura":"✒","Verificar e analisar":"⌕"}[pdfCategoria(f.nome)] || "▧";
+    return `<button type="button" class="pdf-ferramenta ${selecionada ? "selecionada" : ""}" data-pdf-tool="${esc(f.nome)}" aria-pressed="${selecionada}">
+      <span class="pdf-ferramenta-icone">${icone}</span><b>${esc(PDF_ROTULOS[f.nome] || f.nome.replaceAll("_"," "))}</b>
+      <small>${esc(f.descricao || "")}</small></button>`;
+  }).join("") : '<p class="sutil">Nenhuma ferramenta encontrada nesta categoria.</p>';
+}
 async function carregarPDF() {
-  const estadoEl = $("#pdf-estado");
+  const estadoEl = $("#pdf-estado-inicial");
   try {
     const dados = await api("/api/pdf");
     pdfFerramentas = dados.ferramentas || [];
-    const avisoDependencias = !dados.dependencias_instaladas ? "⚠️ Instale o suporte completo: " + dados.comando_instalacao + " (Windows/Linux)." : "";
-    $("#pdf-ferramenta").innerHTML = pdfFerramentas.map((f) =>
-      `<option value="${esc(f.nome)}">${esc(f.nome.replaceAll("_", " "))}</option>`).join("");
     if (!pdfFerramentas.length) throw new Error("Nenhuma ferramenta PDF foi registrada.");
-    desenharParametrosPDF();
-    desenharArquivosPDF();
-    estadoEl.textContent = avisoDependencias || `${pdfFerramentas.length} ferramentas carregadas · processamento local`;
-  } catch (e) { estadoEl.textContent = "⚠️ " + e.message; }
+    desenharFiltrosPDF(); desenharArquivosPDF();
+    estadoEl.textContent = `${pdfFerramentas.length} ferramentas carregadas · processamento local` +
+      (dados.dependencias_instaladas ? "" : " · algumas operações exigem instalar o extra PDF");
+  } catch (e) { estadoEl.textContent = "⚠️ Não foi possível carregar o catálogo: " + e.message; }
+}
+function selecionarFerramentaPDF(nome) {
+  const f = pdfFerramentas.find(x => x.nome === nome);
+  if (!f) return;
+  $("#pdf-ferramenta").value = nome;
+  $("#pdf-operacao-selecionada").classList.remove("oculto");
+  $("#pdf-estado-inicial").classList.add("oculto");
+  $("#pdf-titulo-operacao").textContent = PDF_ROTULOS[nome] || nome.replaceAll("_"," ");
+  desenharFiltrosPDF(); desenharParametrosPDF();
+  $("#pdf-operacao-selecionada").scrollIntoView({behavior:"smooth",block:"nearest"});
 }
 function desenharArquivosPDF() {
   $("#pdf-lista-arquivos").innerHTML = pdfEnviados.length
-    ? pdfEnviados.map((f, i) => `<div class="pdf-arquivo"><span>📄 ${esc(f.nome)}</span><small>${(f.tamanho / 1048576).toFixed(2)} MB</small><button type="button" class="icone" data-pdf-remover="${i}" title="Remover da seleção">✕</button></div>`).join("")
-    : '<p class="sutil">Nenhum PDF adicionado ainda.</p>';
+    ? pdfEnviados.map((f,i) => `<div class="pdf-arquivo"><span>📄 ${esc(f.nome)}</span><small>${(f.tamanho/1048576).toFixed(2)} MB</small><button type="button" class="icone" data-pdf-remover="${i}" title="Remover da seleção">✕</button></div>`).join("")
+    : '<p class="sutil">Nenhum documento adicionado ainda.</p>';
   $("#pdf-executar").disabled = !pdfEnviados.length || !pdfAtual();
 }
 function desenharParametrosPDF() {
   const f = pdfAtual();
   $("#pdf-descricao").textContent = f ? f.descricao : "";
-  const campos = f ? Object.entries(f.parametros || {}) : [];
-  $("#pdf-parametros").innerHTML = campos.map(([nome, info]) => {
+  $("#pdf-parametros").innerHTML = (f ? Object.entries(f.parametros || {}) : []).map(([nome,info]) => {
     const tipo = info.type === "integer" || info.type === "number" ? "number" : "text";
     let valor = "";
     if (nome === "arquivo" && pdfEnviados[0]) valor = pdfEnviados[0].arquivo;
-    if (nome === "arquivos" && pdfEnviados.length) valor = pdfEnviados.map((x) => x.arquivo).join(";");
+    if (nome === "arquivos" && pdfEnviados.length) valor = pdfEnviados.map(x=>x.arquivo).join(";");
     if ((nome === "arquivo_a" || nome === "arquivo1") && pdfEnviados[0]) valor = pdfEnviados[0].arquivo;
     if ((nome === "arquivo_b" || nome === "arquivo2" || nome === "certificado" || nome === "perfil_icc") && pdfEnviados[1]) valor = pdfEnviados[1].arquivo;
-    const obrigatorio = (f.obrigatorios || []).includes(nome);
-    return `<label>${esc(nome.replaceAll("_", " "))}${obrigatorio ? " *" : ""}<input class="campo" data-pdf-param="${esc(nome)}" type="${tipo}" value="${esc(valor)}" placeholder="${esc(info.description || nome)}" ${obrigatorio && !valor ? "required" : ""}></label>`;
+    const obrigatorio = (f.obrigatorios || []).includes(nome), sensivel = /senha|password/i.test(nome);
+    return `<label>${esc(nome.replaceAll("_"," "))}${obrigatorio ? " *" : ""}<input class="campo" data-pdf-param="${esc(nome)}" type="${sensivel ? "password" : tipo}" ${sensivel ? 'autocomplete="new-password"' : ""} value="${esc(valor)}" placeholder="${esc(info.description || nome)}" ${obrigatorio && !valor ? "required" : ""}></label>`;
   }).join("");
   $("#pdf-executar").disabled = !pdfEnviados.length || !f;
 }
-$("#pdf-ferramenta").addEventListener("change", desenharParametrosPDF);
+$("#pdf-filtros").addEventListener("click", e => {
+  const b = e.target.closest("[data-pdf-categoria]");
+  if (!b) return; pdfCategoriaAtiva = b.dataset.pdfCategoria; desenharFiltrosPDF();
+});
+$("#pdf-busca").addEventListener("input", desenharFiltrosPDF);
+$("#pdf-ferramentas-grid").addEventListener("click", e => {
+  const b = e.target.closest("[data-pdf-tool]"); if (b) selecionarFerramentaPDF(b.dataset.pdfTool);
+});
+$("#pdf-limpar-operacao").addEventListener("click", () => {
+  $("#pdf-ferramenta").value = ""; $("#pdf-operacao-selecionada").classList.add("oculto");
+  $("#pdf-estado-inicial").classList.remove("oculto"); desenharFiltrosPDF();
+});
 $("#pdf-enviar").addEventListener("click", async () => {
   const arquivos = [...($("#pdf-arquivos").files || [])];
-  if (!arquivos.length) { $("#pdf-estado").textContent = "Selecione pelo menos um PDF."; return; }
+  if (!arquivos.length) { $("#pdf-estado-inicial").textContent = "Selecione pelo menos um documento."; return; }
   for (const arquivo of arquivos) {
     const extensao = arquivo.name.toLowerCase().split(".").pop();
-    if (!["pdf", "jpg", "jpeg", "png", "tif", "tiff", "bmp", "html", "htm", "p12", "pfx", "icc"].includes(extensao)) { $("#pdf-estado").textContent = "Envie PDF, imagem, HTML, certificado P12/PFX ou perfil ICC."; continue; }
-    $("#pdf-estado").textContent = "Enviando " + arquivo.name + "…";
+    if (!["pdf","jpg","jpeg","png","tif","tiff","bmp","html","htm","doc","docx","xls","xlsx","ppt","pptx","odt","ods","odp","rtf","txt","csv","p12","pfx","icc"].includes(extensao)) {
+      $("#pdf-estado-inicial").textContent = "Formato não aceito: " + extensao; continue;
+    }
+    $("#pdf-estado-inicial").textContent = "Enviando " + arquivo.name + "…";
     try {
       const r = await api("/api/pdf/upload?nome=" + encodeURIComponent(arquivo.name), {
-        method: "POST", headers: { "Content-Type": "application/pdf" }, body: arquivo, tempo: 180000
+        method:"POST",headers:{"Content-Type":"application/octet-stream"},body:arquivo,tempo:180000
       });
-      pdfEnviados.push(r);
-      desenharArquivosPDF();
-    } catch (e) { $("#pdf-estado").textContent = "Falha no envio de " + arquivo.name + ": " + e.message; }
+      pdfEnviados.push(r); desenharArquivosPDF();
+    } catch(e) { $("#pdf-estado-inicial").textContent = "Falha no envio de " + arquivo.name + ": " + e.message; }
   }
-  $("#pdf-arquivos").value = "";
-  desenharParametrosPDF();
-  if (pdfEnviados.length) $("#pdf-estado").textContent = pdfEnviados.length + " arquivo(s) pronto(s) para processar.";
+  $("#pdf-arquivos").value = ""; desenharParametrosPDF();
+  if (pdfEnviados.length) $("#pdf-estado-inicial").textContent = pdfEnviados.length + " arquivo(s) pronto(s) para processar.";
 });
-$("#pdf-lista-arquivos").addEventListener("click", (e) => {
-  const botao = e.target.closest("[data-pdf-remover]");
-  if (!botao) return;
-  pdfEnviados.splice(Number(botao.dataset.pdfRemover), 1);
-  desenharArquivosPDF(); desenharParametrosPDF();
+$("#pdf-lista-arquivos").addEventListener("click", e => {
+  const b = e.target.closest("[data-pdf-remover]"); if (!b) return;
+  pdfEnviados.splice(Number(b.dataset.pdfRemover),1); desenharArquivosPDF(); desenharParametrosPDF();
 });
 $("#pdf-executar").addEventListener("click", async () => {
-  const f = pdfAtual();
-  if (!f) return;
+  const f = pdfAtual(); if (!f) return;
   const argumentos = {};
   for (const campo of $$("[data-pdf-param]")) {
-    const nome = campo.dataset.pdfParam;
-    const valor = campo.value.trim();
+    const nome = campo.dataset.pdfParam, valor = campo.value.trim();
     if (valor === "" && !(f.obrigatorios || []).includes(nome)) continue;
     argumentos[nome] = campo.type === "number" ? Number(valor) : valor;
   }
@@ -235,23 +299,19 @@ $("#pdf-executar").addEventListener("click", async () => {
       $("#pdf-estado").textContent = "Preencha o campo obrigatório: " + nome; return;
     }
   }
-  $("#pdf-executar").disabled = true;
-  $("#pdf-estado").textContent = "Processando localmente…";
+  $("#pdf-executar").disabled = true; $("#pdf-estado").textContent = "Processando localmente…";
   $("#pdf-resultado").textContent = "A operação está em andamento. Não feche o Optimus.";
   try {
-    const r = await api("/api/pdf/executar", { method: "POST", json: { ferramenta: f.nome, argumentos }, tempo: 300000 });
+    const r = await api("/api/pdf/executar",{method:"POST",json:{ferramenta:f.nome,argumentos},tempo:300000});
     const resultado = r.resultado || {};
     const mensagem = resultado.mensagem || resultado.resultado || resultado.texto || "Operação concluída.";
-    const detalhes = Object.entries(resultado).filter(([k]) => !["mensagem", "destino", "zip", "arquivos"].includes(k))
-      .map(([k, v]) => `<div><b>${esc(k.replaceAll("_", " "))}:</b> ${esc(typeof v === "object" ? JSON.stringify(v) : v)}</div>`).join("");
-    const links = (r.arquivos || []).map((x) =>
-      `<a class="botao pequeno" href="/api/pdf/arquivo?nome=${encodeURIComponent(x.nome)}" download>⬇ Baixar ${esc(x.nome)}</a>`).join(" ");
+    const detalhes = Object.entries(resultado).filter(([k])=>!["mensagem","destino","zip","arquivos"].includes(k))
+      .map(([k,v])=>`<div><b>${esc(k.replaceAll("_"," "))}:</b> ${esc(typeof v==="object"?JSON.stringify(v):v)}</div>`).join("");
+    const links = (r.arquivos||[]).map(x=>`<a class="botao pequeno" href="/api/pdf/arquivo?nome=${encodeURIComponent(x.nome)}" download>⬇ Baixar ${esc(x.nome)}</a>`).join(" ");
     $("#pdf-resultado").innerHTML = `<p class="sucesso">✅ ${esc(mensagem)}</p>${detalhes}${links ? `<div class="linha">${links}</div>` : ""}`;
     $("#pdf-estado").textContent = "Operação concluída.";
-  } catch (e) {
-    $("#pdf-resultado").textContent = "Falha: " + e.message;
-    $("#pdf-estado").textContent = "A operação não foi concluída.";
-  } finally { $("#pdf-executar").disabled = !pdfEnviados.length; }
+  } catch(e) { $("#pdf-resultado").textContent = "Falha: " + e.message; $("#pdf-estado").textContent = "A operação não foi concluída."; }
+  finally { $("#pdf-executar").disabled = !pdfEnviados.length; }
 });
 
 $$(".menu button").forEach((b) => b.addEventListener("click", () => irPara(b.dataset.tela)));
@@ -877,7 +937,7 @@ function desenharTunel(d) {
   qr.innerHTML = figura(d.qr, "Abrir Optimus pela internet") +
     figura(d.agenda_qr, "Assinar agenda pela internet");
   if (d.erro) estadoEl.textContent = "⚠️ " + d.erro;
-  else if (d.url) estadoEl.innerHTML = "✅ Acesso HTTPS ativo: <a href=\"" + esc(d.url) + "\" target=\"_blank\" rel=\"noopener noreferrer\">" + esc(d.url) + "</a><br>Leia o QR Code no celular e entre com a senha exclusiva. O endereço é temporário e o computador precisa permanecer ligado e conectado à internet.";
+  else if (d.url) estadoEl.innerHTML = "✅ Acesso HTTPS ativo: <a href=\"" + esc(d.url) + "\" target=\"_blank\" rel=\"noopener noreferrer\">" + esc(d.url) + "</a><br>Leia o QR Code ou abra o endereço em qualquer rede (4G/5G, Wi-Fi externo ou computador). Entre com a senha exclusiva. O endereço é temporário e o computador precisa permanecer ligado e conectado à internet." + (d.agenda ? "<br>Agenda externa: <a href=\"" + esc(d.agenda) + "\" target=\"_blank\" rel=\"noopener noreferrer\">Assinar agenda</a>" : "");
   else if (d.iniciando) estadoEl.textContent = "⏳ Conectando ao Cloudflare… O Optimus verificará automaticamente até o endereço HTTPS e os QR Codes ficarem prontos.";
   else estadoEl.textContent = "Acesso externo desligado.";
   $("#desligar-tunel").classList.toggle("oculto", !d.ligado && !d.iniciando);

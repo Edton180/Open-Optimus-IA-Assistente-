@@ -9,6 +9,7 @@ import json
 import re
 import shutil
 import subprocess
+import tempfile
 import zipfile
 from pathlib import Path
 
@@ -1130,3 +1131,92 @@ def pdf_workflow(ctx, acao: str, nome: str = "", etapas: str = ""):
         except Exception as exc:
             return {"erro": f"Falha ao executar fluxo: {exc}"}
     return {"erro": "Ação deve ser salvar, listar ou executar."}
+
+
+@ferramenta(
+    "pdf_documento_para_pdf",
+    "Converte arquivos Word, Excel, PowerPoint, LibreOffice, RTF, TXT e CSV para PDF usando LibreOffice instalado.",
+    {"arquivo": texto("Documento de origem"), "destino": texto("PDF de saída")},
+    grupo="pdf", risco=MODERADO, obrigatorios=["arquivo"],
+)
+def pdf_documento_para_pdf(ctx, arquivo: str, destino: str = ""):
+    origem = _path(ctx, arquivo)
+    extensoes = {".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx",
+                 ".odt", ".ods", ".odp", ".rtf", ".txt", ".csv"}
+    if not origem.is_file() or origem.suffix.lower() not in extensoes:
+        return {"erro": "Selecione um documento Word, Excel, PowerPoint, LibreOffice, RTF, TXT ou CSV válido."}
+    soffice = shutil.which("soffice") or shutil.which("libreoffice")
+    if not soffice:
+        return {"erro": "Conversão Office para PDF requer LibreOffice instalado no computador (Windows/Linux)."}
+    saida = _path(ctx, destino or f"{origem.stem}.pdf")
+    saida.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        with tempfile.TemporaryDirectory(prefix="optimus-pdf-office-") as temporario:
+            perfil = Path(temporario) / "perfil"
+            pasta_saida = Path(temporario) / "saida"
+            pasta_saida.mkdir()
+            comando = [soffice, "--headless", "--nologo", "--nodefault", "--nolockcheck",
+                       f"-env:UserInstallation={perfil.as_uri()}", "--convert-to", "pdf",
+                       "--outdir", str(pasta_saida), str(origem)]
+            processo = subprocess.run(comando, capture_output=True, text=True, timeout=180, check=False)
+            gerado = pasta_saida / f"{origem.stem}.pdf"
+            if processo.returncode != 0 or not gerado.is_file():
+                detalhe = (processo.stderr or processo.stdout or "LibreOffice não gerou o PDF.").strip()
+                return {"erro": f"Falha na conversão: {detalhe[:800]}"}
+            shutil.copy2(gerado, saida)
+        from pypdf import PdfReader
+        paginas = len(PdfReader(str(saida)).pages)
+        return {"mensagem": f"Documento convertido para PDF com {paginas} página(s).",
+                "destino": str(saida), "paginas": paginas, "tamanho_bytes": saida.stat().st_size}
+    except subprocess.TimeoutExpired:
+        return {"erro": "A conversão excedeu 3 minutos e foi interrompida."}
+    except Exception as exc:
+        return {"erro": f"Não consegui converter o documento: {exc}"}
+
+
+@ferramenta(
+    "pdf_unir_documentos",
+    "Une PDFs, imagens e documentos Office em um único PDF, preservando a ordem informada.",
+    {"arquivos": texto("Caminhos dos arquivos separados por vírgula ou ponto-e-vírgula"),
+     "destino": texto("PDF final")},
+    grupo="pdf", risco=MODERADO, obrigatorios=["arquivos"],
+)
+def pdf_unir_documentos(ctx, arquivos: str, destino: str = ""):
+    deps = _pypdf()
+    if not deps:
+        return {"erro": 'Instale: pip install "optimus-assistente[pdf]"'}
+    PdfReader, PdfWriter = deps
+    entradas = [x.strip().strip('"') for x in re.split(r"[,;]+", arquivos or "") if x.strip()]
+    if len(entradas) < 2:
+        return {"erro": "Selecione pelo menos dois arquivos para unir."}
+    saida = _path(ctx, destino or "documentos_unidos.pdf")
+    saida.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        with tempfile.TemporaryDirectory(prefix="optimus-pdf-merge-") as temporario:
+            escritor = PdfWriter()
+            for indice, item in enumerate(entradas):
+                origem = _path(ctx, item)
+                if not origem.is_file():
+                    return {"erro": f"Arquivo não encontrado: {origem.name}"}
+                extensao = origem.suffix.lower()
+                convertido = origem
+                if extensao != ".pdf":
+                    convertido = Path(temporario) / f"parte_{indice + 1}.pdf"
+                    if extensao in {".jpg", ".jpeg", ".png", ".tif", ".tiff", ".bmp"}:
+                        resultado = pdf_imagens_para_pdf(ctx, str(origem), str(convertido))
+                    else:
+                        resultado = pdf_documento_para_pdf(ctx, str(origem), str(convertido))
+                    if resultado.get("erro"):
+                        return resultado
+                leitor = PdfReader(str(convertido), strict=False)
+                if leitor.is_encrypted:
+                    return {"erro": f"O arquivo {origem.name} está protegido. Desbloqueie-o antes de unir."}
+                for pagina in leitor.pages:
+                    escritor.add_page(pagina)
+            with open(saida, "wb") as destino_pdf:
+                escritor.write(destino_pdf)
+        paginas = len(PdfReader(str(saida)).pages)
+        return {"mensagem": f"{len(entradas)} arquivos unidos em um PDF com {paginas} página(s).",
+                "destino": str(saida), "paginas": paginas, "tamanho_bytes": saida.stat().st_size}
+    except Exception as exc:
+        return {"erro": f"Falha ao unir documentos: {exc}"}
