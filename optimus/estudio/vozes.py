@@ -80,6 +80,15 @@ def _prontas() -> list[Perfil]:
 
     saida = [Perfil(v.id, v.nome, "pronta", "padrao", v.id, v.genero, "pt-BR",
                     descricao=v.descricao) for v in tts.VOZES]
+    # Perfil de narração PT-BR do proprietário, usando a voz masculina natural do Optimus.
+    saida.append(Perfil(
+        "edton-braz", "Edton Braz", "pronta", "padrao", "prime", "masculina", "pt-BR",
+        velocidade=1.08, tom=0.5, expressividade=0.75,
+        descricao=("Narrador jovem-adulto de ciência e tecnologia; PT-BR urbano neutro, "
+                   "dicção nítida e coloquial, timbre médio/médio-agudo claro, projeção "
+                   "próxima e seca, ritmo ágil sem atropelar, micro-pausas estratégicas, "
+                   "perguntas curiosas, ênfase controlada em números e contrastes, "
+                   "fechamentos firmes e amigáveis. Sem imitar pessoa real.")))
     # Voz original do Optimus: um mordomo calmo e formal (não imita nenhuma voz existente).
     saida.append(Perfil("mordomo", "Mordomo", "pronta", "padrao", "nexus", "masculina",
                         velocidade=0.92, tom=-1.5,
