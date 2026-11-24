@@ -63,7 +63,7 @@ class Perfil:
         return asdict(self)
 
 
-def _rodar(comando: list[str], tempo: float = 6.0) -> str:
+def _rodar(comando: list[str], tempo: float = 2.0) -> str:
     if not shutil.which(comando[0]):
         return ""
     try:
@@ -108,7 +108,7 @@ def _placas_windows() -> list[Placa]:
         "{4d36e968-e325-11ce-bfc1-08002be10318}\\0*' -ErrorAction SilentlyContinue | "
         "ForEach-Object { \"$($_.DriverDesc)|$($_.'HardwareInformation.qwMemorySize')\" }"
     )
-    saida = _rodar(["powershell", "-NoProfile", "-Command", script], tempo=10)
+    saida = _rodar(["powershell", "-NoProfile", "-Command", script], tempo=3)
     placas = []
     for linha in saida.splitlines():
         if "|" not in linha:
