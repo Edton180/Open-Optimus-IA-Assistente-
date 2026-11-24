@@ -25,7 +25,7 @@ def test_pergunta_sobre_acoes_brB_vai_para_pesquisa_web():
     from optimus.roteador import pre_execucao
 
     texto = "valor das ações do banco BRB hoje?"
-    assert pre_execucao(texto) == ("pesquisar_web", {"consulta": texto.lower().replace("ç", "ç")})
+    assert pre_execucao(texto) == ("pesquisar_web", {"consulta": "valor das acoes do banco brb hoje"})
     ferramentas = ferramentas_ativas(Config())
     selecionadas = selecionar_ferramentas(texto, ferramentas)
     assert "pesquisar_web" in selecionadas
