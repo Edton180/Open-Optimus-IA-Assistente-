@@ -356,6 +356,12 @@ def test_biblioteca_pela_interface_indexa_lista_e_esquece(tmp_path, monkeypatch)
         assert listagem["total"] == 1
         assert listagem["documentos"][0]["titulo"] == "manual.md"
 
+        busca = _req(base + "/api/biblioteca?q=segurança+laboratório")
+        assert busca["total"] == 1
+        assert busca["resultados"][0]["titulo"] == "manual.md"
+        assert "Manual de segurança" in busca["resultados"][0]["trecho"]
+        assert str(docs / "manual.md") in busca["resultados"][0]["citacao"]
+
         pedido = urllib.request.Request(
             base + "/api/biblioteca", data=json.dumps({"pasta": str(docs)}).encode(),
             headers={"Content-Type": "application/json"}, method="DELETE")
