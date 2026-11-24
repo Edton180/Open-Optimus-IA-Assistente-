@@ -527,13 +527,26 @@ def status() -> dict[str, Any]:
     try:
         arquivos = [dict(r) for r in con.execute(
             "SELECT nome,tamanho,total,cursor,concluido,atualizado FROM arquivos ORDER BY nome")]
-        artigos = int(con.execute(
-            "SELECT COUNT(DISTINCT arquivo || ':' || caminho_artigo) FROM trechos").fetchone()[0])
-        trechos = int(con.execute("SELECT COUNT(*) FROM trechos").fetchone()[0])
-        embeddings = int(con.execute(
-            "SELECT COUNT(*) FROM trechos WHERE embedding IS NOT NULL").fetchone()[0])
         catalogo = zim.listar_zim()
-        arquivos_disponiveis = int(catalogo.get("total") or 0)
+        nomes_disponiveis = [
+            str(item.get("nome") or "") for item in catalogo.get("arquivos", [])
+            if item.get("nome")
+        ]
+        arquivos_disponiveis = len(nomes_disponiveis)
+        if nomes_disponiveis:
+            placeholders = ",".join("?" for _ in nomes_disponiveis)
+            artigos = int(con.execute(
+                f"SELECT COUNT(DISTINCT arquivo || ':' || caminho_artigo) FROM trechos WHERE arquivo IN ({placeholders})",
+                nomes_disponiveis).fetchone()[0])
+            trechos = int(con.execute(
+                f"SELECT COUNT(*) FROM trechos WHERE arquivo IN ({placeholders})",
+                nomes_disponiveis).fetchone()[0])
+            embeddings = int(con.execute(
+                f"SELECT COUNT(*) FROM trechos WHERE embedding IS NOT NULL AND arquivo IN ({placeholders})",
+                nomes_disponiveis).fetchone()[0])
+        else:
+            artigos = trechos = embeddings = 0
+        total_trechos_indice = int(con.execute("SELECT COUNT(*) FROM trechos").fetchone()[0])
         modo = "hibrido" if embeddings else "lexical" if trechos else "indisponivel"
         return {
             "arquivos": arquivos,
@@ -541,6 +554,7 @@ def status() -> dict[str, Any]:
             "artigos_indexados": artigos,
             "trechos": trechos,
             "com_embeddings": embeddings,
+            "trechos_de_arquivos_ausentes": max(0, total_trechos_indice - trechos),
             "modo_busca": modo,
             "pronto": trechos > 0,
             "mensagem": (
