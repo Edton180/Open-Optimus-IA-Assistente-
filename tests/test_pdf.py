@@ -4,7 +4,7 @@ from pypdf import PdfReader
 from reportlab.pdfgen import canvas
 
 from optimus.config import Config
-from optimus.tools import pdf
+from optimus.tools import pdf, pdf_suite
 from optimus.tools.base import Contexto
 
 
@@ -95,7 +95,7 @@ def test_pdf_imagens_para_pdf_cria_uma_pagina_por_imagem(tmp_path):
     Image.new("RGB", (120, 80), "black").save(b)
     destino = tmp_path / "fotos.pdf"
 
-    resultado = pdf.pdf_suite.pdf_imagens_para_pdf(
+    resultado = pdf_suite.pdf_imagens_para_pdf(
         _ctx(tmp_path), f"{a};{b}", str(destino), "auto", 18
     )
 
