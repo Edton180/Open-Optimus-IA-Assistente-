@@ -605,14 +605,16 @@ def pdf_localizar_termos(ctx, arquivo: str, texto: str):
 
 @ferramenta(
     "pdf_censurar",
-    "Indisponível: censura irreversível não implementada. Use pdf_localizar_termos para localizar "
-    "ocorrências; isso não oculta os dados.",
-    {"arquivo": texto("PDF"), "texto": texto("Termos separados por vírgula")},
+    "Censura termos detectados por OCR, rasteriza todas as páginas e descarta o conteúdo original.",
+    {"arquivo": texto("PDF"), "texto": texto("Termos separados por vírgula"),
+     "destino": texto("PDF de saída"), "idioma": texto("Idioma Tesseract: por, eng..."),
+     "escala": numero("Escala de renderização entre 2 e 5")},
     grupo="pdf", risco=MODERADO, obrigatorios=["arquivo", "texto"],
 )
-def pdf_censurar(ctx, arquivo: str, texto: str):
-    return {"erro": "Censura irreversível não está implementada. O PDF original não foi alterado. "
-            "Use pdf_localizar_termos apenas para localizar ocorrências; isso não oculta os dados."}
+def pdf_censurar(ctx, arquivo: str, texto: str, destino: str = "",
+                 idioma: str = "por", escala: int = 3):
+    from optimus.tools.pdf_suite import censurar_por_rasterizacao
+    return censurar_por_rasterizacao(ctx, arquivo, texto, destino, idioma, escala)
 
 
 @ferramenta(
