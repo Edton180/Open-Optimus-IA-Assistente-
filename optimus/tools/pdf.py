@@ -10,6 +10,8 @@ from __future__ import annotations
 import re
 import shutil
 import subprocess
+from html import escape as html_escape
+from io import BytesIO
 from pathlib import Path
 
 from optimus.safety import LIVRE, MODERADO
@@ -55,6 +57,64 @@ def _paginas_parse(s: str, total: int) -> list[int]:
             except ValueError:
                 continue
     return sorted(indices)
+
+
+def _ordem_paginas_parse(s: str, total: int) -> list[int]:
+    """Interpreta a ordem informada sem ordenar nem remover repetições."""
+    if not s or not s.strip():
+        return list(range(total))
+    indices = []
+    for parte in re.split(r"[,\\s]+", s.strip()):
+        if not parte:
+            continue
+        try:
+            if "-" in parte:
+                a, b = (int(v) for v in parte.split("-", 1))
+                passo = 1 if b >= a else -1
+                candidatos = range(a, b + passo, passo)
+            else:
+                candidatos = (int(parte),)
+        except ValueError:
+            continue
+        indices.extend(i - 1 for i in candidatos if 1 <= i <= total)
+    return indices
+
+
+def _sobrepor_texto(pagina, texto: str, marca: bool = False) -> None:
+    """Aplica texto visível à página. Requer reportlab; não cria assinatura digital."""
+    try:
+        from reportlab.lib.colors import Color
+        from reportlab.pdfgen import canvas
+        from pypdf import PdfReader
+    except ImportError as erro:
+        raise RuntimeError(
+            'Este recurso exige reportlab. Instale: pip install "optimus-assistente[documentos]"'
+        ) from erro
+    largura = float(pagina.mediabox.width)
+    altura = float(pagina.mediabox.height)
+    buffer = BytesIO()
+    tela = canvas.Canvas(buffer, pagesize=(largura, altura))
+    if marca:
+        tela.saveState()
+        tela.setFillColor(Color(0.55, 0.55, 0.55, alpha=0.24))
+        tela.translate(largura / 2, altura / 2)
+        tela.rotate(35)
+        tela.setFont("Helvetica-Bold", max(18, min(48, largura / 12)))
+        tela.drawCentredString(0, 0, texto[:100])
+        tela.restoreState()
+    else:
+        tela.setFillColor(Color(0, 0, 0, alpha=0.9))
+        tela.setFont("Helvetica", 9)
+        tela.drawCentredString(largura / 2, 18, texto[:80])
+    tela.save()
+    buffer.seek(0)
+    pagina.merge_page(PdfReader(buffer).pages[0])
+
+
+def _salvar_pdf(writer, destino: Path) -> None:
+    destino.parent.mkdir(parents=True, exist_ok=True)
+    with open(destino, "wb") as arquivo:
+        writer.write(arquivo)
 
 
 @ferramenta(
