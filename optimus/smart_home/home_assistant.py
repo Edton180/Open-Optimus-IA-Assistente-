@@ -114,6 +114,19 @@ def _container(elevate: bool = False) -> dict[str, Any]:
             "imagem": partes[2] if len(partes) > 2 else IMAGEM}
 
 
+def _healthcheck(timeout: float = 2.0) -> dict[str, Any]:
+    """Confirma que a interface HTTP do Home Assistant responde localmente."""
+    try:
+        import httpx
+        resposta = httpx.get(f"http://127.0.0.1:{PORTA}/", timeout=timeout,
+                             follow_redirects=False)
+        return {"saudavel": resposta.status_code < 500,
+                "http_status": resposta.status_code}
+    except Exception as exc:
+        return {"saudavel": False, "http_status": None,
+                "observacao": type(exc).__name__}
+
+
 def estado() -> dict[str, Any]:
     runtime = _runtime()
     try:
@@ -135,6 +148,8 @@ def estado() -> dict[str, Any]:
                          "verificacao": "HTTP local"}
         except Exception:
             pass
+    if container.get("rodando"):
+        container.update(_healthcheck())
     try:
         tarefa = dict(_TAREFA)
     except Exception:
@@ -187,6 +202,23 @@ def instalar_ambiente() -> dict[str, Any]:
         return {"ok": True, "mensagem": "Docker já está instalado e ativo."}
     if platform.system() == "Linux":
         _instalar_runtime_linux()
+    elif platform.system() == "Darwin":
+        brew = shutil.which("brew")
+        if not brew:
+            raise RuntimeError("Homebrew não foi encontrado. O Optimus pode instalar o Docker Desktop automaticamente quando o Homebrew estiver disponível.")
+        p = subprocess.run([brew, "install", "--cask", "docker"],
+                           capture_output=True, text=True, timeout=1800, check=False)
+        if p.returncode:
+            raise RuntimeError("A instalação do Docker Desktop pelo Homebrew falhou: " +
+                               (p.stderr or p.stdout or "erro sem detalhes")[-1000:])
+        subprocess.Popen(["open", "-a", "Docker"], stdin=subprocess.DEVNULL,
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        limite = time.monotonic() + 240
+        while time.monotonic() < limite:
+            if _runtime().get("docker_ativo") is True:
+                return {"ok": True, "mensagem": "Docker Desktop instalado e inicializado."}
+            time.sleep(4)
+        raise RuntimeError("Docker Desktop foi instalado, mas ainda não respondeu. Verifique a virtualização e conclua a primeira abertura do Docker Desktop.")
     elif platform.system() == "Windows":
         winget = shutil.which("winget")
         if not winget:
@@ -227,7 +259,9 @@ def instalar() -> dict[str, Any]:
     if not runtime["suportado"]:
         raise RuntimeError("Este sistema operacional não está na matriz de provisionamento suportada.")
     if not runtime["docker_instalado"]:
-        instalar_ambiente()
+        resultado_runtime = instalar_ambiente()
+        if resultado_runtime.get("reiniciar"):
+            return resultado_runtime
         runtime = _runtime()
     if runtime["docker_ativo"] is not True:
         try:
@@ -250,12 +284,12 @@ def instalar() -> dict[str, Any]:
         args += ["-p", f"{PORTA}:8123"]
     args += [IMAGEM]
     _executar(args, timeout=90, elevate=True)
-    for _ in range(30):
+    for _ in range(120):
         time.sleep(2)
         st = _container(elevate=True)
-        if st["rodando"]:
-            return {"ok": True, "mensagem": "Home Assistant iniciado. A primeira inicialização pode levar alguns minutos.", "url": f"http://127.0.0.1:{PORTA}"}
-    raise RuntimeError("O container foi criado, mas não confirmou estado ativo. Consulte os logs para identificar o problema.")
+        if st["rodando"] and _healthcheck(timeout=2).get("saudavel"):
+            return {"ok": True, "mensagem": "Home Assistant instalado, iniciado e respondendo ao health-check HTTP.", "url": f"http://127.0.0.1:{PORTA}"}
+    raise RuntimeError("O container foi criado, mas o Home Assistant não passou no health-check após 4 minutos. Os dados foram preservados; consulte os logs antes de tentar novamente.")
 
 
 def acao(nome: str) -> dict[str, Any]:
