@@ -272,7 +272,8 @@ def pesquisar_web(ctx, consulta: str, quantidade: int = 0):
         return {"consulta": consulta, "erro": "Os buscadores não retornaram resultados "
                 "com relação suficiente com a pergunta. Não use resultados genéricos como resposta.",
                 "provedores_consultados": provedores, "falhas": falhas[:4]}
-    return {"consulta": consulta, "consultas_usadas": variantes,
+    origem = pontuados[0].get("provedor", "") if pontuados else ""
+    return {"consulta": consulta, "buscador": origem, "consultas_usadas": variantes,
             "provedores_consultados": provedores, "total_relevantes": len(pontuados),
             "itens": pontuados[:limite]}
 
