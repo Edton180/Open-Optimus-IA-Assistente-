@@ -1085,6 +1085,19 @@ async function testarHomeAssistant() {
   }
 }
 $("#casa-testar").onclick = testarHomeAssistant;
+$("#casa-onvif-descobrir").onclick = async () => {
+  const saida = $("#casa-onvif-resultados");
+  saida.textContent = "Procurando câmeras ONVIF na rede local…";
+  try {
+    const d = await api("/api/cameras/descobrir", { method: "POST", json: {} });
+    saida.innerHTML = d.total ? (d.itens || []).map((item) =>
+      `<article class="cartao"><b>Câmera ONVIF encontrada</b>
+        <p>IP: ${esc(item.ip || "não informado")}</p>
+        <p>Endpoint: ${(item.endpoints || []).map(esc).join("<br>")}</p>
+        <p class="sutil">Autenticação: não verificada. Informe abaixo o endereço RTSP ou snapshot e as credenciais da câmera.</p></article>`
+    ).join("") : `<p class="sutil">${esc(d.mensagem || "Nenhuma câmera encontrada.")}</p>`;
+  } catch (e) { saida.textContent = "Falha na descoberta: " + e.message; }
+};
 $("#casa-salvar").onclick = async () => {
   const status = $("#casa-conexao-status");
   status.textContent = "Salvando configuração local…";
