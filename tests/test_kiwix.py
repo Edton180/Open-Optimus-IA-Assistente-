@@ -53,10 +53,10 @@ def test_inicia_kiwix_local_sem_shell(tmp_path, monkeypatch):
 
     assert dados["executando"] is True
     assert dados["arquivo"] == "wikipedia_pt.zim"
-    assert dados["url"] == "http://127.0.0.1:8766/"
+    assert dados["url"] == "http://127.0.0.1:8767/"
     assert criados[0].kwargs["shell"] is False
     assert "--address=127.0.0.1" in criados[0].args
-    assert "--port=8766" in criados[0].args
+    assert "--port=8767" in criados[0].args
     assert Path(criados[0].args[-1]).name == "wikipedia_pt.zim"
     assert criados[0].kwargs["stdin"] == kiwix.subprocess.DEVNULL
 
