@@ -179,12 +179,17 @@ def preparar_embedding(url: str, modelo: str = "") -> dict[str, Any]:
             if resposta.status_code != 200:
                 return {"instalado": False,
                         "erro": f"Ollama não conseguiu baixar all-minilm (HTTP {resposta.status_code})."}
+            concluido = False
             for linha in resposta.iter_lines():
                 if not linha:
                     continue
                 dados = json.loads(linha)
                 if dados.get("error"):
                     return {"instalado": False, "erro": str(dados["error"])[:500]}
+                if dados.get("status") == "success":
+                    concluido = True
+            if not concluido:
+                return {"instalado": False, "erro": "Ollama encerrou o download sem confirmar sucesso."}
         return {"instalado": True, "modelo": "all-minilm", "origem": "baixado"}
     except Exception as erro:
         return {"instalado": False, "erro": f"Falha ao preparar modelo de embeddings: {erro}"}
