@@ -458,10 +458,12 @@
           <button class="botao" data-ha-acao="parar">Parar</button>
           <button class="botao" data-ha-acao="reiniciar">Reiniciar</button>
           <button class="botao" data-ha-acao="atualizar">Atualizar Home Assistant</button>
+          <button class="botao" data-ha-acao="logs">Ver logs</button>
           <button class="botao" data-ha-acao="backup">Criar backup</button>
           <button class="botao perigo" data-ha-acao="desinstalar">Remover serviço (preservar dados)</button>
         </div>
         <p id="ha-gerenciado-status" class="sutil" role="status" aria-live="polite">Nenhuma operação em andamento.</p>
+        <pre id="ha-gerenciado-logs" class="oculto" aria-label="Logs do Home Assistant"></pre>
         <details><summary>O que será instalado e o que ainda exige participação?</summary>
           <ul>
             <li>O Optimus instala e administra o container e mantém a configuração em uma pasta local.</li>
