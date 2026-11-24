@@ -1,4 +1,4 @@
-"""Motor OmniVoice (k2-fsa, licença Apache-2.0): clonagem, criação de voz por descrição e
+"""Motor OmniVoice (código Apache-2.0; pesos oficiais CC-BY-NC-4.0): clonagem, criação de voz por descrição e
 mais de 600 idiomas num modelo só.
 
 - **Clonar**: alguns segundos de amostra bastam; a "impressão" da voz é calculada uma vez e
