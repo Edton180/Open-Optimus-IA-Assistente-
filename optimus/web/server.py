@@ -487,6 +487,76 @@ class Manipulador(BaseHTTPRequestHandler):
             tipo += "; charset=utf-8"
         self._bytes(alvo.read_bytes(), tipo)
 
+    def _proxy_kiwix(self, caminho: str) -> None:
+        """Expõe o leitor Kiwix pelo mesmo host/porta do Optimus, inclusive no celular.
+
+        O Kiwix continua preso a 127.0.0.1; o proxy exige a autenticação normal
+        da API e não aceita host, porta ou esquema fornecidos pelo navegador.
+        """
+        from optimus import kiwix
+
+        estado_leitor = kiwix.estado()
+        if not estado_leitor.get("executando"):
+            return self._json({"erro": "O leitor Kiwix não está em execução."}, 409)
+        partes = caminho.strip("/").split("/")[3:]
+        if any(p in (".", "..") or "\\\\" in p or "\\x00" in p for p in partes):
+            return self._json({"erro": "Caminho inválido para o leitor."}, 400)
+        sufixo = "/".join(partes)
+        destino = f"http://127.0.0.1:{int(estado_leitor['porta'])}/" + sufixo
+        consulta = urlparse(self.path).query
+        if consulta:
+            destino += "?" + consulta
+        cabecalhos = {"User-Agent": "Open-Optimus-Kiwix-Proxy/1.0"}
+        for nome in ("Range", "If-Range", "Accept", "Accept-Encoding"):
+            valor = self.headers.get(nome)
+            if valor:
+                cabecalhos[nome] = valor
+        requisicao = urllib.request.Request(destino, headers=cabecalhos)
+        try:
+            resposta = urllib.request.urlopen(requisicao, timeout=30)
+        except urllib.error.HTTPError as erro:
+            resposta = erro
+        except (urllib.error.URLError, TimeoutError, OSError) as erro:
+            return self._json({"erro": f"Não foi possível acessar o leitor Kiwix: {erro}"}, 502)
+
+        with resposta:
+            status = getattr(resposta, "status", resposta.getcode())
+            tipo = resposta.headers.get("Content-Type", "application/octet-stream")
+            eh_html = "text/html" in tipo.lower()
+            if eh_html:
+                corpo = resposta.read()
+                # O Kiwix gera links absolutos a partir da raiz. Reescrevemos
+                # os caminhos locais para continuarem dentro do proxy autenticado.
+                texto = corpo.decode("utf-8", errors="replace")
+                texto = texto.replace('href="/', 'href="/api/zim/leitor/')
+                texto = texto.replace('src="/', 'src="/api/zim/leitor/')
+                texto = texto.replace('action="/', 'action="/api/zim/leitor/')
+                texto = texto.replace('url(/', 'url(/api/zim/leitor/')
+                corpo = texto.encode("utf-8")
+                self.send_response(status)
+                self.send_header("Content-Type", tipo)
+                self.send_header("Content-Length", str(len(corpo)))
+                self.send_header("Cache-Control", "no-store")
+                self.send_header("X-Content-Type-Options", "nosniff")
+                self.end_headers()
+                self.wfile.write(corpo)
+                return
+
+            self.send_response(status)
+            for nome in ("Content-Type", "Content-Length", "Content-Range",
+                         "Accept-Ranges", "Last-Modified", "ETag"):
+                valor = resposta.headers.get(nome)
+                if valor:
+                    self.send_header(nome, valor)
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.end_headers()
+            while True:
+                bloco = resposta.read(64 * 1024)
+                if not bloco:
+                    break
+                self.wfile.write(bloco)
+
     def _api(self, metodo: str, caminho: str, consulta: dict) -> None:
         estado = self.estado
         optimus = estado.optimus
@@ -503,6 +573,8 @@ class Manipulador(BaseHTTPRequestHandler):
                                             "modulos": True, "casa_gerenciada": True}})
         if recurso == "zim":
             from optimus import kiwix, zim
+            if metodo == "GET" and ident == "leitor":
+                return self._proxy_kiwix(caminho)
             if metodo == "GET" and ident == "catalogo":
                 from optimus import zim_catalog
                 return self._json(zim_catalog.catalogo())
