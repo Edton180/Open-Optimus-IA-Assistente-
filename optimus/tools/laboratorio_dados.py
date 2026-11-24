@@ -10,6 +10,7 @@ import gzip
 import hashlib
 import html
 import urllib.parse
+import zlib
 
 from optimus.tools.base import ferramenta, texto
 from optimus.safety import LIVRE
@@ -61,7 +62,11 @@ def laboratorio_dados(ctx, operacao: str, texto: str):
             comprimido = base64.b64decode(texto, validate=True)
             if len(comprimido) > 2 * 1024 * 1024:
                 return {"erro": "Limite do arquivo comprimido: 2 MiB."}
-            descomprimido = gzip.decompress(comprimido)
+            descompactador = zlib.decompressobj(16 + zlib.MAX_WBITS)
+            descomprimido = descompactador.decompress(comprimido, 8 * 1024 * 1024 + 1)
+            if len(descomprimido) > 8 * 1024 * 1024 or descompactador.unconsumed_tail:
+                return {"erro": "O conteúdo descomprimido excede 8 MiB."}
+            descomprimido += descompactador.flush()
             if len(descomprimido) > 8 * 1024 * 1024:
                 return {"erro": "O conteúdo descomprimido excede 8 MiB."}
             resultado = descomprimido.decode("utf-8")
