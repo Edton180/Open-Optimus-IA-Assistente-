@@ -28,11 +28,8 @@ def test_pdf_organizar_preserva_ordem_exatamente(tmp_path):
     resultado = pdf.pdf_organizar(_ctx(tmp_path), str(origem), "3,1,2", str(destino))
 
     assert "erro" not in resultado
-    textos = [p.extract_text() for p in PdfReader(str(destino)).pages]
-    assert ["PAGINA TRES", "PAGINA UM", "PAGINA DOIS"] == [
-        next(t for t in textos if nome in t) for nome in
-        ["PAGINA TRES", "PAGINA UM", "PAGINA DOIS"]
-    ]
+    textos = [p.extract_text().strip() for p in PdfReader(str(destino)).pages]
+    assert textos == ["PAGINA TRES", "PAGINA UM", "PAGINA DOIS"]
 
 
 def test_pdf_marca_aplica_texto_visivel(tmp_path):
