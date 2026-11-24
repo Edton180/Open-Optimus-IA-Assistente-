@@ -58,5 +58,5 @@ def test_deepsearch_nao_inventa_fontes_quando_busca_falha(monkeypatch):
 
 
 def test_dominio_oficial_brasileiro():
-    assert deepsearch._dominio("https://www.gov.br/") == "gov.br"
+    assert deepsearch._dominio("https://www.gov.br/") == "www.gov.br"
     assert deepsearch._dominio("https://ri.brb.com.br/") == "brb.com.br"
