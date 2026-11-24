@@ -317,8 +317,8 @@
     <section id="tela-casa" class="tela">
       <div class="tela-cabecalho"><h2>Casa inteligente</h2>
         <p>Luzes, tomadas e câmeras pela rede. Você <b>não precisa</b> do Home Assistant: tomadas TP-Link Kasa e câmeras IP funcionam direto. O Home Assistant é opcional, para quem já usa e quer trazer tudo junto.</p></div>
-      <h3 class="subtitulo">📷 Câmeras ao vivo</h3>
-      <p class="sutil">Uma câmera Wi-Fi (Intelbras e outras) só mostra a imagem para quem tem o <b>login dela</b> — por isso o Optimus acha a câmera na rede, mas precisa do usuário e senha para ver. Adicione abaixo; nada sai do seu PC.</p>
+      <h3 class="subtitulo">📷 Prévia das câmeras</h3>
+      <p class="sutil">Prévia JPEG atualizada periodicamente (não é vídeo contínuo). Cadastre o endereço de snapshot/RTSP e as credenciais da câmera. A descoberta automática por fabricante/ONVIF ainda não está disponível.</p>
       <div class="cartao formulario" id="form-camera">
         <div class="linha">
           <label>Nome<input id="cam-nome" class="campo" placeholder="Portão"></label>
@@ -341,7 +341,8 @@
         <div class="linha" style="margin-top:.6rem"><label>Endereço do Home Assistant<input id="casa-url" class="campo" placeholder="http://192.168.0.10:8123"></label>
           <label>Token de acesso<input id="casa-token" class="campo" type="password" placeholder="token de longa duração"></label></div>
         <div class="linha"><button class="botao primario" id="casa-salvar">Salvar e conectar</button>
-          <button class="botao" id="casa-atualizar">Atualizar aparelhos</button></div>
+          <button class="botao" id="casa-atualizar">Atualizar aparelhos</button>
+          <button class="botao" id="casa-diagnostico">Diagnosticar integrações</button></div>
       </details>
       <div id="casa-aparelhos" class="grade"></div>
     </section>

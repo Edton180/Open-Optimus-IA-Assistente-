@@ -93,3 +93,12 @@ ngrok já entregam HTTPS.
 
 Instalação rápida do cloudflared:  
 https://developers.cloudflare.com/cloudflare-one/connections/connect-apps/install-and-setup/installation/
+
+## Descobrir dispositivos na rede local
+
+- `rede_local` lê apenas o cache ARP/neighbor que o sistema já conhece; é rápido, mas pode omitir aparelhos.
+- `rede_wifi_varrer` faz uma descoberta ativa limitada à LAN privada das interfaces IPv4 ativas, combinando ping e cache ARP/neighbor.
+- Por segurança, a ferramenta só aceita uma sub-rede privada que pertença a uma interface local ativa e tenha no máximo 256 endereços por execução. Não varre IPs públicos, não faz port scan e não tenta autenticar ou alterar dispositivos.
+- O resultado diferencia dispositivos que responderam ao ping dos que só estavam no cache. MAC pode não estar disponível e o fabricante/hostname ainda não são inferidos nesta versão; aparelhos que bloqueiam ping e não aparecem no cache podem não ser encontrados.
+
+A varredura ativa pede confirmação pelo mecanismo de risco do Optimus. Faça isso apenas em redes que você administra ou tem autorização para diagnosticar.

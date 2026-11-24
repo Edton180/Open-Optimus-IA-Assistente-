@@ -41,7 +41,9 @@ e **"confirmo"** nas críticas. Qualquer "não", "espera" ou "cancela" nega, mes
 | Aurora, Lyra, Titan | fem., fem., masc. | neural, online (Edge) | internet |
 | Sistema (feminina/masculina) | ambos | voz do Windows (Maria, Daniel), espeak-ng no Linux, voz do Android | nada |
 
-A voz **Edton Braz** (também chamada de Matheus) é a voz masculina brasileira jovem e energética da biblioteca da ElevenLabs. Ela já vem cadastrada por padrão no sistema e no Estúdio de voz.
+A opção **Edton Braz** atualmente aponta para uma voz pública da biblioteca ElevenLabs identificada no código como “Matheus - Friendly and Energetic”. Ela **não é uma clonagem validada da voz pessoal do Edton** e não foi comparada automaticamente com uma amostra de referência. Sem chave ElevenLabs, o sistema usa uma voz masculina de reserva (Titan/Prime), que não é a mesma voz.
+
+Para ajustar a voz à amostra pessoal, é necessário importar novamente o áudio de referência no Estúdio e fazer uma avaliação auditiva consentida. A auditoria do histórico disponível não localizou o arquivo de áudio original; portanto, nenhuma semelhança com ele pode ser afirmada neste momento.
 
 Troque falando: *"Optimus, mude para a voz Edton Braz"* ou *"mude para a voz Matheus"*. Se a voz escolhida não estiver disponível, ele usa a reserva mais parecida e avisa.
 

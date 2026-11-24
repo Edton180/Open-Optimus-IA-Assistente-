@@ -19,6 +19,12 @@ TV"*, *"manda o comando ligar para o controle da TV"*, *"tira uma foto da câmer
 Fechaduras, alarmes, portões de garagem e sirenes são tratados como **ações críticas** e sempre pedem
 confirmação.
 
+## O que funciona sem Home Assistant (limites atuais)
+
+Sem Home Assistant, o controle direto nativo é limitado a aparelhos TP-Link Kasa compatíveis com o protocolo local antigo, Bluetooth suportado pelo sistema e câmeras/webcams cadastradas. Tuya/Smart Life, Tapo com KLAP, Intelbras, WAP, TVs e ar-condicionado de outras marcas **não são controlados diretamente pelo Optimus**: precisam de uma integração compatível no Home Assistant ou de um adaptador específico ainda não implementado.
+
+O botão de procurar aparelhos Wi-Fi consulta a tabela de vizinhos que o sistema operacional já conhece (ARP/neighbor cache). Ele **não faz uma varredura ativa completa da sub-rede** e pode deixar de mostrar dispositivos que ainda não trocaram tráfego com o PC.
+
 ## Sem Home Assistant
 
 | Pedido | O que acontece |
@@ -74,6 +80,14 @@ Também dá para cadastrar uma webcam com nome em `config.toml`:
 nome = "Câmera da garagem"
 url = "usb:1"
 ```
+
+## Acesso fora de casa
+
+O acesso pelo celular descrito no guia atual é para a rede local. Para controlar a casa fora do Wi-Fi, use uma VPN autenticada (por exemplo, WireGuard/Tailscale) ou uma solução remota HTTPS do Home Assistant. O Optimus ainda não fornece seu próprio relay remoto, pareamento de dispositivos ou túnel de ponta a ponta. **Não encaminhe a porta 8123 nem exponha RTSP diretamente à internet.**
+
+## Descoberta e compatibilidade de câmeras
+
+Atualmente é possível cadastrar manualmente uma URL HTTP de snapshot ou RTSP, usar câmeras expostas como entidades `camera.*` pelo Home Assistant e webcams USB. Ainda não há descoberta ONVIF/WS-Discovery automática, perfis prontos por fabricante (Intelbras/WAP/Tapo/genéricas) nem grade de streaming contínuo. Cada câmera exige endereço/stream e credenciais válidas; modelos e firmwares variam.
 
 ## Gestos pela câmera
 
