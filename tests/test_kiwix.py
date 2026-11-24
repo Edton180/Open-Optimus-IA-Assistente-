@@ -57,7 +57,7 @@ def test_inicia_kiwix_local_sem_shell(tmp_path, monkeypatch):
     assert criados[0].kwargs["shell"] is False
     assert "--address=127.0.0.1" in criados[0].args
     assert "--port=8766" in criados[0].args
-    assert str((_ for _ in [Path(criados[0].args[-1])]).__next__().name) == "wikipedia_pt.zim"
+    assert Path(criados[0].args[-1]).name == "wikipedia_pt.zim"
     assert criados[0].kwargs["stdin"] == kiwix.subprocess.DEVNULL
 
 
@@ -69,7 +69,10 @@ def test_nao_permite_caminho_externo_ou_travessia(tmp_path, monkeypatch):
         kiwix.iniciar("../fora.zim")
     with pytest.raises(ValueError):
         kiwix.iniciar(str(externo))
-    (pasta / "atalho.zim").symlink_to(externo)
+    try:
+        (pasta / "atalho.zim").symlink_to(externo)
+    except (OSError, NotImplementedError):
+        return
     with pytest.raises(ValueError):
         kiwix.iniciar("atalho.zim")
 
