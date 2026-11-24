@@ -503,6 +503,9 @@ class Manipulador(BaseHTTPRequestHandler):
                                             "modulos": True, "casa_gerenciada": True}})
         if recurso == "zim":
             from optimus import kiwix, zim
+            if metodo == "GET" and ident == "catalogo":
+                from optimus import zim_catalog
+                return self._json(zim_catalog.catalogo())
             if metodo == "GET" and ident == "kiwix":
                 return self._json(kiwix.estado())
             if metodo == "GET" and ident == "buscar":

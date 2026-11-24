@@ -216,6 +216,35 @@ async function carregarZim() {
           mensagemErroZim(erroInicial) + ". Você pode tentar novamente pelo botão abaixo.";
       }
     }
+    try {
+      const catalogo = await api("/api/zim/catalogo");
+      const alvo = $("#zim-catalogo");
+      const selo = $("#zim-catalogo-resumo");
+      if (alvo) {
+        const categorias = Array.isArray(catalogo.categories) ? catalogo.categories : [];
+        alvo.innerHTML = categorias.map((categoria) =>
+          '<article class="cartao"><h3>' + esc(categoria.name) + '</h3><p class="sutil">' +
+          esc(categoria.description || "") + '</p>' +
+          (categoria.tiers || []).map((tier) =>
+            '<div style="margin-top:.7rem"><b>' + esc(tier.name) +
+            (tier.recommended ? ' · Recomendado' : '') + '</b><p class="sutil">' +
+            esc(tier.description || "") + '</p><ul class="lista pequena">' +
+            (tier.resources || []).map((recurso) =>
+              '<li><span><b>' + esc(recurso.title) + '</b><small class="sutil"> ' +
+              esc(recurso.description || "") + ' · ' + esc(String(recurso.size_mb ?? "?")) +
+              ' MB</small></span><span class="selo">' +
+              (recurso.instalado ? 'Instalado' : 'No catálogo') + '</span></li>'
+            ).join("") + '</ul></div>'
+          ).join("") + '</article>'
+        ).join("");
+      }
+      if (selo) selo.textContent = (catalogo.total_instalados || 0) + " de " +
+        (catalogo.total_recursos || 0) + " recursos instalados";
+    } catch (erroCatalogo) {
+      const alvo = $("#zim-catalogo");
+      if (alvo) alvo.innerHTML = '<p class="sutil">Não foi possível carregar o catálogo: ' +
+        esc(mensagemErroZim(erroCatalogo)) + '</p>';
+    }
     resumo.innerHTML = [
       ["Arquivos", String(dados.total ?? arquivos.length)],
       ["Espaço ocupado", formatarBytes(dados.tamanho_total_bytes ?? 0)]
