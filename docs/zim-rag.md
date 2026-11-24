@@ -8,7 +8,9 @@ pip install "optimus-assistente[conhecimento]"
 ```
 
 A dependência publica wheels para Windows x64, Linux x86_64/aarch64 e macOS
-x86_64/arm64. O conteúdo permanece local.
+x86_64/arm64. O conteúdo permanece local. Se a dependência não estiver disponível, o botão de indexação
+instala automaticamente o wheel oficial em uma pasta privada do Optimus usando o Python
+atual; não altera PATH, não usa privilégios administrativos e não modifica o ambiente global.
 
 ## Indexação incremental
 
@@ -26,7 +28,9 @@ A recuperação combina cobertura lexical FTS5 com similaridade cosseno de embed
 Se um modelo de embedding compatível já estiver instalado no Ollama, o Optimus detecta
 automaticamente modelos conhecidos (EmbeddingGemma, nomic-embed-text, mxbai-embed-large,
 BGE-M3, Snowflake Arctic Embed e all-minilm). Também aceita o nome explícito via API.
-Nenhum modelo é baixado silenciosamente. Sem um modelo local, a recuperação continua
+Nenhum modelo de embedding é baixado silenciosamente. Se houver um modelo conhecido já instalado,
+o Optimus o detecta; se o modelo for instalado posteriormente, os embeddings ausentes podem
+ser preenchidos sem reler os artigos ZIM. Sem um modelo local, a recuperação continua
 funcionando em modo lexical e a interface deve identificar que não há vetores.
 
 ## RAG conectado ao agente
