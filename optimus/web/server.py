@@ -840,6 +840,9 @@ class Manipulador(BaseHTTPRequestHandler):
                 "climate": {"turn_on", "turn_off", "toggle"},
                 "lock": {"lock", "unlock"},
                 "media_player": {"turn_on", "turn_off", "toggle"},
+                "humidifier": {"turn_on", "turn_off", "toggle"},
+                "water_heater": {"turn_on", "turn_off"},
+                "vacuum": {"start", "stop", "return_to_base"},
             }
             if "." not in entity_id:
                 return self._json({"ok": False, "erro": "Identificador de aparelho inválido."}, 400)
