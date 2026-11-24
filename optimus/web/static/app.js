@@ -168,7 +168,8 @@ $("#pdf-enviar").addEventListener("click", async () => {
   const arquivos = [...($("#pdf-arquivos").files || [])];
   if (!arquivos.length) { $("#pdf-estado").textContent = "Selecione pelo menos um PDF."; return; }
   for (const arquivo of arquivos) {
-    if (!/\\.(pdf|jpe?g|png|tiff?|bmp)$/i.test(arquivo.name)) { $("#pdf-estado").textContent = "Envie PDF ou imagem JPG, PNG, TIFF ou BMP."; continue; }
+    const extensao = arquivo.name.toLowerCase().split(".").pop();
+    if (!["pdf", "jpg", "jpeg", "png", "tif", "tiff", "bmp"].includes(extensao)) { $("#pdf-estado").textContent = "Envie PDF ou imagem JPG, PNG, TIFF ou BMP."; continue; }
     $("#pdf-estado").textContent = "Enviando " + arquivo.name + "…";
     try {
       const r = await api("/api/pdf/upload?nome=" + encodeURIComponent(arquivo.name), {
