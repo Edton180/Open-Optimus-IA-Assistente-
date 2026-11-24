@@ -25,7 +25,7 @@ uma operação concluída.
 | Converter para PDF | \`pdf_imagens_para_pdf\` (JPG/PNG/TIFF/BMP), \`pdf_documento_para_pdf\` (DOC/DOCX/XLS/XLSX/PPT/PPTX/ODT/ODS/ODP/RTF/TXT/CSV) e \`pdf_html_para_pdf\` via LibreOffice |
 | Converter de PDF | \`pdf_converter\` (TXT/HTML/CSV/DOCX), \`pdf_para_imagens\` (JPG/PNG), \`pdf_para_markdown\` |
 | Editar | \`pdf_cortar\`, \`pdf_marca\`, \`pdf_numeros\`, \`pdf_girar\` |
-| Segurança | \`pdf_proteger\`, \`pdf_desbloquear\`, \`pdf_localizar_termos\`, \`pdf_censurar\` (bloqueada até haver redação segura) |
+| Segurança | \`pdf_proteger\`, \`pdf_desbloquear\`, \`pdf_localizar_termos\`, \`pdf_censurar\` (OCR + rasterização destrutiva, exige revisão visual) |
 | Inteligência | \`pdf_comparar\`, \`pdf_resumir\`, \`pdf_formularios\`, \`pdf_metadados\` |
 
 ## Exemplos no chat
@@ -74,8 +74,7 @@ optimus pdf ocr escaneado.pdf --idioma por
 ## Limites técnicos e segurança
 
 - \`pdf_assinar\` existente é um carimbo visual, não assinatura digital ICP-Brasil.
-- \`pdf_censurar\` continua deliberadamente bloqueada: localizar texto ou desenhar tarja por cima
-  não garante remoção irreversível de texto, imagens, OCR, camadas e anexos.
+- \`pdf_censurar\` rasteriza todas as páginas, localiza ocorrências por OCR, cobre as regiões e descarta o conteúdo original selecionável. OCR pode não reconhecer todo conteúdo; revise visualmente cada página e mantenha o original. A ferramenta aborta se a verificação OCR ainda detectar o termo.
 - A conversão de PDF para DOCX/HTML/CSV baseada em extração de texto não preserva perfeitamente
   a diagramação original. PDF para Office com fidelidade visual exige um motor especializado.
 - \`pdf_comprimir\` com pypdf faz otimização estrutural; recompressão de imagens depende de
