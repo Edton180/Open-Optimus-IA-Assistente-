@@ -1,23 +1,40 @@
 # Casa inteligente
 
-## Home Assistant (recomendado)
+## Home Assistant integrado e gerenciado pelo Optimus
 
-O [Home Assistant](https://www.home-assistant.io) é um sistema livre que fala com milhares de aparelhos:
-lâmpadas e tomadas Wi-Fi (Tuya/Smart Life, Sonoff, Shelly, TP-Link), Bluetooth, Zigbee, Matter,
-Chromecast, TVs (Samsung, LG), ar-condicionado, aspiradores, fechaduras, sensores e câmeras. Para
-aparelhos com **controle remoto infravermelho** (TV antiga, ar-condicionado, ventilador), use um emissor
-IR como o Broadlink RM integrado ao Home Assistant.
+A tela **Casa inteligente** possui o painel **Home Assistant gerenciado pelo Optimus**. Use
+**Instalar / configurar automaticamente** para detectar o sistema operacional, verificar o runtime
+Docker e provisionar o Home Assistant Container. O Optimus administra o ciclo de vida do container,
+a atualização e os backups sem exigir que o usuário execute comandos Docker manualmente.
 
-1. Instale o Home Assistant num PC, Raspberry Pi ou máquina virtual e adicione seus aparelhos nele.
-2. No Home Assistant: seu perfil > **Segurança** > **Tokens de acesso de longa duração** > Criar token.
-3. No Optimus: **Casa inteligente**, informe o endereço (`http://IP:8123`) e o token, e clique em
-   **Salvar e conectar**.
+- **Linux Debian/Ubuntu:** se o Docker Engine não existir, o Optimus solicita autorização administrativa
+  pelo diálogo do sistema (pkexec), instala o pacote Docker e inicia o serviço.
+- **Windows 10/11:** o Optimus instala Docker Desktop via winget e solicita sua inicialização. Dependendo
+  do computador, o Windows pode exigir reinicialização, WSL2 e a conclusão inicial do Docker Desktop.
+  Depois, clique novamente em instalar para provisionar o Home Assistant.
+- **macOS:** o provisionamento do container pode ser usado com Docker Desktop já instalado e ativo.
+  A instalação automática do Docker Desktop no macOS ainda não está habilitada.
+- **Outros sistemas:** a interface informa que o provisionamento não foi validado e não simula instalação.
 
-Depois é só falar: *"apaga a luz da sala"*, *"liga o ar em 22 graus"*, *"fecha a cortina"*, *"pausa a
-TV"*, *"manda o comando ligar para o controle da TV"*, *"tira uma foto da câmera do portão"*.
+O Home Assistant fica em `http://127.0.0.1:8123` e seus dados ficam em
+`<pasta de configuração do Optimus>/home_assistant`. O container reinicia automaticamente com o
+Docker. O Optimus permite iniciar, parar, reiniciar, atualizar, criar backup e remover o container.
+A remoção preserva os dados; a exclusão definitiva dos dados não é feita automaticamente.
 
-Fechaduras, alarmes, portões de garagem e sirenes são tratados como **ações críticas** e sempre pedem
-confirmação.
+**Importante sobre a edição instalada:** este provisionamento usa Home Assistant Container. Ele oferece
+as integrações e entidades da plataforma Home Assistant, mas não inclui Supervisor, add-ons ou a loja
+de add-ons do Home Assistant OS. Para rádio Zigbee/Matter/Bluetooth conectado por USB, o dispositivo
+precisa estar acessível ao container e a compatibilidade depende do host. A primeira abertura ainda
+exige criar a conta local e concluir o onboarding do Home Assistant; credenciais de serviços e
+pareamento físico não podem ser inventados pelo Optimus.
+
+Depois que o serviço estiver ativo, conclua o onboarding em sua interface e volte ao Optimus. Para
+conectar um servidor já existente, informe sua URL e token na seção de conexão manual. O token é um
+segredo: não o compartilhe. O Optimus mascara o token e pode reutilizar o valor já salvo ao testar
+a conexão.
+
+Documentação oficial: [instalação do Home Assistant](https://www.home-assistant.io/installation/) e
+[autenticação e tokens](https://www.home-assistant.io/docs/authentication/#your-account-profile).
 
 ## O que funciona sem Home Assistant (limites atuais)
 
