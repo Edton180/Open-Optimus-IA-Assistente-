@@ -54,7 +54,9 @@ def test_incremental_index_resume_and_complete(tmp_path, monkeypatch):
     pasta_zim.mkdir()
     arquivo_zim = pasta_zim / "pequeno.zim"
     arquivo_zim.write_bytes(b"zim-fixture")
-    monkeypatch.setattr(zim_rag, "_pasta", lambda: tmp_path / "indice")
+    pasta_indice = tmp_path / "indice"
+    pasta_indice.mkdir()
+    monkeypatch.setattr(zim_rag, "_pasta", lambda: pasta_indice)
     monkeypatch.setattr("optimus.zim.pasta_biblioteca", lambda: pasta_zim)
 
     class Item:
