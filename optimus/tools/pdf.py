@@ -569,18 +569,16 @@ def pdf_assinar(ctx, arquivo: str, texto: str, destino: str = ""):
 
 
 @ferramenta(
-    "pdf_censurar",
-    "Localiza termos sensíveis e marca o arquivo.",
-    {"arquivo": texto("PDF"),
-     "texto": texto("Termos separados por vírgula"),
-     "destino": texto("Arquivo de saída")},
-    grupo="pdf", risco=MODERADO, obrigatorios=["arquivo", "texto"],
+    "pdf_localizar_termos",
+    "Localiza termos sensíveis e informa em quais páginas aparecem. NÃO remove nem oculta os dados.",
+    {"arquivo": texto("PDF"), "texto": texto("Termos separados por vírgula")},
+    grupo="pdf", risco=LIVRE, obrigatorios=["arquivo", "texto"],
 )
-def pdf_censurar(ctx, arquivo: str, texto: str, destino: str = ""):
+def pdf_localizar_termos(ctx, arquivo: str, texto: str):
     err = _precisa_pypdf()
     if err:
         return err
-    from pypdf import PdfReader, PdfWriter
+    from pypdf import PdfReader
     caminho = _caminho(ctx, arquivo)
     if not caminho.is_file():
         return {"erro": f"Arquivo não encontrado: {caminho}"}
@@ -592,18 +590,28 @@ def pdf_censurar(ctx, arquivo: str, texto: str, destino: str = ""):
         return {"erro": "PDF protegido."}
     encontrados = []
     for i, pagina in enumerate(leitor.pages):
-        t = (pagina.extract_text() or "")
+        conteudo = pagina.extract_text() or ""
         for termo in termos:
-            if termo.lower() in t.lower():
+            if termo.casefold() in conteudo.casefold():
                 encontrados.append({"pagina": i + 1, "termo": termo})
-    writer = PdfWriter()
-    for p in leitor.pages:
-        writer.add_page(p)
-    writer.add_metadata({"/CensoredTerms": ",".join(termos)[:200]})
-    out = _caminho(ctx, destino or f"{caminho.stem}_censurado.pdf")
-    with open(out, "wb") as f:
-        writer.write(f)
-    return {"mensagem": f"Marcado. {len(encontrados)} ocorrência(s).", "ocorrencias": encontrados[:50], "destino": str(out)}
+    return {
+        "mensagem": "Localizei os termos, mas não alterei o PDF. Isso NÃO é censura/redação.",
+        "ocorrencias": encontrados[:50],
+        "total_ocorrencias": len(encontrados),
+        "arquivo_original_preservado": str(caminho),
+    }
+
+
+@ferramenta(
+    "pdf_censurar",
+    "Indisponível: censura irreversível não implementada. Use pdf_localizar_termos para localizar "
+    "ocorrências; isso não oculta os dados.",
+    {"arquivo": texto("PDF"), "texto": texto("Termos separados por vírgula")},
+    grupo="pdf", risco=MODERADO, obrigatorios=["arquivo", "texto"],
+)
+def pdf_censurar(ctx, arquivo: str, texto: str):
+    return {"erro": "Censura irreversível não está implementada. O PDF original não foi alterado. "
+            "Use pdf_localizar_termos apenas para localizar ocorrências; isso não oculta os dados."}
 
 
 @ferramenta(
