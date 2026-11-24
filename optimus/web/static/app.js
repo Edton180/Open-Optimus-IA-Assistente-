@@ -120,10 +120,106 @@ function irPara(tela) {
   $$(".tela").forEach((t) => t.classList.toggle("ativa", t.id === "tela-" + tela));
   document.body.classList.toggle("fora-do-chat", tela !== "chat");
   app.classList.remove("lateral-aberta");
-  const carregar = { personas: carregarPersonas, prompts: carregarPrompts, memoria: carregarMemoria, acoes: carregarAcoes, config: carregarConfig, casa: carregarCasa, estudio: () => window.carregarEstudio && window.carregarEstudio() }[tela];
+  const carregar = { personas: carregarPersonas, prompts: carregarPrompts, memoria: carregarMemoria, acoes: carregarAcoes, config: carregarConfig, casa: carregarCasa, estudio: () => window.carregarEstudio && window.carregarEstudio(), pdf: carregarPDF }[tela];
   if (carregar) carregar();
 }
-$$(".menu button").forEach((b) => b.addEventListener("click", () => irPara(b.dataset.tela)));
+// ---------- Suite visual de PDF ----------
+let pdfFerramentas = [];
+let pdfEnviados = [];
+function pdfAtual() { return pdfFerramentas.find((x) => x.nome === $("#pdf-ferramenta").value); }
+async function carregarPDF() {
+  const estadoEl = $("#pdf-estado");
+  try {
+    const dados = await api("/api/pdf");
+    pdfFerramentas = dados.ferramentas || [];
+    $("#pdf-ferramenta").innerHTML = pdfFerramentas.map((f) =>
+      `<option value="${esc(f.nome)}">${esc(f.nome.replaceAll("_", " "))}</option>`).join("");
+    if (!pdfFerramentas.length) throw new Error("Nenhuma ferramenta PDF foi registrada.");
+    desenharParametrosPDF();
+    desenharArquivosPDF();
+    estadoEl.textContent = `${pdfFerramentas.length} ferramentas carregadas · processamento local`;
+  } catch (e) { estadoEl.textContent = "⚠️ " + e.message; }
+}
+function desenharArquivosPDF() {
+  $("#pdf-lista-arquivos").innerHTML = pdfEnviados.length
+    ? pdfEnviados.map((f, i) => `<div class="pdf-arquivo"><span>📄 ${esc(f.nome)}</span><small>${(f.tamanho / 1048576).toFixed(2)} MB</small><button type="button" class="icone" data-pdf-remover="${i}" title="Remover da seleção">✕</button></div>`).join("")
+    : '<p class="sutil">Nenhum PDF adicionado ainda.</p>';
+  $("#pdf-executar").disabled = !pdfEnviados.length || !pdfAtual();
+}
+function desenharParametrosPDF() {
+  const f = pdfAtual();
+  $("#pdf-descricao").textContent = f ? f.descricao : "";
+  const campos = f ? Object.entries(f.parametros || {}) : [];
+  $("#pdf-parametros").innerHTML = campos.map(([nome, info]) => {
+    const tipo = info.type === "integer" || info.type === "number" ? "number" : "text";
+    let valor = "";
+    if (nome === "arquivo" && pdfEnviados[0]) valor = pdfEnviados[0].arquivo;
+    if (nome === "arquivos" && pdfEnviados.length) valor = pdfEnviados.map((x) => x.arquivo).join(";");
+    if ((nome === "arquivo_a" || nome === "arquivo1") && pdfEnviados[0]) valor = pdfEnviados[0].arquivo;
+    if ((nome === "arquivo_b" || nome === "arquivo2") && pdfEnviados[1]) valor = pdfEnviados[1].arquivo;
+    const obrigatorio = (f.obrigatorios || []).includes(nome);
+    return `<label>${esc(nome.replaceAll("_", " "))}${obrigatorio ? " *" : ""}<input class="campo" data-pdf-param="${esc(nome)}" type="${tipo}" value="${esc(valor)}" placeholder="${esc(info.description || nome)}" ${obrigatorio && !valor ? "required" : ""}></label>`;
+  }).join("");
+  $("#pdf-executar").disabled = !pdfEnviados.length || !f;
+}
+$("#pdf-ferramenta").addEventListener("change", desenharParametrosPDF);
+$("#pdf-enviar").addEventListener("click", async () => {
+  const arquivos = [...($("#pdf-arquivos").files || [])];
+  if (!arquivos.length) { $("#pdf-estado").textContent = "Selecione pelo menos um PDF."; return; }
+  for (const arquivo of arquivos) {
+    if (!arquivo.name.toLowerCase().endsWith(".pdf")) { $("#pdf-estado").textContent = "Somente arquivos PDF são aceitos."; continue; }
+    $("#pdf-estado").textContent = "Enviando " + arquivo.name + "…";
+    try {
+      const r = await api("/api/pdf/upload?nome=" + encodeURIComponent(arquivo.name), {
+        method: "POST", headers: { "Content-Type": "application/pdf" }, body: arquivo, tempo: 180000
+      });
+      pdfEnviados.push(r);
+      desenharArquivosPDF();
+    } catch (e) { $("#pdf-estado").textContent = "Falha no envio de " + arquivo.name + ": " + e.message; }
+  }
+  $("#pdf-arquivos").value = "";
+  desenharParametrosPDF();
+  if (pdfEnviados.length) $("#pdf-estado").textContent = pdfEnviados.length + " arquivo(s) pronto(s) para processar.";
+});
+$("#pdf-lista-arquivos").addEventListener("click", (e) => {
+  const botao = e.target.closest("[data-pdf-remover]");
+  if (!botao) return;
+  pdfEnviados.splice(Number(botao.dataset.pdfRemover), 1);
+  desenharArquivosPDF(); desenharParametrosPDF();
+});
+$("#pdf-executar").addEventListener("click", async () => {
+  const f = pdfAtual();
+  if (!f) return;
+  const argumentos = {};
+  for (const campo of $("[data-pdf-param]")) {
+    const nome = campo.dataset.pdfParam;
+    argumentos[nome] = campo.type === "number" && campo.value !== "" ? Number(campo.value) : campo.value.trim();
+  }
+  for (const nome of f.obrigatorios || []) {
+    if (argumentos[nome] === "" || argumentos[nome] === undefined) {
+      $("#pdf-estado").textContent = "Preencha o campo obrigatório: " + nome; return;
+    }
+  }
+  $("#pdf-executar").disabled = true;
+  $("#pdf-estado").textContent = "Processando localmente…";
+  $("#pdf-resultado").textContent = "A operação está em andamento. Não feche o Optimus.";
+  try {
+    const r = await api("/api/pdf/executar", { method: "POST", json: { ferramenta: f.nome, argumentos }, tempo: 300000 });
+    const resultado = r.resultado || {};
+    const mensagem = resultado.mensagem || resultado.resultado || resultado.texto || "Operação concluída.";
+    const detalhes = Object.entries(resultado).filter(([k]) => !["mensagem", "destino", "zip", "arquivos"].includes(k))
+      .map(([k, v]) => `<div><b>${esc(k.replaceAll("_", " "))}:</b> ${esc(typeof v === "object" ? JSON.stringify(v) : v)}</div>`).join("");
+    const links = (r.arquivos || []).map((x) =>
+      `<a class="botao pequeno" href="/api/pdf/arquivo?nome=${encodeURIComponent(x.nome)}" download>⬇ Baixar ${esc(x.nome)}</a>`).join(" ");
+    $("#pdf-resultado").innerHTML = `<p class="sucesso">✅ ${esc(mensagem)}</p>${detalhes}${links ? `<div class="linha">${links}</div>` : ""}`;
+    $("#pdf-estado").textContent = "Operação concluída.";
+  } catch (e) {
+    $("#pdf-resultado").textContent = "Falha: " + e.message;
+    $("#pdf-estado").textContent = "A operação não foi concluída.";
+  } finally { $("#pdf-executar").disabled = !pdfEnviados.length; }
+});
+
+$(".menu button").forEach((b) => b.addEventListener("click", () => irPara(b.dataset.tela)));
 $$("#hud-nav button").forEach((b) => b.addEventListener("click", () => {
   const destino = b.dataset.ir;
   if (destino === "painel-conversa") document.body.classList.toggle("transcricao-aberta");
