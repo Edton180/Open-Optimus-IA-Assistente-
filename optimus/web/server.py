@@ -565,6 +565,31 @@ class Manipulador(BaseHTTPRequestHandler):
             return self._json({"ok": True})
         if recurso == "acoes":
             return self._json({"acoes": optimus.auditoria.ultimas(100)})
+        if recurso == "tunel":
+            from optimus.web import celular
+
+            config = optimus.config
+            if metodo == "POST" and ident == "desligar":
+                parar_tunel()
+            elif metodo == "POST":
+                senha = str(self._corpo().get("senha", "") or config.get("web", "senha", "")).strip()
+                if len(senha) < 12:
+                    return self._json({"erro": "Para acesso externo, use uma senha com pelo menos 12 caracteres."}, 400)
+                config.definir("web", "senha", senha)
+                config.salvar()
+                Manipulador.senha = senha
+                resultado = iniciar_tunel(self.server.server_address[1], senha)
+                if resultado.get("erro"):
+                    return self._json(resultado, 503)
+            url_externa = estado_tunel().get("url", "")
+            agenda_externa = (f"{url_externa}/api/agenda.ics?chave={celular.token_agenda(config)}"
+                              if url_externa else "")
+            return self._json({
+                **estado_tunel(),
+                "qr": celular.qr_svg(url_externa) if url_externa else "",
+                "agenda": agenda_externa,
+                "agenda_qr": celular.qr_svg(agenda_externa) if agenda_externa else "",
+            })
         if recurso == "celular":
             from optimus.web import celular
 
@@ -889,18 +914,27 @@ def desligar_celular() -> None:
 
 
 def iniciar(host: str = "127.0.0.1", porta: int = 8765, abrir_navegador: bool = True,
-            optimus: Optimus | None = None) -> None:
+            optimus: Optimus | None = None, tunel: bool = False) -> None:
     optimus = optimus or Optimus()
     senha = optimus.config.get("web", "senha") or ""
+    if tunel and len(senha) < 12:
+        raise SystemExit("Para usar --tunel, defina uma senha forte com pelo menos 12 caracteres: "
+                         "optimus config web.senha SUA_SENHA_FORTE")
     if host not in ("127.0.0.1", "localhost") and not senha:
         raise SystemExit("Para abrir a interface na rede (celular), defina uma senha: "
                          "optimus config web.senha SUA_SENHA")
     Manipulador.estado = Estado(optimus)
     threading.Thread(target=aquecer_modelos, args=(optimus,), daemon=True).start()
     # A senha protege o acesso de outros aparelhos; só neste PC (127.0.0.1) não é pedida.
-    Manipulador.senha = senha if host not in ("127.0.0.1", "localhost") else ""
+    Manipulador.senha = senha if (tunel or host not in ("127.0.0.1", "localhost")) else ""
     servidor = ThreadingHTTPServer((host, porta), Manipulador)
     servidor.daemon_threads = True
+    if tunel:
+        resultado = iniciar_tunel(servidor.server_address[1], senha)
+        if resultado.get("erro"):
+            servidor.server_close()
+            raise SystemExit(str(resultado["erro"]))
+        print(f"Acesso externo: {resultado.get('url') or 'túnel iniciando; consulte o painel'}")
     try:  # pastas observadas do estúdio passam a rodar enquanto a interface estiver aberta
         from optimus.estudio import automacao
 
@@ -933,7 +967,8 @@ def iniciar(host: str = "127.0.0.1", porta: int = 8765, abrir_navegador: bool = 
     except KeyboardInterrupt:
         print("\nAté logo!")
     finally:
+        parar_tunel()
         servidor.server_close()
 
 
-__all__ = ["iniciar", "cfg"]
+__all__ = ["iniciar", "cfg", "iniciar_tunel", "parar_tunel", "estado_tunel"]
