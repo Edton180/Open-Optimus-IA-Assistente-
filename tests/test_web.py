@@ -457,3 +457,26 @@ def test_rota_modulos_e_tela_da_central(monkeypatch):
     finally:
         httpd.shutdown()
         httpd.server_close()
+
+
+def test_laboratorio_visual_e_api_executam_transformacao_local():
+    httpd, base = _subir()
+    try:
+        pagina = urllib.request.urlopen(base + "/").read().decode()
+        assert 'data-tela="laboratorio"' in pagina
+        assert 'id="lab-operacao"' in pagina
+        dados = _req(base + "/api/laboratorio", {
+            "operacao": "base64_codificar", "texto": "Optimus local"
+        })
+        assert dados["resultado"] == "T3B0aW11cyBsb2NhbA=="
+        try:
+            _req(base + "/api/laboratorio", {
+                "operacao": "comando_shell", "texto": "whoami"
+            })
+        except urllib.error.HTTPError as erro:
+            assert erro.code == 400
+        else:
+            raise AssertionError("Operação desconhecida deveria ser rejeitada")
+    finally:
+        httpd.shutdown()
+        httpd.server_close()

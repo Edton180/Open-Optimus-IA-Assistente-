@@ -484,6 +484,13 @@ class Manipulador(BaseHTTPRequestHandler):
         if recurso == "modulos" and metodo == "GET":
             from optimus import modulos
             return self._json({"modulos": modulos.inventario()})
+        if recurso == "laboratorio" and metodo == "POST":
+            from optimus.tools.laboratorio_dados import laboratorio_dados
+            corpo = self._corpo()
+            operacao = str(corpo.get("operacao") or "")
+            entrada = str(corpo.get("texto") or "")
+            resultado = laboratorio_dados(None, operacao, entrada)
+            return self._json(resultado, 400 if "erro" in resultado else 200)
         if recurso == "pdf":
             from optimus.tools import pdf as _pdf  # noqa: F401
             from optimus.tools import pdf_suite as _pdf_suite  # noqa: F401
