@@ -95,26 +95,51 @@ class Estado:
         self.downloads: dict[str, dict[str, Any]] = {}
         self._falantes: dict[str, tts.Falante] = {}
         self._ouvinte = None
-        self._motor_cache: tuple[float, bool, list[str]] | None = None
+        self._motor_cache: tuple[float, bool, list[str]] = (0.0, False, [])
+        self._motor_destinos: list[dict[str, Any]] = []
+        self._motor_lock = threading.Lock()
+        self._motor_atualizando = False
         optimus.iniciar_lembretes(lambda l: self.avisos.append(
             {"tipo": l.get("tipo", "lembrete"), "texto": l["texto"], "quando": time.time()}))
         optimus.iniciar_copiados()
 
-    def motor_status(self) -> tuple[bool, list[str]]:
-        """Disponibilidade e lista de modelos do motor, com cache de ~4 s.
+    def _atualizar_motor_status(self) -> None:
+        """Consulta o motor fora da thread HTTP: servidores remotos podem não responder."""
+        try:
+            motor = self.optimus.motor
+            disponivel = motor.disponivel()
+            modelos = motor.modelos() if disponivel else []
+            destinos = motor.estado() if isinstance(motor, MotorRede) else []
+            cache = (time.monotonic(), disponivel, modelos, destinos)
+        except Exception:
+            log.exception("Falha ao consultar disponibilidade do motor de IA")
+            cache = (time.monotonic(), False, [], [])
+        finally:
+            # O cache é atualizado mesmo se o provedor externo falhar.
+            with self._motor_lock:
+                self._motor_cache = cache[:3]
+                self._motor_destinos = cache[3]
+                self._motor_atualizando = False
 
-        A tela chama /api/estado a cada poucos segundos; sem o cache, cada poll bate no Ollama
-        (/api/version + /api/tags) mesmo durante uma geração, o que num PC fraco deixa o status
-        lento e faz a interface mostrar "Sem conexão" à toa. O cache evita esse peso.
+    def motor_status(self) -> tuple[bool, list[str]]:
+        """Retorna o último estado imediatamente e atualiza em segundo plano.
+
+        /api/estado é consultado pela interface durante a abertura. Não podemos deixar
+        uma chamada HTTP a Ollama/LM Studio/rede segurar a resposta do servidor web.
         """
         agora = time.monotonic()
-        if self._motor_cache and agora - self._motor_cache[0] < 4.0:
-            return self._motor_cache[1], self._motor_cache[2]
-        motor = self.optimus.motor
-        disponivel = motor.disponivel()
-        modelos = motor.modelos() if disponivel else []
-        self._motor_cache = (agora, disponivel, modelos)
-        return disponivel, modelos
+        with self._motor_lock:
+            idade = agora - self._motor_cache[0]
+            if idade >= 4.0 and not self._motor_atualizando:
+                self._motor_atualizando = True
+                threading.Thread(target=self._atualizar_motor_status, daemon=True,
+                                 name="status-motor").start()
+            return self._motor_cache[1], list(self._motor_cache[2])
+
+    def motor_destinos(self) -> list[dict[str, Any]]:
+        """Retorna destinos remotos do cache; nunca sonda a rede na thread HTTP."""
+        with self._motor_lock:
+            return list(self._motor_destinos)
 
     def falante(self, voz: str) -> tts.Falante:
         if voz not in self._falantes:
@@ -560,7 +585,7 @@ class Manipulador(BaseHTTPRequestHandler):
                 "motor": {"backend": optimus.config.get("motor", "backend"),
                           "disponivel": disponivel, "modelo": optimus.modelo_atual(),
                           "modelos": lista_modelos,
-                          "destinos": motor.estado() if isinstance(motor, MotorRede) else []},
+                          "destinos": estado.motor_destinos()},
                 "uso": {"cpu": psutil.cpu_percent(interval=None), "ram": memoria.percent,
                         "ram_livre_gb": round(memoria.available / 1024**3, 1)},
                 "modo": optimus.config.get("agente", "modo"),
