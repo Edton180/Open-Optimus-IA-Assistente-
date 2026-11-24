@@ -48,3 +48,28 @@ test("importa o conteúdo inicial oficial do NOMAD pela ação explícita", asyn
   await page.locator("#zim-nomad-inicial").click();
   await expect(page.locator("#zim-lista")).toContainText("wikipedia_en_100_mini_2026-01.zim");
 });
+
+
+test("primeira abertura provisiona a mini-Wikipédia quando a biblioteca está vazia", async ({ page }) => {
+  let leituras = 0;
+  await page.route("**/api/zim/nomad-inicial", (route) => route.fulfill({ json: {
+    ok: true, arquivo: "wikipedia_en_100_mini_2026-01.zim",
+    tamanho_bytes: 4537782, mensagem: "Mini-Wikipédia inicial do Project NOMAD adicionada e validada."
+  } }));
+  await page.route("**/api/zim", (route) => {
+    leituras += 1;
+    return route.fulfill({ json: leituras === 1 ? {
+      total: 0, tamanho_total_bytes: 0, arquivos: [], pasta_configurada: true,
+      kiwix: { instalado: true, gerenciado: true, versao: "3.8.2", executando: false, suportado: true }
+    } : {
+      total: 1, tamanho_total_bytes: 4537782,
+      arquivos: [{ nome: "wikipedia_en_100_mini_2026-01.zim", tamanho_bytes: 4537782, modificado_em: 1 }],
+      pasta_configurada: true,
+      kiwix: { instalado: true, gerenciado: true, versao: "3.8.2", executando: false, suportado: true }
+    } });
+  });
+  await page.goto("/");
+  await page.locator('[data-tela="zim"]').click();
+  await expect(page.locator("#zim-lista")).toContainText("wikipedia_en_100_mini_2026-01.zim");
+  await expect(page.locator("#zim-status")).toContainText("Catálogo atualizado");
+});
