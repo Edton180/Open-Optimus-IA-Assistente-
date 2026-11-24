@@ -593,3 +593,92 @@ def bluetooth_conectar(ctx, endereco: str):
                     for p in passos)
     return {"mensagem": ("Conectado a " if conectado else "Tentei conectar a ") + endereco,
             "passos": passos}
+
+# Descoberta ONVIF/WS-Discovery: somente descoberta na LAN, sem tentar autenticar nem controlar.
+import socket
+import xml.etree.ElementTree as ET
+from urllib.parse import urlsplit
+
+
+def _extrair_xaddrs_onvif(payload: bytes | str) -> list[str]:
+    """Extrai endpoints ONVIF HTTP(S) de uma resposta WS-Discovery não confiável."""
+    try:
+        root = ET.fromstring(payload)
+    except (ET.ParseError, TypeError, ValueError):
+        return []
+    encontrados = []
+    for elemento in root.iter():
+        if elemento.tag.rsplit("}", 1)[-1] != "XAddrs" or not elemento.text:
+            continue
+        for candidato in elemento.text.split():
+            try:
+                partes = urlsplit(candidato)
+                if (partes.scheme in ("http", "https") and partes.hostname
+                        and not partes.username and not partes.password):
+                    encontrados.append(candidato)
+            except ValueError:
+                continue
+    return list(dict.fromkeys(encontrados))
+
+
+def descobrir_cameras_onvif(timeout: float = 3.0, max_respostas: int = 32) -> list[dict]:
+    """Procura câmeras ONVIF na rede local via WS-Discovery (UDP multicast IPv4).
+
+    A operação é somente leitura: não autentica, não altera câmera e não salva credenciais.
+    O usuário deve confirmar/cadastrar manualmente os endpoints encontrados.
+    """
+    mensagem = (b'<?xml version="1.0" encoding="UTF-8"?>'
+        b'<e:Envelope xmlns:e="http://www.w3.org/2003/05/soap-envelope" '
+        b'xmlns:w="http://schemas.xmlsoap.org/ws/2004/08/addressing" '
+        b'xmlns:d="http://schemas.xmlsoap.org/ws/2005/04/discovery" '
+        b'xmlns:dn="http://www.onvif.org/ver10/network/wsdl">'
+        b'<e:Header><w:MessageID>uuid:optimus-onvif-discovery</w:MessageID>'
+        b'<w:To>urn:schemas-xmlsoap-org:ws:2005:04:discovery</w:To>'
+        b'<w:Action>http://schemas.xmlsoap.org/ws/2005/04/discovery/Probe</w:Action>'
+        b'</e:Header><e:Body><d:Probe><d:Types>dn:NetworkVideoTransmitter</d:Types>'
+        b'</d:Probe></e:Body></e:Envelope>')
+    resultados: dict[str, dict] = {}
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+    try:
+        sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 2)
+        sock.settimeout(max(0.2, min(float(timeout), 10.0)))
+        sock.sendto(mensagem, ("239.255.255.250", 3702))
+        limite = time.monotonic() + max(0.2, min(float(timeout), 10.0))
+        while len(resultados) < max(1, min(int(max_respostas), 128)):
+            restante = limite - time.monotonic()
+            if restante <= 0:
+                break
+            sock.settimeout(restante)
+            try:
+                payload, origem = sock.recvfrom(65535)
+            except socket.timeout:
+                break
+            for endpoint in _extrair_xaddrs_onvif(payload):
+                chave = endpoint.lower()
+                resultados.setdefault(chave, {
+                    "ip": origem[0], "endpoints": [endpoint],
+                    "protocolo": "ONVIF", "estado": "descoberto",
+                    "autenticacao": "nao_verificada",
+                    "observacao": "Endpoint anunciado; cadastre e valide credenciais antes de usar."
+                })
+    finally:
+        sock.close()
+    return list(resultados.values())
+
+
+@ferramenta(
+    "casa_descobrir_onvif",
+    "Procura câmeras ONVIF na rede local por WS-Discovery. Apenas identifica endpoints; "
+    "não autentica, não grava vídeo e não altera dispositivos.",
+    grupo="casa", obrigatorios=[],
+)
+def casa_descobrir_onvif(ctx):
+    try:
+        itens = descobrir_cameras_onvif()
+    except OSError as erro:
+        return {"erro": f"Falha na descoberta ONVIF: {type(erro).__name__}: {erro}",
+                "itens": [], "total": 0}
+    return {"total": len(itens), "itens": itens,
+            "mensagem": ("Câmeras encontradas. Revise o IP e cadastre manualmente."
+                         if itens else "Nenhuma câmera ONVIF respondeu nesta rede. "
+                         "Verifique se estão na mesma LAN e se WS-Discovery está habilitado.")}
