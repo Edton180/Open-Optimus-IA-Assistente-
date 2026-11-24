@@ -250,6 +250,23 @@ function atualizarEstadoKiwix(dados) {
   if (dados.executando && $("#zim-arquivo")) $("#zim-arquivo").value = dados.arquivo || "";
 }
 $("#zim-atualizar")?.addEventListener("click", carregarZim);
+$("#zim-nomad-inicial")?.addEventListener("click", async () => {
+  const botao = $("#zim-nomad-inicial");
+  const status = $("#zim-status");
+  botao.disabled = true;
+  status.textContent = "Baixando a mini-Wikipédia inicial do Project NOMAD (aprox. 4,4 MB) e verificando sua integridade…";
+  try {
+    const dados = await api("/api/zim/nomad-inicial", { method: "POST", json: {}, tempo: 240000 });
+    status.textContent = dados.mensagem || "Conteúdo inicial do NOMAD disponível.";
+    await carregarZim();
+    await atualizarStatusIndiceZim();
+  } catch (erro) {
+    status.textContent = "Não foi possível adicionar o conteúdo inicial: " + mensagemErroZim(erro);
+  } finally {
+    botao.disabled = false;
+  }
+});
+
 $("#zim-arquivo")?.addEventListener("change", () => {
   const badge = $("#zim-kiwix-status");
   $("#zim-abrir").disabled = !$("#zim-arquivo").value ||
