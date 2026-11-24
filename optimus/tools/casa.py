@@ -603,8 +603,11 @@ from urllib.parse import urlsplit
 def _extrair_xaddrs_onvif(payload: bytes | str) -> list[str]:
     """Extrai endpoints ONVIF HTTP(S) de uma resposta WS-Discovery não confiável."""
     try:
-        root = ET.fromstring(payload)
-    except (ET.ParseError, TypeError, ValueError):
+        bruto = payload.encode("utf-8") if isinstance(payload, str) else payload
+        if len(bruto) > 65536 or b"<!DOCTYPE" in bruto.upper() or b"<!ENTITY" in bruto.upper():
+            return []
+        root = ET.fromstring(bruto)
+    except (ET.ParseError, TypeError, ValueError, AttributeError):
         return []
     encontrados = []
     for elemento in root.iter():
