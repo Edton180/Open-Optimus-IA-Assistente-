@@ -151,9 +151,32 @@ function irPara(tela) {
   $$(".tela").forEach((t) => t.classList.toggle("ativa", t.id === "tela-" + tela));
   document.body.classList.toggle("fora-do-chat", tela !== "chat");
   app.classList.remove("lateral-aberta");
-  const carregar = { personas: carregarPersonas, prompts: carregarPrompts, memoria: carregarMemoria, biblioteca: carregarBiblioteca, acoes: carregarAcoes, config: carregarConfig, casa: carregarCasa, estudio: () => window.carregarEstudio && window.carregarEstudio(), pdf: carregarPDF }[tela];
+  const carregar = { personas: carregarPersonas, prompts: carregarPrompts, memoria: carregarMemoria, biblioteca: carregarBiblioteca, acoes: carregarAcoes, config: carregarConfig, casa: carregarCasa, estudio: () => window.carregarEstudio && window.carregarEstudio(), pdf: carregarPDF, modulos: carregarModulos }[tela];
   if (carregar) carregar();
 }
+// ---------- Command Center: inventário local de integrações ----------
+async function carregarModulos() {
+  const estadoEl = $("#modulos-estado");
+  const grade = $("#modulos-grade");
+  if (!estadoEl || !grade) return;
+  estadoEl.textContent = "Verificando executáveis e serviços locais…";
+  try {
+    const dados = await api("/api/modulos");
+    const itens = dados.modulos || [];
+    grade.innerHTML = itens.map((m) => {
+      const status = m.estado === "disponivel" ? "Disponível" :
+        m.estado === "instalado_parado" ? "Instalado · serviço indisponível" :
+        m.estado === "nativo" ? "Recurso nativo do Optimus" : "Não instalado";
+      return `<article class="cartao"><div class="linha entre"><b>${esc(m.nome)}</b><span class="selo">${esc(status)}</span></div>
+        <p>${esc(m.descricao)}</p><small class="sutil">${esc(m.detalhe || "Detecção local")}</small></article>`;
+    }).join("") || '<p class="sutil">Nenhum módulo foi identificado.</p>';
+    estadoEl.textContent = `${itens.length} componentes verificados · ${new Date().toLocaleTimeString("pt-BR")}`;
+  } catch (erro) {
+    estadoEl.textContent = "Não foi possível consultar o inventário: " + erro.message;
+  }
+}
+$("#modulos-atualizar")?.addEventListener("click", carregarModulos);
+
 // ---------- Central visual de documentos e PDF ----------
 let pdfFerramentas = [];
 let pdfEnviados = [];
