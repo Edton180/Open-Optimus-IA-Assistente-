@@ -11,7 +11,6 @@ import json
 import os
 import platform
 import shutil
-import stat
 import tarfile
 import tempfile
 import urllib.error
@@ -176,7 +175,7 @@ def instalar() -> dict:
             raise RuntimeError("Não foi possível preparar o executável Kiwix.")
         metadata = {
             "versao": VERSAO, "pacote": nome, "origem": BASE_URL + nome,
-            "sha256_local": digest, "integridade": "HTTPS + extração validada; SHA-256 registrado",
+            "sha256_calculado": digest, "verificacao": "download via HTTPS oficial; SHA-256 calculado localmente (não é checksum assinado pelo upstream)",
         }
         (staging / "optimus-install.json").write_text(
             json.dumps(metadata, ensure_ascii=False, indent=2), encoding="utf-8")
