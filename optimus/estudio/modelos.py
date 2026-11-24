@@ -54,9 +54,9 @@ class Item:
                         and list(pasta.glob("*decoder*.onnx")))
         if self.id.startswith("piper-"):
             pasta = self.pastas[0] if self.pastas else None
-            return bool(pasta and pasta.is_dir()
-                        and any(pasta.glob("*.onnx"))
-                        and (pasta / "tokens.txt").is_file())
+            # O catálogo legado considera o arquivo ONNX como marcador do download da voz;
+            # tokens/espeak são verificados pelo motor sherpa-onnx ao inicializar a síntese.
+            return bool(pasta and pasta.is_dir() and any(pasta.glob("*.onnx")))
         return bool(self.pastas) and all(p.is_file() and p.stat().st_size > 0
                                          for p in self.pastas)
 
