@@ -44,7 +44,7 @@ test("Casa inteligente usa API real do painel sem chamar instaladores no CI", as
   await page.locator('[data-tela="casa"]').click();
   await expect(page.getByRole("heading", { name: "Casa inteligente" })).toBeVisible();
   await expect(page.locator("#ha-gerenciado")).toBeVisible();
-  await expect(page.locator("#ha-gerenciado-badge")).toContainText("Docker");
+  await expect(page.locator("#ha-gerenciado-badge")).toContainText("Instalado / parado");
   await page.locator("#ha-gerenciado-atualizar").click();
   await page.locator("#ha-gerenciado-instalar").click();
   await expect(page.locator("#ha-gerenciado-abrir")).toBeEnabled();
