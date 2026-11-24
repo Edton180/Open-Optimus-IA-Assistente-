@@ -36,7 +36,7 @@ def test_sqlite_fts_and_source_citation(tmp_path, monkeypatch):
             ("wikipedia_pt.zim", "Seguranca_do_trabalho", "Segurança do trabalho",
              "zim://wikipedia_pt.zim/Seguranca_do_trabalho", 0,
              "Equipamentos de proteção individual reduzem riscos ocupacionais.",
-             "abc", None),
+             "a" * 64, None),
         )
         con.commit()
     finally:
