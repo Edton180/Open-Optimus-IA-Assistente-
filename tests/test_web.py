@@ -243,7 +243,10 @@ def test_status_do_motor_nao_bloqueia_resposta_da_api(monkeypatch):
 
 
 def test_boot_nao_pode_ficar_preso_e_arquivos_estaticos_nao_sao_cacheados():
-    httpd, base = _subir()
+    # Este teste valida somente arquivos estáticos; não precisa iniciar hardware, banco ou IA.
+    httpd = ThreadingHTTPServer(("127.0.0.1", 0), server.Manipulador)
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    base = f"http://127.0.0.1:{httpd.server_address[1]}"
     try:
         with urllib.request.urlopen(base + "/", timeout=5) as resposta:
             pagina = resposta.read().decode()
@@ -258,3 +261,4 @@ def test_boot_nao_pode_ficar_preso_e_arquivos_estaticos_nao_sao_cacheados():
                 assert resposta.read()
     finally:
         httpd.shutdown()
+        httpd.server_close()
