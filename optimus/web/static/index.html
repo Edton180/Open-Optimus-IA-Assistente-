@@ -67,6 +67,7 @@
       <button data-tela="personas"><span>🎭</span>Personas</button>
       <button data-tela="prompts"><span>📚</span>Biblioteca de prompts</button>
       <button data-tela="memoria"><span>🧠</span>Memória e lembretes</button>
+      <button data-tela="biblioteca"><span>📚</span>Biblioteca de documentos</button>
       <button data-tela="estudio"><span>🎙️</span>Estúdio de voz</button>
       <button data-tela="pdf"><span>📄</span>Documentos e PDF</button>
       <button data-tela="casa"><span>🏠</span>Casa inteligente</button>
@@ -242,6 +243,33 @@
       <div class="cartao"><h3>📖 Base de conhecimento</h3>
         <p class="sutil">Conteúdos que o Optimus estudou e consulta sozinho, mesmo offline. Peça no chat: "aprenda este site: https://…" ou "estude o arquivo ~/Documentos/manual.pdf".</p>
         <ul id="lista-conhecimento" class="lista"></ul></div>
+    </section>
+
+    <section id="tela-biblioteca" class="tela">
+      <div class="tela-cabecalho"><h2>📚 Biblioteca de documentos</h2>
+        <p>Indexe pastas do computador que executa o Optimus. Os documentos permanecem no dispositivo e são pesquisados localmente pelo SQLite FTS5. Esta biblioteca é diferente da biblioteca de prompts.</p></div>
+      <div class="cartao">
+        <h3>Adicionar uma pasta à biblioteca</h3>
+        <form id="form-biblioteca" class="formulario">
+          <label>Caminho da pasta no computador do Optimus
+            <input class="campo" name="pasta" placeholder="Ex.: C:\\Users\\Você\\Documents ou /home/voce/Documentos" required>
+          </label>
+          <label class="linha"><input type="checkbox" name="recursivo" checked> Incluir subpastas</label>
+          <div class="linha"><button class="botao primario" type="submit">Indexar / atualizar documentos</button>
+            <button class="botao" type="button" id="atualizar-biblioteca">Atualizar lista</button></div>
+        </form>
+        <p id="biblioteca-status" class="sutil" role="status">Indexação local. Formatos: TXT, Markdown, CSV, HTML, JSON, YAML, PDF e DOCX.</p>
+      </div>
+      <div class="cartao">
+        <div class="linha entre"><h3>Documentos indexados</h3><strong id="biblioteca-total">0</strong></div>
+        <ul id="biblioteca-lista" class="lista"><li class="sutil">Carregando…</li></ul>
+        <form id="form-biblioteca-esquecer" class="formulario">
+          <label>Remover do conhecimento todos os documentos de uma pasta
+            <input class="campo" name="pasta" placeholder="Caminho da pasta que deseja esquecer" required>
+          </label>
+          <button class="botao perigo" type="submit">Esquecer documentos desta pasta</button>
+        </form>
+      </div>
     </section>
 
     <section id="tela-estudio" class="tela">
