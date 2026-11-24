@@ -101,28 +101,33 @@ def casa_diagnostico(ctx):
             resultado["webcams"] = webcam.listar() if ctx.config.get("casa", "webcams", True) else []
         except Exception as erro:  # noqa: BLE001 - diagnóstico não deve derrubar o agente
             resultado["erro_webcams"] = f"{type(erro).__name__}: {erro}"
-        try:
-            url, cabecalho = _ha(ctx)
+
+        # Ausência de URL/token é estado "não configurado", não falha de conexão.
+        url_configurada = (ctx.config.get("casa", "url") or "").strip()
+        token_configurado = (ctx.config.get("casa", "token") or "").strip()
+        if url_configurada and token_configurado:
             resultado["home_assistant_configurado"] = True
-            resposta = httpx.get(f"{url}/api/states", headers=cabecalho, timeout=8)
-            resposta.raise_for_status()
-            estados = resposta.json()
-            if not isinstance(estados, list):
-                raise RuntimeError("A API de estados retornou um formato inesperado.")
-            dominios = {}
-            cameras = []
-            for estado in estados:
-                ident = str(estado.get("entity_id", ""))
-                dominio = ident.split(".", 1)[0] if "." in ident else "desconhecido"
-                dominios[dominio] = dominios.get(dominio, 0) + 1
-                if dominio == "camera":
-                    cameras.append({"id": ident, "nome": (estado.get("attributes") or {}).get(
-                        "friendly_name", ident), "estado": estado.get("state", "unknown")})
-            resultado.update(home_assistant_conectado=True, entidades=len(estados),
-                             dominios=dict(sorted(dominios.items())),
-                             cameras_home_assistant=cameras)
-        except Exception as erro:  # noqa: BLE001 - expõe a causa real sem vazar token
-            resultado["erro_home_assistant"] = f"{type(erro).__name__}: {erro}"
+            try:
+                url, cabecalho = _ha(ctx)
+                resposta = httpx.get(f"{url}/api/states", headers=cabecalho, timeout=8)
+                resposta.raise_for_status()
+                estados = resposta.json()
+                if not isinstance(estados, list):
+                    raise RuntimeError("A API de estados retornou um formato inesperado.")
+                dominios = {}
+                cameras = []
+                for estado in estados:
+                    ident = str(estado.get("entity_id", ""))
+                    dominio = ident.split(".", 1)[0] if "." in ident else "desconhecido"
+                    dominios[dominio] = dominios.get(dominio, 0) + 1
+                    if dominio == "camera":
+                        cameras.append({"id": ident, "nome": (estado.get("attributes") or {}).get(
+                            "friendly_name", ident), "estado": estado.get("state", "unknown")})
+                resultado.update(home_assistant_conectado=True, entidades=len(estados),
+                                 dominios=dict(sorted(dominios.items())),
+                                 cameras_home_assistant=cameras)
+            except Exception as erro:  # noqa: BLE001 - expõe a causa real sem vazar token
+                resultado["erro_home_assistant"] = f"{type(erro).__name__}: {erro}"
     return resultado
 
 
