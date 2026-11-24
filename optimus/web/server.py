@@ -712,6 +712,11 @@ class Manipulador(BaseHTTPRequestHandler):
             from optimus import biblioteca as biblioteca_docs
 
             if metodo == "GET":
+                termo = str((consulta.get("q") or [""])[0]).strip()
+                if termo:
+                    resultados = biblioteca_docs.buscar(banco, termo, limite=20)
+                    return self._json({"consulta": termo, "resultados": resultados,
+                                       "total": len(resultados)})
                 docs = biblioteca_docs.fontes(banco)
                 return self._json({"documentos": docs, "total": len(docs)})
             corpo = self._corpo()
