@@ -304,3 +304,33 @@ def test_pdf_assinar_digital_com_certificado_pkcs12(tmp_path):
     assert "erro" not in resultado
     campos = PdfReader(str(destino)).get_fields()
     assert any(campo.get("/FT") == "/Sig" and campo.get("/V") for campo in campos.values())
+
+
+def test_pdf_pdfa_usa_ghostscript_e_nao_finge_validacao_formal(tmp_path, monkeypatch):
+    import subprocess
+
+    origem = tmp_path / "origem.pdf"
+    perfil = tmp_path / "srgb.icc"
+    destino = tmp_path / "arquivo_pdfa.pdf"
+    _criar_pdf(origem, ["DOCUMENTO"])
+    perfil.write_bytes(b"ICC-TESTE")
+
+    def localizar(nome):
+        return "gs" if nome == "gs" else None
+
+    def executar(comando, **kwargs):
+        saida = next(arg.split("=", 1)[1] for arg in comando
+                     if arg.startswith("-sOutputFile="))
+        _criar_pdf(Path(saida), ["PDF-A-GERADO"])
+        return subprocess.CompletedProcess(comando, 0, "", "")
+
+    monkeypatch.setattr(pdf_suite.shutil, "which", localizar)
+    monkeypatch.setattr(pdf_suite.subprocess, "run", executar)
+
+    resultado = pdf_suite.pdf_pdfa(
+        _ctx(tmp_path), str(origem), str(perfil), "2", str(destino)
+    )
+
+    assert "erro" not in resultado
+    assert resultado["validacao_formal"].startswith("não executada")
+    assert len(PdfReader(str(destino)).pages) == 1
