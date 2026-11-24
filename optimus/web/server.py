@@ -433,6 +433,102 @@ class Manipulador(BaseHTTPRequestHandler):
         recurso = partes[0] if partes else ""
         ident = partes[1] if len(partes) > 1 else ""
 
+        if recurso == "pdf":
+            from optimus.tools import pdf as _pdf  # noqa: F401
+            from optimus.tools import pdf_suite as _pdf_suite  # noqa: F401
+            from optimus.tools.base import Contexto, registradas
+
+            pasta_pdf = (cfg.pasta_base() / "documentos_pdf").resolve()
+            pasta_pdf.mkdir(parents=True, exist_ok=True)
+            if metodo == "GET" and not ident:
+                ferramentas_pdf = [
+                    {"nome": f.nome, "descricao": f.descricao,
+                     "parametros": f.parametros, "obrigatorios": f.obrigatorios}
+                    for f in registradas().values() if f.grupo == "pdf"
+                ]
+                return self._json({"ferramentas": ferramentas_pdf,
+                                   "pasta": str(pasta_pdf)})
+            if metodo == "POST" and ident == "upload":
+                tamanho = int(self.headers.get("Content-Length") or 0)
+                if tamanho <= 0 or tamanho > 200 * 1024 * 1024:
+                    return self._json({"erro": "Envie um arquivo de até 200 MB."}, 413)
+                nome_original = unquote((consulta.get("nome") or ["documento.pdf"])[0])
+                nome = re.sub(r"[^\w.() -]", "_", Path(nome_original).name).strip(" .") or "documento.pdf"
+                if not nome.lower().endswith(".pdf") and not Path(nome).suffix:
+                    nome += ".pdf"
+                if not nome.lower().endswith(".pdf"):
+                    return self._json({"erro": "Selecione um arquivo PDF válido."}, 415)
+                dados = self.rfile.read(tamanho)
+                if not dados.startswith(b"%PDF-"):
+                    return self._json({"erro": "O arquivo enviado não possui assinatura PDF válida."}, 415)
+                alvo = pasta_pdf / f"{uuid.uuid4().hex[:8]}_{nome}"
+                alvo.write_bytes(dados)
+                return self._json({"arquivo": str(alvo), "nome": nome,
+                                   "tamanho": len(dados)})
+            if metodo == "POST" and ident == "executar":
+                corpo = self._corpo()
+                nome_ferramenta = str(corpo.get("ferramenta") or "")
+                ferramenta_pdf = registradas().get(nome_ferramenta)
+                if not ferramenta_pdf or ferramenta_pdf.grupo != "pdf":
+                    return self._json({"erro": "Ferramenta PDF inválida."}, 400)
+                argumentos = corpo.get("argumentos") or {}
+                if not isinstance(argumentos, dict):
+                    return self._json({"erro": "Parâmetros inválidos."}, 400)
+                # Os arquivos de entrada só podem vir da pasta de documentos enviada pela interface.
+                chaves_arquivo = {"arquivo", "arquivos", "arquivo_a", "arquivo_b",
+                                  "certificado", "perfil_icc"}
+                for chave in chaves_arquivo:
+                    valor = argumentos.get(chave)
+                    if not valor:
+                        continue
+                    valores = re.split(r"[,;]+", str(valor)) if chave == "arquivos" else [str(valor)]
+                    for item in valores:
+                        item = item.strip().strip('"')
+                        if not item:
+                            continue
+                        caminho = Path(item).expanduser().resolve()
+                        if not caminho.is_relative_to(pasta_pdf) or not caminho.is_file():
+                            return self._json({"erro": f"Arquivo de entrada não enviado ou fora da pasta segura: {Path(item).name}"}, 400)
+                if "destino" in ferramenta_pdf.parametros:
+                    destino = str(argumentos.get("destino") or "resultado.pdf")
+                    argumentos["destino"] = str(pasta_pdf / Path(destino).name)
+                contexto_pdf = Contexto(config=optimus.config, banco=optimus.banco,
+                                        pasta_trabalho=pasta_pdf)
+                resultado_bruto = ferramenta_pdf.executar(argumentos, contexto_pdf)
+                try:
+                    resultado = json.loads(resultado_bruto)
+                except (TypeError, json.JSONDecodeError):
+                    resultado = {"resultado": str(resultado_bruto)}
+                if isinstance(resultado, dict) and resultado.get("erro"):
+                    return self._json(resultado, 400)
+                saidas = []
+                if isinstance(resultado, dict):
+                    for chave in ("destino", "zip"):
+                        valor = resultado.get(chave)
+                        if valor:
+                            caminho = Path(str(valor)).resolve()
+                            if caminho.is_relative_to(pasta_pdf) and caminho.is_file():
+                                saidas.append({"nome": caminho.name, "tamanho": caminho.stat().st_size})
+                if isinstance(resultado, dict) and resultado.get("arquivos"):
+                    for valor in resultado["arquivos"]:
+                        caminho = Path(str(valor)).resolve()
+                        if caminho.is_relative_to(pasta_pdf) and caminho.is_file():
+                            saidas.append({"nome": caminho.name, "tamanho": caminho.stat().st_size})
+                return self._json({"resultado": resultado, "arquivos": saidas})
+            if metodo == "GET" and ident == "arquivo":
+                nome = Path(unquote((consulta.get("nome") or [""])[0])).name
+                alvo = (pasta_pdf / nome).resolve()
+                if not alvo.is_relative_to(pasta_pdf) or not alvo.is_file():
+                    return self._json({"erro": "Arquivo não encontrado."}, 404)
+                dados = alvo.read_bytes()
+                self.send_response(200)
+                self.send_header("Content-Type", mimetypes.guess_type(alvo.name)[0] or "application/octet-stream")
+                self.send_header("Content-Length", str(len(dados)))
+                self.send_header("Content-Disposition", f'attachment; filename="{alvo.name.encode("ascii", "replace").decode()}"')
+                self.send_header("X-Content-Type-Options", "nosniff")
+                self.end_headers()
+                self.wfile.write(dados)
+                return
         if recurso == "estado":
             memoria = psutil.virtual_memory()
             motor = optimus.motor
