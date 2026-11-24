@@ -254,8 +254,11 @@ def instalar_todos(progresso=None, ids: list[str] | None = None, cancelado=None)
                 if progresso:
                     progresso(((indice - 1) + max(0.0, min(1.0, float(pct)))) / total, msg)
 
-            resultado = instalar(item.id, callback if progresso or cancelado else None,
-                                 cancelado=cancelado)
+            if cancelado:
+                resultado = instalar(item.id, callback if progresso or cancelado else None,
+                                     cancelado=cancelado)
+            else:
+                resultado = instalar(item.id, callback if progresso else None)
             resultados.append({"id": item.id, "nome": item.nome, "estado": "instalado",
                                 "detalhes": resultado})
             verificar_cancelamento()
