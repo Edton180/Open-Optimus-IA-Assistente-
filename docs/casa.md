@@ -10,11 +10,12 @@ domínios compatíveis, sem depender de comandos Docker manuais.
 
 - **Linux Debian/Ubuntu:** se o Docker Engine não existir, o Optimus solicita autorização administrativa
   pelo diálogo do sistema (pkexec), instala o pacote Docker e inicia o serviço.
-- **Windows 10/11:** o Optimus instala Docker Desktop via winget e solicita sua inicialização. Dependendo
-  do computador, o Windows pode exigir reinicialização, WSL2 e a conclusão inicial do Docker Desktop.
-  Depois, clique novamente em instalar para provisionar o Home Assistant.
-- **macOS:** o provisionamento do container pode ser usado com Docker Desktop já instalado e ativo.
-  A instalação automática do Docker Desktop no macOS ainda não está habilitada.
+- **Windows 10/11:** o Optimus instala Docker Desktop via winget, inicia o aplicativo e aguarda o
+  motor Docker. O Windows pode exigir reinicialização, WSL2 e virtualização habilitada. Se a instalação
+  retornar que é necessário reiniciar, o Optimus informa isso e preserva os dados para continuar depois.
+- **macOS:** o provisionamento requer Docker Desktop. O Optimus tenta instalá-lo pelo Homebrew quando
+  este já está presente; se o Homebrew não estiver instalado, a tela informa a dependência e não declara
+  instalação concluída. A automação de bootstrap do Homebrew/Docker Desktop ainda está pendente.
 - **Outros sistemas:** a interface informa que o provisionamento não foi validado e não simula instalação.
 
 O Home Assistant fica em `http://127.0.0.1:8123` e seus dados ficam em
@@ -29,10 +30,11 @@ precisa estar acessível ao container e a compatibilidade depende do host. A pri
 exige criar a conta local e concluir o onboarding do Home Assistant; credenciais de serviços e
 pareamento físico não podem ser inventados pelo Optimus.
 
-Depois que o serviço estiver ativo, conclua o onboarding em sua interface e volte ao Optimus. Para
-conectar um servidor já existente, informe sua URL e token na seção de conexão manual. O token é um
-segredo: não o compartilhe. O Optimus mascara o token e pode reutilizar o valor já salvo ao testar
-a conexão.
+Depois que o serviço estiver ativo, conclua o onboarding inicial (criação da conta local) na interface
+oficial. O Optimus preenche automaticamente o endereço local quando o serviço é gerenciado por ele.
+Para consultar aparelhos, salve um token pessoal de longa duração uma única vez. O token é um segredo:
+não o compartilhe; a interface o mascara e o backend reutiliza o valor já salvo ao testar a conexão.
+As entidades de Home Assistant são sincronizadas ao inventário local sem copiar tokens ou senhas.
 
 Documentação oficial: [instalação do Home Assistant](https://www.home-assistant.io/installation/) e
 [autenticação e tokens](https://www.home-assistant.io/docs/authentication/#your-account-profile).
