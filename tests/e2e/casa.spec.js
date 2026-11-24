@@ -84,7 +84,7 @@ test("painel Casa informa quando o backend instalado está desatualizado", async
       body: JSON.stringify({ erro: "rota não encontrada" }) }));
   await page.goto("/");
   await page.locator('[data-tela="casa"]').click();
-  await expect(page.locator("#ha-gerenciado-diagnostico")).toContainText(/API desta instalação está desatualizada/i);
+  await expect(page.locator("#ha-gerenciado-diagnostico")).toContainText(/processo Python do Optimus ainda está carregado com o servidor antigo/i);
 });
 
 test("tela Casa explica o onboarding e preservação dos dados", async ({ page }) => {
