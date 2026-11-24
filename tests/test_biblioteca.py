@@ -189,3 +189,14 @@ def test_esquecer_pasta_desconectada_remove_apenas_do_indice(tmp_path):
     assert biblioteca.esquecer_pasta(banco, docs, estado_arq=estado) == 1
     assert biblioteca.fontes(banco) == []
     assert not banco.consultar("conteúdo que deve ser esquecido")
+
+
+def test_documento_corrompido_nao_interrompe_demais(tmp_path):
+    docs = tmp_path / "docs"
+    _doc(docs, "bom.md", "documento saudável indexado")
+    _doc(docs, "corrompido.docx", "isto não é um arquivo DOCX")
+    banco = _banco(tmp_path)
+    resumo = biblioteca.indexar_pasta(banco, docs, estado_arq=tmp_path / "estado.json")
+    assert resumo["indexados"] == 1
+    assert resumo["erros"] and resumo["erros"][0]["arquivo"] == "corrompido.docx"
+    assert banco.consultar("documento saudável indexado")
