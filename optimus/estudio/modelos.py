@@ -138,6 +138,47 @@ def instalar(ident: str, progresso=None) -> dict:
     return item.para_dict()
 
 
+
+def instalar_todos(progresso=None, ids: list[str] | None = None) -> dict:
+    """Instala sequencialmente todos os motores e pesos do catálogo.
+
+    Faz uma pré-verificação de espaço, preserva os itens já instalados e continua
+    após falhas individuais para não perder o progresso dos demais downloads.
+    """
+    itens = catalogo()
+    selecionados = [i for i in itens if ids is None or i.id in set(ids)]
+    faltantes = [i for i in selecionados if not i.instalado()]
+    estimativa = sum(i.tamanho_mb for i in faltantes)
+    livre = shutil.disk_usage(pasta_estudio()).free // (1024 * 1024)
+    reserva = max(1024, int(estimativa * 0.25))
+    necessario = estimativa + reserva
+    if livre < necessario:
+        raise ErroEstudio(
+            f"Espaço insuficiente para instalar os modelos: estimativa de {estimativa} MB "
+            f"+ reserva de {reserva} MB; disponíveis {livre} MB. Libere espaço ou instale "
+            "os modelos individualmente."
+        )
+    resultados = []
+    total = max(1, len(selecionados))
+    for indice, item in enumerate(selecionados, 1):
+        if item.instalado():
+            resultados.append({"id": item.id, "nome": item.nome, "estado": "já instalado"})
+            continue
+        if progresso:
+            progresso((indice - 1) / total, f"({indice}/{total}) Instalando {item.nome}…")
+        try:
+            resultado = instalar(item.id)
+            resultados.append({"id": item.id, "nome": item.nome, "estado": "instalado",
+                                "detalhes": resultado})
+        except Exception as erro:  # cada falha fica registrada; os outros modelos continuam
+            resultados.append({"id": item.id, "nome": item.nome, "estado": "falhou",
+                                "erro": f"{type(erro).__name__}: {erro}"})
+    falhas = [r for r in resultados if r["estado"] == "falhou"]
+    if progresso:
+        progresso(1.0, f"Instalação concluída: {len(resultados) - len(falhas)}/{len(resultados)}")
+    return {"total": len(resultados), "instalados": len(resultados) - len(falhas),
+            "falhas": falhas, "resultados": resultados}
+
 def remover(ident: str) -> dict:
     item = obter(ident)
     if item.forma == "pacote":
