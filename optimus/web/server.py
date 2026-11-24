@@ -1444,7 +1444,7 @@ def iniciar(host: str = "127.0.0.1", porta: int = 8765, abrir_navegador: bool = 
                    str(servidor.server_address[1]), "--sem-navegador"]
         if tunel:
             comando.append("--tunel")
-        elif host not in ("127.0.0.1", "localhost", "::1"):
+        elif host in ("0.0.0.0", ""):
             comando.append("--rede")
         opcoes = {"stdin": subprocess.DEVNULL, "stdout": subprocess.DEVNULL,
                   "stderr": subprocess.DEVNULL, "close_fds": True}
