@@ -514,8 +514,8 @@ def pdf_marca(ctx, arquivo: str, texto: str, destino: str = ""):
     writer = PdfWriter()
     try:
         for pagina in leitor.pages:
-            _sobrepor_texto(pagina, texto, marca=True)
             writer.add_page(pagina)
+            _sobrepor_texto(writer.pages[-1], texto, marca=True)
     except RuntimeError as erro:
         return {"erro": str(erro)}
     writer.add_metadata({"/Watermark": texto[:100]})
@@ -546,8 +546,8 @@ def pdf_numeros(ctx, arquivo: str, destino: str = ""):
     writer = PdfWriter()
     try:
         for i, pagina in enumerate(leitor.pages, start=1):
-            _sobrepor_texto(pagina, str(i), marca=False)
             writer.add_page(pagina)
+            _sobrepor_texto(writer.pages[-1], str(i), marca=False)
     except RuntimeError as erro:
         return {"erro": str(erro)}
     out = _caminho(ctx, destino or f"{caminho.stem}_numerado.pdf")
