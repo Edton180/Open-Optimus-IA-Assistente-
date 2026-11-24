@@ -60,3 +60,44 @@ def test_deepsearch_nao_inventa_fontes_quando_busca_falha(monkeypatch):
 def test_dominio_oficial_brasileiro():
     assert deepsearch._dominio("https://www.gov.br/") == "www.gov.br"
     assert deepsearch._dominio("https://ri.brb.com.br/") == "brb.com.br"
+
+
+def test_especialistas_llm_rodam_em_paralelo_sem_ferramentas(monkeypatch):
+    import threading
+
+    barreira = threading.Barrier(2)
+
+    class ConfigFake:
+        def get(self, secao, chave, padrao=None):
+            return padrao
+
+    class SubAgenteFake:
+        ferramentas = {"acao_perigosa": object()}
+
+        def responder(self, texto, persona=None):
+            assert self.ferramentas == {}
+            barreira.wait(timeout=3)
+            return persona["nome"] + " validou o dossiê."
+
+    class AgentePaiFake:
+        profundidade = 0
+        config = ConfigFake()
+
+        def criar_sub_agente(self, nome, grupos):
+            return SubAgenteFake()
+
+        def modelo_rapido(self):
+            return "modelo-teste"
+
+    class ContextoFake:
+        agente = AgentePaiFake()
+
+    monkeypatch.setattr(deepsearch.psutil, "virtual_memory",
+                        lambda: type("Memoria", (), {"available": 4 * 1024**3})())
+    resultado = deepsearch._especialistas_ia(
+        ContextoFake(), "pergunta de teste", [{"titulo": "Fonte", "url": "https://example.com"}],
+        {"fontes_unicas": 1}, {"paginas_lidas": 1}
+    )
+    assert resultado["status"] == "concluido"
+    assert "Analista" in resultado["analista"]
+    assert "Verificador" in resultado["verificador"]
