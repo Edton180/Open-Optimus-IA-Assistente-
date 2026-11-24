@@ -464,3 +464,22 @@ body.modo-hud #lateral { background: rgba(4,11,20,.96); border-right-color: rgba
   0%, 99.9% { visibility: visible; }
   100% { visibility: hidden; pointer-events: none; }
 }
+
+
+/* Central de PDF: catálogo por categorias, busca e seleção de ferramentas */
+#pdf-busca { margin:8px 0 14px; }
+.pdf-filtros { display:flex; flex-wrap:wrap; gap:8px; margin:12px 0 16px; }
+.pdf-filtro { border:1px solid var(--borda); border-radius:999px; padding:8px 12px; color:var(--texto); background:var(--fundo2); cursor:pointer; }
+.pdf-filtro.ativo { border-color:var(--destaque); background:color-mix(in srgb,var(--destaque) 16%,var(--fundo2)); }
+.pdf-filtro span { opacity:.7; margin-left:4px; }
+.pdf-ferramentas-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:10px; }
+.pdf-ferramenta { min-width:0; display:grid; grid-template-columns:38px 1fr; grid-template-rows:auto auto; gap:4px 10px; text-align:left; align-items:center; padding:13px; border:1px solid var(--borda); border-radius:12px; background:var(--fundo2); color:var(--texto); cursor:pointer; }
+.pdf-ferramenta:hover,.pdf-ferramenta.selecionada { border-color:var(--destaque); background:color-mix(in srgb,var(--destaque) 10%,var(--fundo2)); }
+.pdf-ferramenta-icone { grid-row:1 / span 2; width:36px; height:36px; display:grid; place-items:center; border-radius:10px; background:var(--fundo); font-size:21px; }
+.pdf-ferramenta b { font-size:13px; }
+.pdf-ferramenta small { color:var(--sutil); font-size:11px; line-height:1.35; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+.pdf-operacao-selecionada { margin-top:18px; padding:16px; border:1px solid var(--destaque); border-radius:12px; background:var(--fundo2); }
+.pdf-operacao-topo { display:flex; justify-content:space-between; align-items:center; gap:12px; }
+.pdf-operacao-topo small { color:var(--sutil); letter-spacing:.08em; }
+.pdf-operacao-topo h3 { margin:4px 0; }
+@media(max-width:650px) { .pdf-ferramentas-grid { grid-template-columns:1fr; } .pdf-operacao-topo { align-items:flex-start; flex-direction:column; } }
