@@ -663,6 +663,43 @@ class Manipulador(BaseHTTPRequestHandler):
                 aprovado = interpretar_confirmacao(aprovado, nivel)
             tarefa.responder(bool(aprovado))
             return self._json({"ok": True, "aprovado": bool(aprovado)})
+        if recurso == "casa" and ident == "testar" and metodo == "POST":
+            from urllib.parse import urlsplit
+            import httpx
+
+            corpo = self._corpo()
+            url = str(corpo.get("url", "")).strip().rstrip("/")
+            token = str(corpo.get("token", "")).strip()
+            try:
+                partes_url = urlsplit(url)
+                if (partes_url.scheme not in ("http", "https") or not partes_url.hostname
+                        or partes_url.username or partes_url.password or partes_url.query
+                        or partes_url.fragment):
+                    return self._json({"ok": False, "erro": "Endereço inválido. Use http://IP:8123 ou https://seu-dominio."}, 400)
+                if not token:
+                    return self._json({"ok": False, "erro": "Informe o token de acesso de longa duração do Home Assistant."}, 400)
+                resposta = httpx.get(
+                    f"{url}/api/",
+                    headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+                    timeout=8,
+                    follow_redirects=False,
+                )
+                if resposta.status_code == 401:
+                    return self._json({"ok": False, "erro": "Token recusado (HTTP 401). Gere um novo token de longa duração no perfil do Home Assistant."}, 401)
+                if resposta.status_code == 404:
+                    return self._json({"ok": False, "erro": "Endereço não parece ser a API do Home Assistant. Confira IP, porta 8123 e caminho."}, 502)
+                resposta.raise_for_status()
+                dados = resposta.json()
+                if not isinstance(dados, dict) or "message" not in dados:
+                    return self._json({"ok": False, "erro": "A resposta não parece ser do Home Assistant."}, 502)
+                return self._json({"ok": True, "mensagem": "Conexão autenticada com o Home Assistant.", "api": dados.get("message")})
+            except httpx.ConnectError:
+                return self._json({"ok": False, "erro": "Não foi possível alcançar esse endereço. Verifique se o Home Assistant está instalado, ligado e na mesma rede; confira o IP e a porta."}, 502)
+            except httpx.TimeoutException:
+                return self._json({"ok": False, "erro": "O Home Assistant demorou para responder. Confira a rede e tente novamente."}, 504)
+            except (httpx.HTTPError, ValueError) as erro:
+                log.warning("Teste de conexão Home Assistant falhou: %s", type(erro).__name__)
+                return self._json({"ok": False, "erro": "Falha ao validar a API do Home Assistant. Confira endereço, token e conexão."}, 502)
         if recurso == "config":
             if metodo == "GET":
                 return self._json({"config": _mascarar_config(optimus.config.dados),
