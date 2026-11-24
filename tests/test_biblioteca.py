@@ -192,11 +192,59 @@ def test_esquecer_pasta_desconectada_remove_apenas_do_indice(tmp_path):
 
 
 def test_documento_corrompido_nao_interrompe_demais(tmp_path):
+    import pytest
+    pytest.importorskip("docx")
     docs = tmp_path / "docs"
-    _doc(docs, "bom.md", "documento saudável indexado")
-    _doc(docs, "corrompido.docx", "isto não é um arquivo DOCX")
+    _doc(docs, "a-corrompido.docx", "isto não é um arquivo DOCX")
+    _doc(docs, "z-bom.md", "documento saudável indexado")
     banco = _banco(tmp_path)
     resumo = biblioteca.indexar_pasta(banco, docs, estado_arq=tmp_path / "estado.json")
     assert resumo["indexados"] == 1
-    assert resumo["erros"] and resumo["erros"][0]["arquivo"] == "corrompido.docx"
+    assert resumo["erros"] and resumo["erros"][0]["arquivo"] == "a-corrompido.docx"
     assert banco.consultar("documento saudável indexado")
+
+
+
+def test_busca_da_biblioteca_retorna_trecho_e_citacao(tmp_path):
+    docs = tmp_path / "docs"
+    _doc(docs, "seguranca.md", "Procedimento de segurança: usar capacete e cinto em trabalho em altura.")
+    banco = _banco(tmp_path)
+    biblioteca.indexar_pasta(banco, docs, estado_arq=tmp_path / "estado.json")
+
+    resultados = biblioteca.buscar(banco, "segurança trabalho altura")
+
+    assert resultados
+    assert resultados[0]["titulo"] == "seguranca.md"
+    assert "capacete" in resultados[0]["trecho"]
+    assert str(docs / "seguranca.md") in resultados[0]["citacao"]
+    assert resultados[0]["cobertura"] >= 2
+
+
+def test_busca_da_biblioteca_nao_expoe_fontes_de_outras_areas(tmp_path):
+    banco = _banco(tmp_path)
+    banco.aprender("site:https://exemplo.test", "Página externa", "segurança trabalho altura")
+
+    assert biblioteca.buscar(banco, "segurança trabalho altura") == []
+
+
+
+def test_busca_da_biblioteca_ignora_diacriticos(tmp_path):
+    docs = tmp_path / "docs"
+    _doc(docs, "seguranca.md", "Procedimento de segurança para laboratório.")
+    banco = _banco(tmp_path)
+    biblioteca.indexar_pasta(banco, docs, estado_arq=tmp_path / "estado.json")
+
+    assert biblioteca.buscar(banco, "seguranca")
+
+
+def test_busca_da_biblioteca_filtra_antes_do_limite_global(tmp_path):
+    docs = tmp_path / "docs"
+    _doc(docs, "manual.md", "termo exclusivo biblioteca")
+    banco = _banco(tmp_path)
+    biblioteca.indexar_pasta(banco, docs, estado_arq=tmp_path / "estado.json")
+    for i in range(130):
+        banco.aprender(f"site:https://exemplo.test/{i}", f"Fonte {i}", "termo exclusivo biblioteca")
+
+    resultados = biblioteca.buscar(banco, "termo exclusivo biblioteca")
+
+    assert any(r["titulo"] == "manual.md" for r in resultados)

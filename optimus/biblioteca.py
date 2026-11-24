@@ -178,3 +178,55 @@ def esquecer_pasta(banco: Banco, pasta: Path, estado_arq: Path | None = None) ->
     except OSError:
         pass
     return removidos
+
+
+
+def buscar(banco: Banco, consulta: str, limite: int = 10) -> list[dict[str, str]]:
+    """Busca na biblioteca e devolve trechos com proveniência para citação verificável.
+
+    O SQLite FTS5 recupera candidatos por relevância textual; a segunda ordenação
+    considera cobertura dos termos da consulta. Não depende de serviços externos,
+    embeddings ou rede e não deve ser confundida com busca vetorial semântica.
+    """
+    import re
+    import unicodedata
+
+    def normalizar(valor: str) -> str:
+        return "".join(c for c in unicodedata.normalize("NFKD", valor.casefold())
+                       if not unicodedata.combining(c))
+
+    consulta = str(consulta or "").strip()
+    if not consulta:
+        return []
+    termos = list(dict.fromkeys(
+        termo.casefold() for termo in re.findall(r"\w+", consulta)
+        if len(termo) > 2
+    ))
+    if not termos:
+        return []
+    candidatos = banco.consultar_biblioteca(
+        consulta, limite=max(20, min(int(limite) * 5, 500)))
+    resultados = []
+    for item in candidatos:
+        fonte = str(item.get("fonte", ""))
+        trecho = str(item.get("trecho", ""))
+        texto = normalizar(trecho)
+        cobertura = sum(1 for termo in termos if normalizar(termo) in texto)
+        if cobertura == 0:
+            continue
+        resultados.append({
+            "fonte": fonte[len(PREFIXO):],
+            "titulo": str(item.get("titulo", "")),
+            "trecho": trecho,
+            "citacao": f"{item.get('titulo', 'Documento')} — {fonte[len(PREFIXO):]}",
+            "cobertura": cobertura,
+            "total_termos": len(termos),
+        })
+    resultados.sort(
+        key=lambda item: (
+            item["cobertura"] / max(item["total_termos"], 1),
+            item["cobertura"],
+        ),
+        reverse=True,
+    )
+    return resultados[:max(1, min(int(limite), 50))]
