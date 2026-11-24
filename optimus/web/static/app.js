@@ -58,30 +58,39 @@ function esc(t) {
 }
 function markdown(texto) {
   const blocos = [];
-  let t = String(texto || "").replace(/```(\w*)
-?([\s\S]*?)```/g, (_, l, c) => { blocos.push(c); return `\u0000${blocos.length - 1}\u0000`; });
+  let t = String(texto || "").replace(/```([\\w-]*)\\r?\\n?([\\s\\S]*?)```/g, (_, linguagem, conteudo) => {
+    const marcador = "@@OPTIMUS_CODE_" + blocos.length + "@@";
+    blocos.push(conteudo);
+    return "\\n" + marcador + "\\n";
+  });
   t = esc(t)
     .replace(/`([^`]+)`/g, "<code>$1</code>")
-    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
-    .replace(/(^|[^*])\*([^*
-]+)\*/g, "$1<em>$2</em>")
-    .replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
-    .replace(/(^|[\s(])(https?:\/\/[^\s<)]+)/g, '$1<a href="$2" target="_blank" rel="noopener">$2</a>')
+    .replace(/\\*\\*([^*]+)\\*\\*/g, "<strong>$1</strong>")
+    .replace(/(^|[^*])\\*([^*\\n]+)\\*/g, "$1<em>$2</em>")
+    .replace(/\\[([^\\]]+)\\]\\((https?:[^)\\s]+)\\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>')
+    .replace(/(^|[\\s(])(https?:\\/\\/[^\\s<)]+)/g, '$1<a href="$2" target="_blank" rel="noopener noreferrer">$2</a>')
     .replace(/^#{1,4} (.+)$/gm, "<strong>$1</strong>");
-  const linhas = t.split("
-"); let html = ""; let lista = null;
+  const linhas = t.split(/\\r?\\n/);
+  let html = "";
+  let lista = null;
   for (const linha of linhas) {
-    const item = linha.match(/^\s*(?:[-*•]|(\d+)[.)])\s+(.*)/);
+    const item = linha.match(/^\\s*(?:[-*•]|(\\d+)[.)])\\s+(.*)/);
     if (item) {
       const tipo = item[1] ? "ol" : "ul";
-      if (lista !== tipo) { if (lista) html += `</${lista}>`; html += `<${tipo}>`; lista = tipo; }
-      html += `<li>${item[2]}</li>`; continue;
+      if (lista !== tipo) {
+        if (lista) html += "</" + lista + ">";
+        html += "<" + tipo + ">";
+        lista = tipo;
+      }
+      html += "<li>" + item[2] + "</li>";
+      continue;
     }
-    if (lista) { html += `</${lista}>`; lista = null; }
-    html += linha.trim() ? `<p>${linha}</p>` : "";
+    if (lista) { html += "</" + lista + ">"; lista = null; }
+    if (linha.trim()) html += "<p>" + linha + "</p>";
   }
-  if (lista) html += `</${lista}>`;
-  return html.replace(/\u0000(\d+)\u0000/g, (_, i) => `<pre><code>${esc(blocos[i])}</code></pre>`);
+  if (lista) html += "</" + lista + ">";
+  return html.replace(/@@OPTIMUS_CODE_(\\d+)@@/g, (_, indice) =>
+    "<pre><code>" + esc(blocos[Number(indice)] || "") + "</code></pre>");
 }
 function quando(ts) {
   const d = new Date(ts * 1000);
