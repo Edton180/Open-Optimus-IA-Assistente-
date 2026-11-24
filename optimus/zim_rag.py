@@ -315,7 +315,15 @@ def indexar(arquivos: list[dict] | None = None, limite: int = 150,
         erros.append({"arquivo": "embeddings", "erro": preparo_embedding.get("erro", "")})
     con = _db()
     try:
-        for item in lista[:20]:
+        # Remove do índice os arquivos que o catálogo completo já não encontra.
+        if arquivos is None:
+            presentes = {str(item.get("nome") or "") for item in lista}
+            for registro in con.execute("SELECT nome FROM arquivos").fetchall():
+                if registro["nome"] not in presentes:
+                    con.execute("DELETE FROM trechos WHERE arquivo=?", (registro["nome"],))
+                    con.execute("DELETE FROM arquivos WHERE nome=?", (registro["nome"],))
+            con.commit()
+        for item in lista:
             nome = str(item.get("nome") or "")
             caminho = (zim.pasta_biblioteca() / nome).resolve()
             if caminho.parent != zim.pasta_biblioteca().resolve() or not caminho.is_file() or caminho.is_symlink():
