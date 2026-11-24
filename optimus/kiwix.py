@@ -14,7 +14,7 @@ from pathlib import Path
 from optimus import zim
 
 HOST = "127.0.0.1"
-PORT = 8766
+PORT = 8767
 _lock = threading.RLock()
 _processo: subprocess.Popen | None = None
 _arquivo_ativo: str | None = None
