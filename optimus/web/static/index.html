@@ -373,6 +373,17 @@
         </div>
         <div id="celular-estado" class="sutil" aria-live="polite"></div>
         <div class="linha" id="celular-qr"></div>
+        <hr>
+        <h4>🌐 Acesso externo (4G/5G ou outro Wi-Fi)</h4>
+        <p class="sutil">Cria um endereço HTTPS temporário pelo Cloudflare Tunnel. O computador precisa permanecer ligado e conectado à internet. Defina uma senha exclusiva com pelo menos 12 caracteres.</p>
+        <div class="linha">
+          <input id="tunel-senha" type="password" autocomplete="new-password" placeholder="Senha forte (mínimo 12 caracteres)" aria-label="Senha forte para acesso externo">
+          <button class="botao primario" id="ligar-tunel">🌐 Ativar acesso externo</button>
+          <button class="botao oculto" id="desligar-tunel">Encerrar acesso externo</button>
+          <button class="botao" id="atualizar-tunel">Atualizar status</button>
+        </div>
+        <div id="tunel-estado" class="sutil" aria-live="polite"></div>
+        <div class="qr-grid" id="tunel-qr"></div>
       </div>
       <div class="cartao"><table class="tabela"><thead><tr><th>Quando</th><th>Ferramenta</th><th>Detalhes</th><th>Risco</th><th>Decisão</th></tr></thead><tbody id="lista-acoes"></tbody></table></div>
     </section>
