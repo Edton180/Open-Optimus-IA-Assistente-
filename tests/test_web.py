@@ -531,3 +531,60 @@ def test_api_zim_expoe_estado_do_leitor_e_rejeita_caminho(tmp_path, monkeypatch)
             assert erro.code == 400
     finally:
         httpd.shutdown()
+
+
+def test_home_assistant_gerenciado_rota_e_api_dispositivos(tmp_path, monkeypatch):
+    import httpx
+
+    httpd, base = _subir()
+    try:
+        estado = server.Manipulador.estado
+        # A rota do gerenciador deve existir mesmo quando Docker ainda não está instalado.
+        resposta = _req(base + "/api/casa/gerenciado")
+        assert "runtime" in resposta and "container" in resposta
+        # Sem onboarding/token, a API responde com instrução específica, nunca 404.
+        try:
+            _req(base + "/api/casa/aparelhos")
+            assert False, "a listagem exige token"
+        except urllib.error.HTTPError as erro:
+            assert erro.code == 409
+            assert "token" in json.loads(erro.read())["erro"].lower()
+
+        estado.optimus.config.definir("casa", "url", "http://127.0.0.1:8123")
+        estado.optimus.config.definir("casa", "token", "token-teste")
+
+        class Resposta:
+            status_code = 200
+            def json(self):
+                return [
+                    {"entity_id": "light.sala", "state": "on",
+                     "attributes": {"friendly_name": "Luz da sala"}},
+                    {"entity_id": "sensor.temperatura", "state": "25",
+                     "attributes": {"friendly_name": "Temperatura"}},
+                    {"entity_id": "switch.tomada", "state": "off",
+                     "attributes": {"friendly_name": "Tomada"}},
+                ]
+            def raise_for_status(self):
+                return None
+
+        chamadas = []
+        monkeypatch.setattr(httpx, "get", lambda *a, **k: (chamadas.append(("GET", a, k)) or Resposta()))
+        monkeypatch.setattr(httpx, "post", lambda *a, **k: (chamadas.append(("POST", a, k)) or Resposta()))
+
+        aparelhos = _req(base + "/api/casa/aparelhos")
+        assert aparelhos["total"] == 2
+        assert {x["entity_id"] for x in aparelhos["aparelhos"]} == {"light.sala", "switch.tomada"}
+
+        controle = _req(base + "/api/casa/controle",
+                        {"entity_id": "light.sala", "servico": "turn_off"})
+        assert controle["ok"]
+        assert chamadas[-1][2]["json"] == {"entity_id": "light.sala"}
+
+        try:
+            _req(base + "/api/casa/controle",
+                 {"entity_id": "light.sala", "servico": "delete"})
+            assert False, "serviços arbitrários devem ser bloqueados"
+        except urllib.error.HTTPError as erro:
+            assert erro.code == 400
+    finally:
+        httpd.shutdown()
