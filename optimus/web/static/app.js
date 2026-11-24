@@ -1076,7 +1076,7 @@ async function atualizarHomeAssistantGerenciado() {
     badge.textContent = c.rodando ? "Em execução" : c.instalado ? "Instalado / parado" : rt.docker_instalado ? (rt.docker_ativo ? "Pronto para instalar" : "Docker parado") : "Não instalado";
     diag.textContent = [
       "Sistema: " + (rt.sistema || "desconhecido"),
-      "Docker: " + (rt.docker_instalado ? (rt.docker_ativo ? "ativo " + (rt.docker_versao || "") : "instalado, mas parado") : "não instalado"),
+      "Docker: " + (rt.docker_instalado ? (rt.docker_ativo === null ? "permissão administrativa necessária" : rt.docker_ativo ? "ativo " + (rt.docker_versao || "") : "instalado, mas parado") : "não instalado"),
       "Home Assistant: " + (c.rodando ? "rodando" : c.instalado ? c.estado : "não instalado"),
       d.nota || "", rt.observacao || "", d.erro || ""
     ].filter(Boolean).join(" · ");
