@@ -41,16 +41,17 @@ retornam resultados de texto. Consultas em múltiplos ZIMs são feitas individua
 misturar idiomas incompatíveis. Se o leitor já estiver aberto para outro arquivo, a busca não
 o interrompe: informa que o usuário deve fechar o leitor ou limitar a pesquisa ao arquivo ativo.
 
-## O que ainda não está implementado
+## Indexação incremental e RAG
 
-- Indexação incremental própria do conteúdo ZIM e extração completa de artigos.
-- Índice vetorial e recuperação híbrida.
-- RAG integrado ao agente, com citações verificadas de artigo, arquivo, URL interna e trecho.
-- Atualização automática do Kiwix Tools e assinatura criptográfica do pacote.
+A indexação própria e o RAG local estão descritos em [zim-rag.md](zim-rag.md).
+O Optimus prepara a dependência `libzim` em diretório privado, sem PATH global,
+privilégios administrativos ou alteração do ambiente Python do sistema. A indexação
+é iniciada pelo usuário na tela e processa lotes retomáveis.
 
-Esses itens continuam pendentes na trilha de Knowledge Center/RAG. Não anunciar a busca atual
-como RAG ou busca semântica: ela é uma busca textual apoiada nos índices dos ZIMs e no FTS5
-dos documentos.
+A recuperação combina SQLite FTS5 e embeddings locais do Ollama quando há um modelo
+de embedding já instalado. Sem modelo, permanece em modo lexical e não se apresenta
+como busca semântica. O agente injeta evidências recuperadas no contexto e exige
+citações com URI `zim://arquivo/caminho-do-artigo`.
 
 ## Licenças e Project NOMAD
 
