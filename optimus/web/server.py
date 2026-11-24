@@ -298,21 +298,8 @@ class Manipulador(BaseHTTPRequestHandler):
         except json.JSONDecodeError:
             return {}
 
-    def _exige_senha(self) -> bool:
-        """Protege clientes externos, sem pedir senha no navegador do próprio PC.
-
-        cloudflared encaminha a conexão localmente e preserva CF-Ray e
-        CF-Connecting-IP. A presença dos dois cabeçalhos identifica a rota proxy.
-        """
+    def _credenciais_validas(self) -> bool:
         if not self.senha:
-            return False
-        endereco = str(self.client_address[0]) if self.client_address else ""
-        if endereco in ("127.0.0.1", "::1"):
-            return bool(self.headers.get("CF-Ray") and self.headers.get("CF-Connecting-IP"))
-        return True
-
-    def _autorizado(self) -> bool:
-        if not self._exige_senha():
             return True
         enviada = self.headers.get("X-Optimus-Senha", "")
         cookie = self.headers.get("Cookie", "")
@@ -320,6 +307,25 @@ class Manipulador(BaseHTTPRequestHandler):
         if achado:
             enviada = enviada or achado.group(1)
         return hmac.compare_digest(enviada, self.senha)
+
+    def _exige_senha(self) -> bool:
+        """Protege clientes externos, sem pedir senha no navegador do próprio PC.
+
+        cloudflared encaminha a conexão localmente e preserva CF-Ray e
+        CF-Connecting-IP. O servidor da porta do celular, por sua vez, sempre
+        exige senha, inclusive nos testes e acessos via loopback.
+        """
+        if not self.senha:
+            return False
+        if self.server is _servidor_celular:
+            return True
+        endereco = str(self.client_address[0]) if self.client_address else ""
+        if endereco in ("127.0.0.1", "::1"):
+            return bool(self.headers.get("CF-Ray") and self.headers.get("CF-Connecting-IP"))
+        return True
+
+    def _autorizado(self) -> bool:
+        return not self._exige_senha() or self._credenciais_validas()
 
     # Roteamento
     def do_GET(self):
@@ -446,7 +452,7 @@ class Manipulador(BaseHTTPRequestHandler):
         optimus = self.estado.optimus
         chave = (consulta.get("chave") or [""])[0]
         token = optimus.config.get("web", "token_agenda", "") or ""
-        if not (self._autorizado() or (token and hmac.compare_digest(chave, token))):
+        if not (self._credenciais_validas() or (token and hmac.compare_digest(chave, token))):
             return self._json({"erro": "chave da agenda inválida"}, 401)
         ics = celular.agenda_ics(optimus.banco.lembretes(pendentes=True),
                                  nome=optimus.config.get("geral", "nome") or "Optimus")
