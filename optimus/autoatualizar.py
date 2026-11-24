@@ -188,20 +188,56 @@ def _ramo(config) -> str:
     return (config.get("atualizacao", "ramo", "") if config else "") or "main"
 
 
+def _commit_remoto_atom(repo: str, ramo: str) -> dict:
+    """Consulta o feed público quando a API REST está limitada (403/429/5xx)."""
+    import xml.etree.ElementTree as ET
+    from urllib.parse import quote
+
+    import httpx
+
+    url = f"https://github.com/{repo}/commits/{quote(ramo, safe='/')}.atom"
+    r = httpx.get(url, timeout=15, follow_redirects=True,
+                  headers={"User-Agent": "open-optimus-updater"})
+    r.raise_for_status()
+    raiz = ET.fromstring(r.text)
+    ns = {"atom": "http://www.w3.org/2005/Atom"}
+    entrada = raiz.find("atom:entry", ns)
+    if entrada is None:
+        raise ValueError("O feed do GitHub não contém commits.")
+    identificador = entrada.findtext("atom:id", default="", namespaces=ns)
+    # O feed usa tag:github.com,2008:Grit::Commit/<SHA>.
+    sha = identificador.rsplit("/", 1)[-1].strip()
+    if not re.fullmatch(r"[0-9a-fA-F]{40}", sha):
+        raise ValueError("O GitHub não informou um SHA de commit válido.")
+    titulo = entrada.findtext("atom:title", default="", namespaces=ns).strip()
+    atualizado = entrada.findtext("atom:updated", default="", namespaces=ns)
+    return {"sha": sha, "data": atualizado[:10], "titulo": titulo[:120]}
+
+
 def _commit_remoto_padrao(repo: str, ramo: str) -> dict:
     import httpx
 
-    r = httpx.get(f"https://api.github.com/repos/{repo}/commits/{ramo}", timeout=15,
-                  follow_redirects=True,
-                  headers={"Accept": "application/vnd.github+json",
-                           "User-Agent": "open-optimus-updater"})
-    r.raise_for_status()
-    dado = r.json()
-    commit = dado.get("commit") or {}
-    return {"sha": dado.get("sha", ""),
-            "data": ((commit.get("committer") or {}).get("date") or "")[:10],
-            "titulo": (commit.get("message") or "").splitlines()[0][:120] if commit.get("message")
-            else ""}
+    try:
+        r = httpx.get(f"https://api.github.com/repos/{repo}/commits/{ramo}", timeout=15,
+                      follow_redirects=True,
+                      headers={"Accept": "application/vnd.github+json",
+                               "User-Agent": "open-optimus-updater"})
+        r.raise_for_status()
+        dado = r.json()
+        commit = dado.get("commit") or {}
+        return {"sha": dado.get("sha", ""),
+                "data": ((commit.get("committer") or {}).get("date") or "")[:10],
+                "titulo": (commit.get("message") or "").splitlines()[0][:120]
+                if commit.get("message") else ""}
+    except httpx.HTTPStatusError as erro:
+        # GitHub pode limitar a API REST mesmo quando o repositório está público.
+        if erro.response.status_code not in (403, 429, 500, 502, 503, 504):
+            raise
+        try:
+            return _commit_remoto_atom(repo, ramo)
+        except Exception:
+            # Mantém a exceção original para que a interface informe o erro HTTP real.
+            raise erro
 
 
 def _pip_padrao(url: str) -> tuple[int, str]:
