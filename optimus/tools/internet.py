@@ -170,7 +170,7 @@ def _pontuar_resultado(item: dict, variantes: list[str]) -> float:
         correspondencias = (titulo | trecho) & expandidos
         # Consultas com várias entidades/termos não podem ser aprovadas por uma palavra
         # genérica isolada (ex.: "internet" numa pesquisa sobre ações de um banco).
-        if len(expandidos) >= 3 and len(correspondencias) < 2:
+        if len(expandidos) >= 2 and len(correspondencias) < 2:
             continue
         cobertura = len(correspondencias) / len(expandidos)
         # Título pesa mais que snippet: coincidência no corpo não mascara outro assunto.
