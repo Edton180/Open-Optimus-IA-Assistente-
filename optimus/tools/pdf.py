@@ -24,7 +24,7 @@ def _precisa_pypdf():
         from pypdf import PdfReader, PdfWriter  # noqa: F401
         return None
     except ImportError:
-        return {"erro": "Instale o suporte a PDF: pip install \"optimus-assistente[documentos]\""}
+        return {"erro": "Instale o suporte a PDF: pip install \"optimus-assistente[pdf]\""}
 
 
 def _caminho(ctx, caminho: str) -> Path:
@@ -89,7 +89,7 @@ def _sobrepor_texto(pagina, texto: str, marca: bool = False) -> None:
         from pypdf import PdfReader
     except ImportError as erro:
         raise RuntimeError(
-            'Este recurso exige reportlab. Instale: pip install "optimus-assistente[documentos]"'
+            'Este recurso exige reportlab. Instale: pip install "optimus-assistente[pdf]"'
         ) from erro
     largura = float(pagina.mediabox.width)
     altura = float(pagina.mediabox.height)
@@ -785,7 +785,7 @@ def pdf_converter(ctx, arquivo: str, formato: str, destino: str = ""):
             try:
                 from docx import Document
             except ImportError:
-                return {"erro": 'DOCX exige python-docx. Instale: pip install "optimus-assistente[documentos]"'}
+                return {"erro": 'DOCX exige python-docx. Instale: pip install "optimus-assistente[pdf]"'}
             out = out.with_suffix(".docx")
             documento = Document()
             for linha in texto_pdf.splitlines():
