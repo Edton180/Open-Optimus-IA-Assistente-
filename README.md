@@ -177,6 +177,7 @@ modelo** (`optimus config motor.modelo nome-do-modelo`). Detalhes em [docs/motor
 | [docs/configuracao.md](docs/configuracao.md) | Todas as opções do `config.toml` |
 | [docs/problemas.md](docs/problemas.md) | Erros comuns e soluções |
 | [docs/paridade-grok.md](docs/paridade-grok.md) | Auditoria de capacidades do Grok, o que já existe e lacunas reais |
+| [docs/paridade-muse-gadget-sdk.md](docs/paridade-muse-gadget-sdk.md) | Paridade funcional com o agente Linux e os SDKs de dispositivos Muse |
 | [docs/o-que-mudou.md](docs/o-que-mudou.md) | Pesquisa sobre o OpenJarvis e o que o Optimus faz diferente |
 
 ## Estrutura
