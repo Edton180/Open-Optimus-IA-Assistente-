@@ -18,6 +18,7 @@ import threading
 import time
 import uuid
 import urllib.error
+import urllib.request
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
