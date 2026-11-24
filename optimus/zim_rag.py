@@ -21,8 +21,8 @@ from urllib.parse import urlsplit
 from typing import Any
 
 MAX_ARTIGO = 2 * 1024 * 1024
-TAMANHO_CHUNK = 1100
-SOBREPOSICAO = 160
+TAMANHO_CHUNK = 900
+SOBREPOSICAO = 120
 
 
 class _TextoHTML(HTMLParser):
