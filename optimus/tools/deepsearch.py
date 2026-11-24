@@ -284,6 +284,7 @@ def deepsearch(ctx, consulta: str, max_fontes: int = 8, abrir_paginas: bool = Tr
         "observacao": "A confirmação factual final exige comparar as evidências e datas; "
                       "diversidade de links não equivale a confirmação independente.",
     }
+    especialistas = _especialistas_ia(ctx, consulta, fontes, analise, verificacao)
     return {
         "consulta": consulta,
         "modo": "deepsearch_paralelo",
@@ -291,7 +292,10 @@ def deepsearch(ctx, consulta: str, max_fontes: int = 8, abrir_paginas: bool = Tr
             {"papel": "pesquisadores", "tarefas": [q for _, q in planos]},
             {"papel": "analista", "resultado": analise},
             {"papel": "verificador", "resultado": verificacao},
+            {"papel": "analista_llm", "resultado": especialistas.get("analista", "")},
+            {"papel": "verificador_llm", "resultado": especialistas.get("verificador", "")},
         ],
+        "especialistas_ia": especialistas,
         "fontes": fontes,
         "falhas_parciais": falhas,
         "instrucao_sintese": "Sintetize apenas com base nas evidências; cite cada afirmação "
