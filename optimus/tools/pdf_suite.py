@@ -661,3 +661,124 @@ def pdf_assinar_digital(ctx, arquivo: str, certificado: str, senha: str,
     except Exception as exc:
         temp.unlink(missing_ok=True)
         return {"erro": f"Falha na assinatura digital: {exc}. O PDF original foi preservado."}
+
+
+def censurar_por_rasterizacao(ctx, arquivo: str, texto: str, destino: str = "",
+                              idioma: str = "por", escala: int = 3):
+    """Redação OCR: rasteriza todas as páginas, cobre ocorrências e descarta os objetos originais."""
+    try:
+        import re
+        from io import BytesIO
+        import pytesseract
+        import pypdfium2 as pdfium
+        from PIL import ImageDraw
+        from reportlab.lib.utils import ImageReader
+        from reportlab.pdfgen import canvas
+        from pypdf import PdfReader
+    except ImportError:
+        return {"erro": "Censura segura requer pytesseract, Tesseract no sistema, pypdfium2, Pillow e reportlab."}
+    origem = _path(ctx, arquivo)
+    if not origem.is_file():
+        return {"erro": f"PDF não encontrado: {origem}"}
+    termos = [t.strip() for t in re.split(r"[,;]+", texto or "") if t.strip()]
+    normalizar = lambda valor: re.sub(r"[^a-z0-9]", "", valor.casefold())
+    termos_norm = [(termo, normalizar(termo)) for termo in termos]
+    termos_norm = [(termo, termo_norm) for termo, termo_norm in termos_norm if termo_norm]
+    if not termos_norm:
+        return {"erro": "Informe termos válidos para censurar."}
+    fator = max(2, min(int(escala or 3), 5))
+    out = _path(ctx, destino or f"{origem.stem}_censurado.pdf")
+    temp = out.with_name(out.name + ".tmp")
+    try:
+        doc = pdfium.PdfDocument(str(origem))
+        buffer_pdf = BytesIO()
+        pdf_saida = canvas.Canvas(buffer_pdf)
+        paginas_com_ocorrencia = set()
+        total_ocorrencias = 0
+        for numero, page in enumerate(doc, 1):
+            imagem = page.render(scale=fator).to_pil().convert("RGB")
+            dados = pytesseract.image_to_data(
+                imagem, lang=idioma or "por", output_type=pytesseract.Output.DICT
+            )
+            palavras = []
+            for indice, bruto in enumerate(dados.get("text", [])):
+                palavra = normalizar(bruto)
+                if not palavra:
+                    continue
+                try:
+                    x, y = int(dados["left"][indice]), int(dados["top"][indice])
+                    w, h = int(dados["width"][indice]), int(dados["height"][indice])
+                except (KeyError, ValueError, TypeError, IndexError):
+                    continue
+                if w > 0 and h > 0:
+                    palavras.append((palavra, x, y, x+w, y+h))
+            texto_junto = "".join(item[0] for item in palavras)
+            caixas = []
+            for termo_original, termo in termos_norm:
+                inicio = 0
+                while True:
+                    pos = texto_junto.find(termo, inicio)
+                    if pos < 0:
+                        break
+                    fim = pos + len(termo)
+                    cursor = 0
+                    selecionadas = []
+                    for palavra, x0, y0, x1, y1 in palavras:
+                        proximo = cursor + len(palavra)
+                        if cursor < fim and proximo > pos:
+                            selecionadas.append((x0, y0, x1, y1))
+                        cursor = proximo
+                    if selecionadas:
+                        margem = 8
+                        caixa = (
+                            max(0, min(x[0] for x in selecionadas)-margem),
+                            max(0, min(x[1] for x in selecionadas)-margem),
+                            min(imagem.width, max(x[2] for x in selecionadas)+margem),
+                            min(imagem.height, max(x[3] for x in selecionadas)+margem),
+                        )
+                        caixas.append(caixa)
+                        paginas_com_ocorrencia.add(numero)
+                        total_ocorrencias += 1
+                    inicio = fim
+            if caixas:
+                desenho = ImageDraw.Draw(imagem)
+                for caixa in caixas:
+                    desenho.rectangle(caixa, fill="black")
+                # Não gravar se o OCR ainda conseguir reconhecer o termo após a tarja.
+                depois = pytesseract.image_to_data(
+                    imagem, lang=idioma or "por", output_type=pytesseract.Output.DICT
+                )
+                texto_depois = "".join(normalizar(x) for x in depois.get("text", []))
+                if any(termo in texto_depois for _, termo in termos_norm):
+                    temp.unlink(missing_ok=True)
+                    return {"erro": f"Não consegui confirmar a remoção OCR na página {numero}; nenhum resultado foi salvo."}
+            largura_pt = imagem.width * 72 / (72 * fator)
+            altura_pt = imagem.height * 72 / (72 * fator)
+            pdf_saida.setPageSize((largura_pt, altura_pt))
+            pdf_saida.drawImage(ImageReader(imagem), 0, 0, width=largura_pt, height=altura_pt)
+            pdf_saida.showPage()
+        if total_ocorrencias == 0:
+            return {"erro": "Nenhuma ocorrência foi detectada por OCR; nenhum arquivo foi gerado."}
+        pdf_saida.save()
+        buffer_pdf.seek(0)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        temp.write_bytes(buffer_pdf.getvalue())
+        validado = PdfReader(str(temp), strict=True)
+        if len(validado.pages) != len(doc):
+            temp.unlink(missing_ok=True)
+            return {"erro": "Validação de páginas falhou; original preservado."}
+        # Saída rasterizada: não deve conter texto selecionável nem objetos vetoriais originais.
+        if any((pagina.extract_text() or "").strip() for pagina in validado.pages):
+            temp.unlink(missing_ok=True)
+            return {"erro": "A saída ainda contém texto selecionável; original preservado."}
+        temp.replace(out)
+        return {
+            "mensagem": "PDF rasterizado e termos detectados cobertos com tarjas pretas.",
+            "destino": str(out), "ocorrencias_detectadas": total_ocorrencias,
+            "paginas_afetadas": sorted(paginas_com_ocorrencia),
+            "paginas": len(validado.pages), "texto_selecionavel_removido": True,
+            "observacao": "A redação remove o conteúdo original ao rasterizar todas as páginas. OCR pode falhar em textos pouco legíveis, manuscritos ou idiomas ausentes; revise visualmente cada página antes de compartilhar."
+        }
+    except Exception as exc:
+        temp.unlink(missing_ok=True)
+        return {"erro": f"Falha na censura OCR: {exc}. O arquivo original foi preservado."}
