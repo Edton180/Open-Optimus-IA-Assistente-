@@ -47,7 +47,7 @@ def ler_arquivo(ctx, caminho: str, offset: int = 0, limite_bytes: int = 65536):
     if not alvo.is_file():
         return {"erro": f"Arquivo não encontrado ou não é arquivo: {alvo}"}
     offset = max(0, int(offset or 0))
-    limite = max(1, min(65536, int(limite_bytes or 65536)))
+    limite = max(4, min(65536, int(limite_bytes or 65536)))
     total = alvo.stat().st_size
     if offset > total:
         return {"erro": f"Offset {offset} ultrapassa o tamanho do arquivo ({total} bytes)."}
