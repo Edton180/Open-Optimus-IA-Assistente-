@@ -384,3 +384,225 @@ def pdf_formularios(ctx, arquivo: str, valores: str = "", destino: str = ""):
                 "campos_preenchidos": list(dados)}
     except Exception as exc:
         return {"erro": f"Falha ao processar formulário PDF: {exc}"}
+
+
+@ferramenta(
+    "pdf_para_excel",
+    "Extrai tabelas de um PDF para XLSX; quando não há tabelas detectáveis, exporta o texto por página.",
+    {"arquivo": texto("PDF de origem"), "destino": texto("Planilha XLSX")},
+    grupo="pdf", risco=MODERADO, obrigatorios=["arquivo"],
+)
+def pdf_para_excel(ctx, arquivo: str, destino: str = ""):
+    try:
+        import pdfplumber
+        from openpyxl import Workbook
+    except ImportError:
+        return {"erro": 'Exportação para Excel requer pdfplumber e openpyxl. Instale: pip install "optimus-assistente[pdf]"'}
+    origem = _path(ctx, arquivo)
+    if not origem.is_file():
+        return {"erro": f"PDF não encontrado: {origem}"}
+    try:
+        workbook = Workbook()
+        resumo = workbook.active
+        resumo.title = "Conteudo"
+        tabelas = 0
+        with pdfplumber.open(str(origem)) as pdf:
+            for numero_pagina, page in enumerate(pdf.pages, 1):
+                achadas = page.extract_tables() or []
+                for indice, tabela in enumerate(achadas, 1):
+                    tabelas += 1
+                    sheet = workbook.create_sheet(f"P{numero_pagina}_T{indice}"[:31])
+                    for linha in tabela:
+                        sheet.append([celula or "" for celula in linha])
+                texto_pagina = page.extract_text() or ""
+                if texto_pagina:
+                    resumo.append([f"Página {numero_pagina}"])
+                    for linha in texto_pagina.splitlines():
+                        resumo.append([linha])
+        out = _path(ctx, destino or f"{origem.stem}.xlsx")
+        if out.suffix.lower() != ".xlsx":
+            out = out.with_suffix(".xlsx")
+        out.parent.mkdir(parents=True, exist_ok=True)
+        workbook.save(out)
+        return {"mensagem": "Conteúdo exportado para Excel.",
+                "destino": str(out), "tabelas_detectadas": tabelas,
+                "observacao": "Tabelas detectadas são aproximadas; confira células mescladas e layout."}
+    except Exception as exc:
+        return {"erro": f"Falha ao exportar Excel: {exc}"}
+
+
+@ferramenta(
+    "pdf_para_powerpoint",
+    "Converte cada página de PDF em um slide de PowerPoint visual (páginas como imagens).",
+    {"arquivo": texto("PDF de origem"), "destino": texto("Apresentação PPTX"),
+     "escala": numero("Escala de renderização (1 a 3)")},
+    grupo="pdf", risco=MODERADO, obrigatorios=["arquivo"],
+)
+def pdf_para_powerpoint(ctx, arquivo: str, destino: str = "", escala: int = 2):
+    try:
+        import pypdfium2 as pdfium
+        from pptx import Presentation
+        from pptx.util import Inches
+        from io import BytesIO
+    except ImportError:
+        return {"erro": 'Exportação para PowerPoint requer pypdfium2 e python-pptx. Instale: pip install "optimus-assistente[pdf]"'}
+    origem = _path(ctx, arquivo)
+    if not origem.is_file():
+        return {"erro": f"PDF não encontrado: {origem}"}
+    fator = max(1, min(int(escala or 2), 3))
+    try:
+        doc = pdfium.PdfDocument(str(origem))
+        if len(doc) == 0:
+            return {"erro": "PDF sem páginas."}
+        primeira = doc[0]
+        largura, altura = primeira.get_size()
+        proporcao = largura / altura if altura else 1.414
+        prs = Presentation()
+        prs.slide_width = Inches(10)
+        prs.slide_height = Inches(10 / proporcao)
+        layout = prs.slide_layouts[6]
+        for pagina in doc:
+            imagem = pagina.render(scale=fator).to_pil()
+            buffer = BytesIO()
+            imagem.save(buffer, format="PNG")
+            buffer.seek(0)
+            slide = prs.slides.add_slide(layout)
+            slide.shapes.add_picture(buffer, 0, 0, width=prs.slide_width, height=prs.slide_height)
+        out = _path(ctx, destino or f"{origem.stem}.pptx")
+        if out.suffix.lower() != ".pptx":
+            out = out.with_suffix(".pptx")
+        out.parent.mkdir(parents=True, exist_ok=True)
+        prs.save(out)
+        return {"mensagem": f"Apresentação criada com {len(doc)} slides.",
+                "destino": str(out),
+                "observacao": "Cada slide contém a página original como imagem; o texto não fica editável."}
+    except Exception as exc:
+        return {"erro": f"Falha ao converter para PowerPoint: {exc}"}
+
+
+@ferramenta(
+    "pdf_comparar_visual",
+    "Compara visualmente dois PDFs, gera imagens de diferença por página e um ZIP.",
+    {"arquivo_a": texto("Primeiro PDF"), "arquivo_b": texto("Segundo PDF"),
+     "destino": texto("ZIP de diferenças")},
+    grupo="pdf", risco=MODERADO, obrigatorios=["arquivo_a", "arquivo_b"],
+)
+def pdf_comparar_visual(ctx, arquivo_a: str, arquivo_b: str, destino: str = ""):
+    try:
+        import pypdfium2 as pdfium
+        from PIL import Image, ImageChops, ImageEnhance
+    except ImportError:
+        return {"erro": 'Comparação visual requer pypdfium2 e Pillow. Instale: pip install "optimus-assistente[pdf]"'}
+    a, b = _path(ctx, arquivo_a), _path(ctx, arquivo_b)
+    if not a.is_file() or not b.is_file():
+        return {"erro": "Não encontrei os dois PDFs."}
+    pasta = _path(ctx, f"{a.stem}_vs_{b.stem}_diff")
+    zip_path = _path(ctx, destino or f"{a.stem}_vs_{b.stem}_diff.zip")
+    try:
+        da, db = pdfium.PdfDocument(str(a)), pdfium.PdfDocument(str(b))
+        pasta.mkdir(parents=True, exist_ok=True)
+        quantidade = max(len(da), len(db))
+        arquivos = []
+        for i in range(quantidade):
+            if i >= len(da) or i >= len(db):
+                continue
+            ia = da[i].render(scale=1.5).to_pil().convert("RGB")
+            ib = db[i].render(scale=1.5).to_pil().convert("RGB")
+            if ia.size != ib.size:
+                ib = ib.resize(ia.size)
+            diff = ImageChops.difference(ia, ib)
+            diff = ImageEnhance.Contrast(diff).enhance(3)
+            nome = pasta / f"pagina_{i+1:04d}_diff.png"
+            diff.save(nome)
+            arquivos.append(nome)
+        with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as pacote:
+            for item in arquivos:
+                pacote.write(item, item.name)
+        return {"mensagem": "Comparação visual concluída.",
+                "paginas_pdf_a": len(da), "paginas_pdf_b": len(db),
+                "paginas_comparadas": len(arquivos), "zip": str(zip_path),
+                "observacao": "Diferenças são realçadas por imagem; páginas ausentes são reportadas pela contagem."}
+    except Exception as exc:
+        return {"erro": f"Falha na comparação visual: {exc}"}
+
+
+@ferramenta(
+    "pdf_editar",
+    "Insere texto, retângulo, círculo ou imagem sobre páginas PDF em coordenadas de pontos.",
+    {"arquivo": texto("PDF de origem"), "tipo": texto("texto|retangulo|circulo|imagem"),
+     "conteudo": texto("Texto ou caminho da imagem"),
+     "x": numero("Posição X em pontos a partir da esquerda"),
+     "y": numero("Posição Y em pontos a partir da base"),
+     "largura": numero("Largura em pontos"), "altura": numero("Altura em pontos"),
+     "pagina": numero("Página 1-based; 0 aplica em todas"),
+     "destino": texto("PDF de saída")},
+    grupo="pdf", risco=MODERADO, obrigatorios=["arquivo", "tipo"],
+)
+def pdf_editar(ctx, arquivo: str, tipo: str, conteudo: str = "", x: int = 72, y: int = 72,
+               largura: int = 180, altura: int = 48, pagina: int = 1, destino: str = ""):
+    deps = _pypdf()
+    if not deps:
+        return {"erro": 'Instale: pip install "optimus-assistente[documentos]"'}
+    try:
+        from io import BytesIO
+        from reportlab.pdfgen import canvas
+        from reportlab.lib.utils import ImageReader
+        PdfReader, PdfWriter = deps
+        origem = _path(ctx, arquivo)
+        if not origem.is_file():
+            return {"erro": f"PDF não encontrado: {origem}"}
+        tipo = (tipo or "").lower()
+        if tipo not in ("texto", "retangulo", "circulo", "imagem"):
+            return {"erro": "Tipo deve ser texto, retangulo, circulo ou imagem."}
+        imagem = None
+        if tipo == "imagem":
+            imagem = _path(ctx, conteudo)
+            if not imagem.is_file():
+                return {"erro": f"Imagem não encontrada: {imagem}"}
+        reader = PdfReader(str(origem), strict=False)
+        if reader.is_encrypted:
+            return {"erro": "PDF protegido; desbloqueie antes."}
+        if pagina < 0 or pagina > len(reader.pages):
+            return {"erro": "Página inválida."}
+        writer = PdfWriter()
+        aplicadas = 0
+        for indice, page in enumerate(reader.pages, 1):
+            if pagina not in (0, indice):
+                writer.add_page(page)
+                continue
+            w, h = float(page.mediabox.width), float(page.mediabox.height)
+            buffer = BytesIO()
+            layer = canvas.Canvas(buffer, pagesize=(w, h))
+            if tipo == "texto":
+                layer.setFont("Helvetica", 12)
+                layer.drawString(max(0, x), max(0, y), (conteudo or "")[:500])
+            elif tipo == "retangulo":
+                layer.rect(max(0, x), max(0, y), max(1, min(largura, w)),
+                           max(1, min(altura, h)), stroke=1, fill=0)
+            elif tipo == "circulo":
+                layer.ellipse(max(0, x), max(0, y), max(0, x)+max(1, largura),
+                              max(0, y)+max(1, altura), stroke=1, fill=0)
+            else:
+                layer.drawImage(ImageReader(str(imagem)), max(0, x), max(0, y),
+                                width=max(1, min(largura, w)),
+                                height=max(1, min(altura, h)), preserveAspectRatio=True,
+                                anchor="c", mask="auto")
+            layer.save()
+            buffer.seek(0)
+            page.merge_page(PdfReader(buffer).pages[0])
+            writer.add_page(page)
+            aplicadas += 1
+        out = _path(ctx, destino or f"{origem.stem}_editado.pdf")
+        out.parent.mkdir(parents=True, exist_ok=True)
+        temp = out.with_name(out.name + ".tmp")
+        with temp.open("wb") as arquivo_saida:
+            writer.write(arquivo_saida)
+        if len(PdfReader(str(temp), strict=True).pages) != len(reader.pages):
+            temp.unlink(missing_ok=True)
+            return {"erro": "Validação falhou; arquivo original preservado."}
+        temp.replace(out)
+        return {"mensagem": f"Elemento inserido em {aplicadas} página(s).",
+                "destino": str(out),
+                "observacao": "Este editor insere elementos sobre a página; não reescreve o texto original nem oferece editor visual drag-and-drop."}
+    except Exception as exc:
+        return {"erro": f"Falha ao editar PDF: {exc}"}
