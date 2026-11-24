@@ -225,3 +225,26 @@ def test_busca_da_biblioteca_nao_expoe_fontes_de_outras_areas(tmp_path):
     banco.aprender("site:https://exemplo.test", "Página externa", "segurança trabalho altura")
 
     assert biblioteca.buscar(banco, "segurança trabalho altura") == []
+
+
+
+def test_busca_da_biblioteca_ignora_diacriticos(tmp_path):
+    docs = tmp_path / "docs"
+    _doc(docs, "seguranca.md", "Procedimento de segurança para laboratório.")
+    banco = _banco(tmp_path)
+    biblioteca.indexar_pasta(banco, docs, estado_arq=tmp_path / "estado.json")
+
+    assert biblioteca.buscar(banco, "seguranca")
+
+
+def test_busca_da_biblioteca_filtra_antes_do_limite_global(tmp_path):
+    docs = tmp_path / "docs"
+    _doc(docs, "manual.md", "termo exclusivo biblioteca")
+    banco = _banco(tmp_path)
+    biblioteca.indexar_pasta(banco, docs, estado_arq=tmp_path / "estado.json")
+    for i in range(130):
+        banco.aprender(f"site:https://exemplo.test/{i}", f"Fonte {i}", "termo exclusivo biblioteca")
+
+    resultados = biblioteca.buscar(banco, "termo exclusivo biblioteca")
+
+    assert any(r["titulo"] == "manual.md" for r in resultados)
