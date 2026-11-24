@@ -441,9 +441,11 @@
 
     <section id="tela-casa" class="tela">
       <div class="tela-cabecalho"><h2>Casa inteligente</h2>
-        <p>Luzes, tomadas e câmeras pela rede. Você <b>não precisa</b> do Home Assistant: tomadas TP-Link Kasa e câmeras IP funcionam direto. O Home Assistant é opcional, para quem já usa e quer trazer tudo junto.</p></div>
+        <p>Controle de dispositivos pelo Home Assistant, descoberta de câmeras ONVIF e prévias de câmeras IP cadastradas. O Home Assistant é opcional, mas necessário para a integração ampla de luzes, tomadas, sensores e outros aparelhos. A integração direta TP-Link Kasa ainda não está disponível nesta versão.</p></div>
       <h3 class="subtitulo">📷 Prévia das câmeras</h3>
-      <p class="sutil">Prévia JPEG atualizada periodicamente (não é vídeo contínuo). Cadastre o endereço de snapshot/RTSP e as credenciais da câmera. A descoberta automática por fabricante/ONVIF ainda não está disponível.</p>
+      <p class="sutil">A prévia é uma imagem JPEG atualizada periodicamente, não vídeo contínuo. Use a busca ONVIF para localizar câmeras compatíveis na rede; depois informe o endereço RTSP ou snapshot e as credenciais no cadastro. A descoberta identifica endpoints, mas não adivinha a senha nem o endereço RTSP.</p>
+      <div class="linha"><button class="botao" id="casa-onvif-descobrir">🔎 Descobrir câmeras ONVIF na rede</button></div>
+      <div id="casa-onvif-resultados" class="lista" aria-live="polite"></div>
       <div class="cartao formulario" id="form-camera">
         <div class="linha">
           <label>Nome<input id="cam-nome" class="campo" placeholder="Portão"></label>
@@ -461,13 +463,24 @@
         <button class="botao" id="casa-rede">Procurar aparelhos no Wi-Fi</button>
         <button class="botao" id="casa-bluetooth">Procurar Bluetooth</button>
       </div>
-      <details class="cartao">
-        <summary>Home Assistant (opcional)</summary>
-        <div class="linha" style="margin-top:.6rem"><label>Endereço do Home Assistant<input id="casa-url" class="campo" placeholder="http://192.168.0.10:8123"></label>
-          <label>Token de acesso<input id="casa-token" class="campo" type="password" placeholder="token de longa duração"></label></div>
-        <div class="linha"><button class="botao primario" id="casa-salvar">Salvar e conectar</button>
+      <details class="cartao" open>
+        <summary>Conectar ao Home Assistant (opcional)</summary>
+        <div class="sutil" style="margin-top:.7rem">
+          <p><b>Você só precisa preencher estes campos se já tiver um servidor Home Assistant.</b> O Optimus não cria esse servidor automaticamente. Ele pode ficar em outro computador, Raspberry Pi, mini-PC ou servidor da sua rede.</p>
+          <ol>
+            <li>Instale o Home Assistant em um equipamento que ficará ligado. Guia oficial: <a href="https://www.home-assistant.io/installation/" target="_blank" rel="noopener noreferrer">instalação do Home Assistant</a>.</li>
+            <li>Abra a interface dele. Normalmente: <code>http://homeassistant.local:8123</code> ou <code>http://IP-DO-SERVIDOR:8123</code>. O endereço <code>192.168.0.10</code> é apenas exemplo: use o IP real exibido no roteador ou no próprio Home Assistant.</li>
+            <li>No Home Assistant, clique no seu perfil (canto inferior esquerdo), vá até <b>Tokens de acesso de longa duração</b>, crie um token e copie-o. A documentação oficial explica esse processo: <a href="https://www.home-assistant.io/docs/authentication/#your-account-profile" target="_blank" rel="noopener noreferrer">perfil e autenticação</a>.</li>
+          </ol>
+          <p>O token é uma senha secreta: não o envie em conversas nem compartilhe capturas de tela que o mostrem. O Optimus o guarda na configuração local e o mascara na interface.</p>
+        </div>
+        <div class="linha" style="margin-top:.7rem"><label>Endereço do Home Assistant<input id="casa-url" class="campo" placeholder="http://homeassistant.local:8123 ou http://IP:8123"></label>
+          <label>Token de acesso<input id="casa-token" class="campo" type="password" autocomplete="new-password" placeholder="Cole o token de longa duração"></label></div>
+        <div class="linha"><button class="botao" id="casa-testar">Testar conexão</button>
+          <button class="botao primario" id="casa-salvar">Salvar e conectar</button>
           <button class="botao" id="casa-atualizar">Atualizar aparelhos</button>
           <button class="botao" id="casa-diagnostico">Diagnosticar integrações</button></div>
+        <p id="casa-conexao-status" class="sutil" role="status" aria-live="polite">Ainda não conectado. Primeiro teste o endereço e o token.</p>
       </details>
       <div id="casa-aparelhos" class="grade"></div>
     </section>

@@ -373,3 +373,66 @@ def test_biblioteca_pela_interface_indexa_lista_e_esquece(tmp_path, monkeypatch)
         assert (docs / "manual.md").exists()  # só remove do índice, nunca o original
     finally:
         httpd.shutdown()
+
+
+
+def test_api_casa_testar_rejeita_url_invalida():
+    httpd, base = _subir()
+    try:
+        try:
+            _req(base + "/api/casa/testar", {"url": "file:///etc/passwd", "token": "x"})
+            assert False, "esquema inválido deve ser rejeitado"
+        except urllib.error.HTTPError as erro:
+            assert erro.code == 400
+            assert "Endereço inválido" in json.loads(erro.read())["erro"]
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+
+
+def test_api_casa_testar_valida_api_sem_salvar_token(monkeypatch):
+    import httpx
+    from optimus.web import server
+
+    class Resposta:
+        status_code = 200
+        def raise_for_status(self): pass
+        def json(self): return {"message": "API running."}
+
+    chamadas = []
+    def fake_get(url, **kwargs):
+        chamadas.append((url, kwargs))
+        return Resposta()
+
+    monkeypatch.setattr(httpx, "get", fake_get)
+    httpd, base = _subir()
+    try:
+        resultado = _req(base + "/api/casa/testar", {
+            "url": "http://homeassistant.local:8123", "token": "token-de-teste"
+        })
+        assert resultado["ok"] is True
+        assert chamadas[0][0] == "http://homeassistant.local:8123/api/"
+        assert chamadas[0][1]["headers"]["Authorization"] == "Bearer token-de-teste"
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+
+
+
+def test_api_descobrir_cameras_onvif_retorna_resultados(monkeypatch):
+    from optimus.tools import casa
+
+    monkeypatch.setattr(casa, "descobrir_cameras_onvif", lambda: [{
+        "ip": "192.168.1.40", "endpoints": ["http://192.168.1.40/onvif/device_service"],
+        "protocolo": "ONVIF", "estado": "descoberto",
+        "autenticacao": "nao_verificada",
+    }])
+    httpd, base = _subir()
+    try:
+        resultado = _req(base + "/api/cameras/descobrir", {})
+        assert resultado["total"] == 1
+        assert resultado["itens"][0]["ip"] == "192.168.1.40"
+        assert resultado["itens"][0]["autenticacao"] == "nao_verificada"
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
