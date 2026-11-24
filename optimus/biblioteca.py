@@ -189,6 +189,11 @@ def buscar(banco: Banco, consulta: str, limite: int = 10) -> list[dict[str, str]
     embeddings ou rede e não deve ser confundida com busca vetorial semântica.
     """
     import re
+    import unicodedata
+
+    def normalizar(valor: str) -> str:
+        return "".join(c for c in unicodedata.normalize("NFKD", valor.casefold())
+                       if not unicodedata.combining(c))
 
     consulta = str(consulta or "").strip()
     if not consulta:
@@ -199,15 +204,14 @@ def buscar(banco: Banco, consulta: str, limite: int = 10) -> list[dict[str, str]
     ))
     if not termos:
         return []
-    candidatos = banco.consultar(consulta, limite=max(20, min(int(limite) * 5, 100)))
+    candidatos = banco.consultar_biblioteca(
+        consulta, limite=max(20, min(int(limite) * 5, 500)))
     resultados = []
     for item in candidatos:
         fonte = str(item.get("fonte", ""))
-        if not fonte.startswith(PREFIXO):
-            continue
         trecho = str(item.get("trecho", ""))
-        texto = trecho.casefold()
-        cobertura = sum(1 for termo in termos if termo in texto)
+        texto = normalizar(trecho)
+        cobertura = sum(1 for termo in termos if normalizar(termo) in texto)
         if cobertura == 0:
             continue
         resultados.append({
