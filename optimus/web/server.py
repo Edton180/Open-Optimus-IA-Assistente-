@@ -712,6 +712,99 @@ class Manipulador(BaseHTTPRequestHandler):
                                  name="home-assistant-gerenciado").start()
                 return self._json({"ok": True, "mensagem": "Operação iniciada.",
                                    "estado": "executando"}, 202)
+        if recurso == "casa" and ident == "aparelhos" and metodo == "GET":
+            import httpx
+            from urllib.parse import urlsplit
+
+            url = str(optimus.config.get("casa", "url") or "").strip().rstrip("/")
+            token = str(optimus.config.get("casa", "token") or "").strip()
+            if not url or not token:
+                return self._json({"ok": False, "erro": "Conclua o primeiro acesso ao Home Assistant e salve o token de acesso para listar os aparelhos."}, 409)
+            partes_url = urlsplit(url)
+            if (partes_url.scheme not in ("http", "https") or not partes_url.hostname
+                    or partes_url.username or partes_url.password or partes_url.query
+                    or partes_url.fragment):
+                return self._json({"ok": False, "erro": "Endereço do Home Assistant inválido."}, 400)
+            try:
+                resposta = httpx.get(url + "/api/states",
+                    headers={"Authorization": "Bearer " + token}, timeout=12,
+                    follow_redirects=False)
+                if resposta.status_code == 401:
+                    return self._json({"ok": False, "erro": "Token recusado pelo Home Assistant. Atualize o token salvo."}, 401)
+                resposta.raise_for_status()
+                dados = resposta.json()
+                if not isinstance(dados, list):
+                    return self._json({"ok": False, "erro": "A API do Home Assistant retornou uma lista inválida."}, 502)
+                dominios = {"light", "switch", "fan", "cover", "climate", "lock", "media_player"}
+                entidades = []
+                for item in dados[:2000]:
+                    if not isinstance(item, dict):
+                        continue
+                    entity_id = str(item.get("entity_id") or "")
+                    dominio = entity_id.split(".", 1)[0] if "." in entity_id else ""
+                    if dominio not in dominios:
+                        continue
+                    atributos = item.get("attributes") if isinstance(item.get("attributes"), dict) else {}
+                    entidades.append({
+                        "entity_id": entity_id, "dominio": dominio,
+                        "nome": str(atributos.get("friendly_name") or entity_id),
+                        "estado": str(item.get("state") or "unknown"),
+                        "unidade": str(atributos.get("unit_of_measurement") or ""),
+                        "dispositivo": str(atributos.get("device_class") or ""),
+                    })
+                return self._json({"ok": True, "total": len(entidades), "aparelhos": entidades})
+            except httpx.HTTPStatusError as erro:
+                return self._json({"ok": False, "erro": f"Home Assistant respondeu HTTP {erro.response.status_code}."}, 502)
+            except httpx.TimeoutException:
+                return self._json({"ok": False, "erro": "O Home Assistant demorou para responder."}, 504)
+            except httpx.HTTPError as erro:
+                log.warning("Falha ao listar entidades Home Assistant: %s", type(erro).__name__)
+                return self._json({"ok": False, "erro": "Não foi possível consultar os aparelhos no Home Assistant."}, 502)
+        if recurso == "casa" and ident == "controle" and metodo == "POST":
+            import httpx
+            from urllib.parse import urlsplit
+
+            corpo = self._corpo()
+            entity_id = str(corpo.get("entity_id") or "").strip()
+            servico = str(corpo.get("servico") or "").strip().lower()
+            dominios_servicos = {
+                "light": {"turn_on", "turn_off", "toggle"},
+                "switch": {"turn_on", "turn_off", "toggle"},
+                "fan": {"turn_on", "turn_off", "toggle"},
+                "cover": {"open_cover", "close_cover", "stop_cover"},
+                "climate": {"turn_on", "turn_off", "toggle"},
+                "lock": {"lock", "unlock"},
+                "media_player": {"turn_on", "turn_off", "toggle"},
+            }
+            if "." not in entity_id:
+                return self._json({"ok": False, "erro": "Identificador de aparelho inválido."}, 400)
+            dominio = entity_id.split(".", 1)[0]
+            if dominio not in dominios_servicos or servico not in dominios_servicos[dominio]:
+                return self._json({"ok": False, "erro": "Ação não permitida para este tipo de aparelho."}, 400)
+            url = str(optimus.config.get("casa", "url") or "").strip().rstrip("/")
+            token = str(optimus.config.get("casa", "token") or "").strip()
+            if not url or not token:
+                return self._json({"ok": False, "erro": "Conecte o Home Assistant antes de controlar aparelhos."}, 409)
+            partes_url = urlsplit(url)
+            if (partes_url.scheme not in ("http", "https") or not partes_url.hostname
+                    or partes_url.username or partes_url.password or partes_url.query
+                    or partes_url.fragment):
+                return self._json({"ok": False, "erro": "Endereço do Home Assistant inválido."}, 400)
+            try:
+                resposta = httpx.post(url + f"/api/services/{dominio}/{servico}",
+                    headers={"Authorization": "Bearer " + token, "Content-Type": "application/json"},
+                    json={"entity_id": entity_id}, timeout=12, follow_redirects=False)
+                if resposta.status_code == 401:
+                    return self._json({"ok": False, "erro": "Token recusado pelo Home Assistant."}, 401)
+                resposta.raise_for_status()
+                return self._json({"ok": True, "mensagem": f"Ação {servico} enviada para {entity_id}."})
+            except httpx.HTTPStatusError as erro:
+                return self._json({"ok": False, "erro": f"Home Assistant respondeu HTTP {erro.response.status_code}."}, 502)
+            except httpx.TimeoutException:
+                return self._json({"ok": False, "erro": "O Home Assistant demorou para executar a ação."}, 504)
+            except httpx.HTTPError as erro:
+                log.warning("Falha no controle Home Assistant: %s", type(erro).__name__)
+                return self._json({"ok": False, "erro": "Não foi possível enviar a ação ao aparelho."}, 502)
         if recurso == "casa" and ident == "testar" and metodo == "POST":
             from urllib.parse import urlsplit
             import httpx
