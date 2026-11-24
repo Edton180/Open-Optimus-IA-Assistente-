@@ -45,9 +45,8 @@ def redes_locais() -> list[dict]:
                 continue
             if not ip.is_private or ip.is_loopback or ip.is_link_local:
                 continue
-            if rede.num_addresses > _MAX_HOSTS:
-                continue
-            item = {"interface": nome, "ip_local": str(ip), "rede": str(rede)}
+            item = {"interface": nome, "ip_local": str(ip), "rede": str(rede),
+                    "varredura_disponivel": rede.num_addresses <= _MAX_HOSTS}
             if item not in saida:
                 saida.append(item)
     return saida
@@ -157,8 +156,7 @@ def descobrir(rede: ipaddress.IPv4Network, ip_local: str = "") -> dict:
 def rede_wifi_varrer(ctx, rede: str = ""):
     interfaces = redes_locais()
     if not interfaces:
-        return {"erro": "Não encontrei interface IPv4 privada ativa com sub-rede de até 256 endereços.",
-                "interfaces": []}
+        return {"erro": "Não encontrei interface IPv4 privada ativa.", "interfaces": []}
     if rede:
         try:
             selecionada = validar_rede(rede, interfaces)
@@ -168,13 +166,21 @@ def rede_wifi_varrer(ctx, rede: str = ""):
                          if ipaddress.ip_address(i["ip_local"]) in selecionada), "")
         return descobrir(selecionada, ip_local)
     resultados = []
-    for interface in interfaces[:_MAX_REDES]:
+    ignoradas = []
+    elegiveis = [i for i in interfaces if i["varredura_disponivel"]]
+    for interface in elegiveis[:_MAX_REDES]:
         rede_local = ipaddress.ip_network(interface["rede"])
         resultado = descobrir(rede_local, interface["ip_local"])
         resultado["interface"] = interface["interface"]
         resultados.append(resultado)
+    ignoradas = [i for i in interfaces if not i["varredura_disponivel"]]
+    if not resultados:
+        return {"erro": "As redes locais encontradas têm mais de 256 endereços. Informe um CIDR "
+                         "privado de até 256 endereços que pertença a uma dessas interfaces.",
+                "interfaces": interfaces, "redes_ignoradas": ignoradas}
     return {
         "interfaces": interfaces,
+        "redes_ignoradas": ignoradas,
         "redes_verificadas": len(resultados),
         "total": sum(r["total"] for r in resultados),
         "resultados": resultados,
