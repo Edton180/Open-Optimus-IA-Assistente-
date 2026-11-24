@@ -656,3 +656,28 @@ def test_rotas_essenciais_e_contrato_da_api_nao_retornam_404(monkeypatch):
         assert "container" in _req(base + "/api/casa/gerenciado")
     finally:
         httpd.shutdown()
+
+
+def test_atualizacao_aplicada_solicita_reinicio_apos_responder(monkeypatch):
+    from optimus import autoatualizar
+
+    class TimerFake:
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        def start(self):
+            pass
+
+    monkeypatch.setattr(server.threading, "Timer", TimerFake)
+    monkeypatch.setattr(autoatualizar, "baixar",
+                        lambda _config: {"ok": True, "mudou": True, "commit": "abcdef0"})
+    server._reinicio_solicitado.clear()
+    httpd, base = _subir()
+    try:
+        resposta = _req(base + "/api/atualizacao", {})
+        assert resposta["ok"] is True
+        assert resposta["reiniciando"] is True
+        assert server._reinicio_solicitado.is_set()
+    finally:
+        server._reinicio_solicitado.clear()
+        httpd.shutdown()
