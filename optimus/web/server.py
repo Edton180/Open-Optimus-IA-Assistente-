@@ -911,6 +911,22 @@ class Manipulador(BaseHTTPRequestHandler):
                 log.warning("Reconhecimento falhou: %s", erro)
                 return self._json({"erro": f"{type(erro).__name__}: {erro}"}, 503)
             return self._json({"texto": texto})
+        if recurso == "cameras" and ident == "descobrir" and metodo == "POST":
+            from optimus.tools.casa import descobrir_cameras_onvif
+
+            try:
+                itens = descobrir_cameras_onvif()
+            except OSError as erro:
+                log.warning("Descoberta ONVIF falhou: %s", type(erro).__name__)
+                return self._json({"erro": "Não foi possível executar a descoberta ONVIF nesta interface de rede."}, 502)
+            return self._json({
+                "total": len(itens),
+                "itens": itens,
+                "mensagem": ("Câmeras ONVIF encontradas. Confira os endpoints e informe o link "
+                             "RTSP ou snapshot no cadastro da câmera."
+                             if itens else "Nenhuma câmera ONVIF respondeu. Confirme se ela está "
+                             "na mesma rede e se WS-Discovery está habilitado."),
+            })
         if recurso == "cameras" and metodo == "GET":
             from optimus.tools.casa import cameras_configuradas
 
