@@ -44,7 +44,7 @@ test("controles Kiwix iniciam e encerram leitor local", async ({ page }) => {
   await expect(linkLeitor).toHaveAttribute("target", "_blank");
   // A nova guia deve permanecer no mesmo host do Optimus, nunca no localhost
   // do dispositivo que está lendo (que seria o celular no acesso remoto).
-  await page.route("**/api/zim/leitor/", (route) => route.fulfill({
+  await page.context().route("**/api/zim/leitor/", (route) => route.fulfill({
     status: 200, contentType: "text/html; charset=utf-8",
     body: "<!doctype html><html><body>Leitor ZIM</body></html>"
   }));
