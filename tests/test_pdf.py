@@ -335,3 +335,76 @@ def test_pdf_pdfa_usa_ghostscript_e_nao_finge_validacao_formal(tmp_path, monkeyp
     assert "erro" not in resultado
     assert resultado["validacao_formal"].startswith("não executada")
     assert len(PdfReader(str(destino)).pages) == 1
+
+
+def test_pdf_criar_formulario_gera_campos_acroform(tmp_path):
+    import json
+    from pypdf import PdfReader
+
+    destino = tmp_path / "formulario.pdf"
+    campos = [
+        {"nome": "nome_completo", "tipo": "texto", "rotulo": "Nome completo", "x": 72, "y": 700},
+        {"nome": "aceito", "tipo": "checkbox", "rotulo": "Aceito", "x": 72, "y": 650},
+        {"nome": "estado", "tipo": "lista", "rotulo": "Estado", "x": 72, "y": 600,
+         "opcoes": ["PA", "SP", "AM"]},
+    ]
+
+    resultado = pdf_suite.pdf_criar_formulario(
+        _ctx(tmp_path), json.dumps(campos), 1, str(destino)
+    )
+
+    assert "erro" not in resultado
+    assert set(PdfReader(str(destino)).get_fields()) == {"nome_completo", "aceito", "estado"}
+
+
+def test_pdf_workflow_salva_e_executa_cadeia_de_ferramentas(tmp_path):
+    import json
+
+    origem = tmp_path / "entrada.pdf"
+    copia = tmp_path / "copia.pdf"
+    _criar_pdf(origem, ["WORKFLOW"])
+
+    etapas = [{"ferramenta": "pdf_copiar",
+               "argumentos": {"arquivo": str(origem), "destino": str(copia)}}]
+    salvo = pdf_suite.pdf_workflow(_ctx(tmp_path), "salvar", "copiar_pdf",
+                                   json.dumps(etapas))
+    executado = pdf_suite.pdf_workflow(_ctx(tmp_path), "executar", "copiar_pdf")
+
+    assert "erro" not in salvo and "erro" not in executado
+    assert copia.is_file()
+    assert "WORKFLOW" in PdfReader(str(copia)).pages[0].extract_text()
+
+
+def test_pdf_para_word_ocr_converte_texto_nativo_em_docx(tmp_path):
+    from docx import Document
+
+    origem = tmp_path / "origem.pdf"
+    destino = tmp_path / "saida.docx"
+    _criar_pdf(origem, ["TEXTO EDITAVEL"])
+
+    resultado = pdf_suite.pdf_para_word_ocr(
+        _ctx(tmp_path), str(origem), "por", str(destino)
+    )
+
+    assert "erro" not in resultado
+    texto = "\n".join(p.text for p in Document(str(destino)).paragraphs)
+    assert "TEXTO EDITAVEL" in texto
+
+
+def test_pdf_extrair_imagens_gera_zip(tmp_path):
+    from PIL import Image
+    from reportlab.lib.utils import ImageReader
+    import zipfile
+
+    imagem = tmp_path / "figura.png"
+    Image.new("RGB", (80, 80), "white").save(imagem)
+    origem = tmp_path / "com_imagem.pdf"
+    c = canvas.Canvas(str(origem))
+    c.drawImage(ImageReader(str(imagem)), 50, 50, width=80, height=80)
+    c.save()
+
+    resultado = pdf_suite.pdf_extrair_imagens(_ctx(tmp_path), str(origem))
+
+    assert "erro" not in resultado
+    with zipfile.ZipFile(resultado["zip"]) as pacote:
+        assert len(pacote.namelist()) >= 1
