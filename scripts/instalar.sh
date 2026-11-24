@@ -57,6 +57,25 @@ elif command -v pacman >/dev/null; then
   sudo pacman -S --noconfirm --needed portaudio espeak-ng ffmpeg >/dev/null 2>&1 && ok "Áudio do sistema" || aviso "Pacotes de áudio não instalados (opcional)."
 fi
 
+# 2.5. Suíte de escritório compatível (LibreOffice / OpenOffice)
+# O Optimus usa o executável soffice para converter e abrir documentos Office.
+# Instala automaticamente o LibreOffice quando o sistema oferece um gerenciador suportado.
+if ! command -v soffice >/dev/null && ! command -v libreoffice >/dev/null; then
+  if [[ $MAC -eq 1 ]] && command -v brew >/dev/null; then
+    brew install --cask libreoffice && ok "LibreOffice instalado" || aviso "LibreOffice não instalado automaticamente; consulte docs/openoffice.md."
+  elif command -v apt-get >/dev/null; then
+    sudo apt-get install -y libreoffice >/dev/null 2>&1 && ok "LibreOffice instalado" || aviso "LibreOffice não instalado; consulte docs/openoffice.md."
+  elif command -v dnf >/dev/null; then
+    sudo dnf install -y libreoffice >/dev/null 2>&1 && ok "LibreOffice instalado" || aviso "LibreOffice não instalado; consulte docs/openoffice.md."
+  elif command -v pacman >/dev/null; then
+    sudo pacman -S --noconfirm --needed libreoffice-fresh >/dev/null 2>&1 && ok "LibreOffice instalado" || aviso "LibreOffice não instalado; consulte docs/openoffice.md."
+  else
+    aviso "Gerenciador de pacotes não reconhecido; consulte docs/openoffice.md."
+  fi
+else
+  ok "Suíte Office compatível já encontrada"
+fi
+
 # 3. Ambiente do Optimus
 DADOS="${XDG_DATA_HOME:-$HOME/.local/share}/optimus"
 mkdir -p "$DADOS" "$HOME/.local/bin"
