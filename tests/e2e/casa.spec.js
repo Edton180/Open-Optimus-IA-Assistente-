@@ -17,7 +17,8 @@ test("painel Casa apresenta estado real e todos os controles chamam a API", asyn
   await page.locator('[data-ha-acao="desinstalar"]').click();
 
   const respostaAcoes = await page.request.get("/api/casa/gerenciado");
-  await expect.poll(async () => (await respostaAcoes.json()).acoes).toEqual([
+  const payloadAcoes = await respostaAcoes.json();
+  expect(payloadAcoes.acoes).toEqual([
     "instalar", "iniciar", "parar", "reiniciar", "atualizar", "backup", "desinstalar"
   ]);
   await expect(page.locator("#ha-gerenciado-status")).toContainText("Operação simulada");
