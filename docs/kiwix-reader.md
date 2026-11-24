@@ -21,6 +21,7 @@ Se o executável não for encontrado, o Optimus informa que o recurso está indi
 - O arquivo deve ser um arquivo regular `.zim` dentro da biblioteca gerenciada; caminhos externos, travessia de diretórios e links simbólicos são rejeitados.
 - O Kiwix escuta somente em `127.0.0.1:8767`, não na rede local nem na internet.
 - O botão **Fechar leitor** encerra somente o processo criado por esta instância do Optimus. Outros processos Kiwix não são localizados nem encerrados.
+- O Optimus também encerra o processo gerenciado ao fechar normalmente (saída graciosa). Encerramento forçado do sistema operacional pode impedir essa limpeza.
 - Se o Kiwix terminar inesperadamente, atualize a biblioteca para atualizar o estado.
 - A porta 8767 precisa estar livre. O Optimus não tenta encerrar um serviço de terceiros que esteja usando essa porta.
 
