@@ -15,6 +15,7 @@ import sqlite3
 import subprocess
 import sys
 import time
+from contextlib import contextmanager
 from html.parser import HTMLParser
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -275,6 +276,17 @@ def _archive_class():
         return _carregar_libzim()
 
 
+@contextmanager
+def _arquivo_aberto(Archive, caminho):
+    """Abre Archive sem exigir protocolo de context manager do libzim."""
+    arquivo = Archive(str(caminho))
+    try:
+        yield arquivo
+    finally:
+        # Archive do python-libzim libera os recursos ao ser destruído.
+        del arquivo
+
+
 def _iterar_entradas(arquivo):
     """Compatibiliza libzim 3.x (Python 3.10) e 4.x (Python >=3.11)."""
     iterador = getattr(arquivo, "iter_efficient", None)
@@ -353,7 +365,7 @@ def indexar(arquivos: list[dict] | None = None, limite: int = 150,
                 continue
             cursor = int(estado["cursor"]) if estado else 0
             try:
-                with Archive(str(caminho)) as arquivo:
+                with _arquivo_aberto(Archive, caminho) as arquivo:
                     total_entradas = getattr(arquivo, "entry_count", None)
                     if total_entradas is None:
                         total_entradas = getattr(arquivo, "all_entry_count", None)
