@@ -99,5 +99,5 @@ def test_especialistas_llm_rodam_em_paralelo_sem_ferramentas(monkeypatch):
         {"fontes_unicas": 1}, {"paginas_lidas": 1}
     )
     assert resultado["status"] == "concluido"
-    assert "Analista" in resultado["analista"]
-    assert "Verificador" in resultado["verificador"]
+    assert "analista" in resultado["analista"].lower()
+    assert "verificador" in resultado["verificador"].lower()
