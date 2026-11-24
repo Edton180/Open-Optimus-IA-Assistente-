@@ -11,7 +11,7 @@ pip install "optimus-assistente[pdf]"
 \`\`\`
 
 O extra instala pypdf, ReportLab, python-docx, Pillow, pypdfium2 e o wrapper pytesseract.
-OCR gera PDF pesquisável (texto invisível sobre as páginas renderizadas) e/ou TXT. Também requer o executável Tesseract e os pacotes de idioma no sistema operacional.
+OCR gera PDF pesquisável (texto invisível sobre as páginas renderizadas) e/ou TXT. PDF para Excel extrai tabelas quando detectáveis; PDF para PowerPoint cria slides com imagens das páginas. O editor adiciona elementos em coordenadas, sem edição livre do conteúdo existente. Também requer o executável Tesseract e os pacotes de idioma no sistema operacional.
 Conversão Office/HTML para PDF requer LibreOffice. Alguns recursos avançados podem exigir
 ferramentas externas específicas; o Optimus informa a dependência ausente em vez de simular
 uma operação concluída.
