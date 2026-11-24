@@ -16,9 +16,10 @@ test("painel Casa apresenta estado real e todos os controles chamam a API", asyn
   page.once("dialog", (dialog) => dialog.accept());
   await page.locator('[data-ha-acao="desinstalar"]').click();
 
-  const respostaAcoes = await page.request.get("/api/casa/gerenciado");
-  const payloadAcoes = await respostaAcoes.json();
-  expect(payloadAcoes.acoes).toEqual([
+  await expect.poll(async () => {
+    const respostaAcoes = await page.request.get("/api/casa/gerenciado");
+    return (await respostaAcoes.json()).acoes;
+  }).toEqual([
     "instalar", "iniciar", "parar", "reiniciar", "atualizar", "backup", "desinstalar"
   ]);
   await expect(page.locator("#ha-gerenciado-status")).toContainText("Operação simulada");
