@@ -178,13 +178,74 @@ async function carregarZim() {
     status.textContent = dados.pasta_configurada === false
       ? "Não foi possível acessar a pasta da biblioteca: " + (dados.erro || "erro desconhecido")
       : "Catálogo atualizado · " + new Date().toLocaleTimeString("pt-BR");
+    const seletor = $("#zim-arquivo");
+    if (seletor) {
+      const selecionado = seletor.value;
+      seletor.innerHTML = '<option value="">Selecione um arquivo ZIM</option>' +
+        arquivos.map((a) => '<option value="' + esc(a.nome) + '">' + esc(a.nome) + ' (' +
+          esc(formatarBytes(a.tamanho_bytes)) + ')</option>').join("");
+      if (arquivos.some((a) => a.nome === selecionado)) seletor.value = selecionado;
+      $("#zim-abrir").disabled = !seletor.value || !dados.kiwix?.instalado || !!dados.kiwix?.executando;
+    }
+    atualizarEstadoKiwix(dados.kiwix || {});
   } catch (erro) {
     status.textContent = "Falha ao consultar a biblioteca: " + erro.message;
     lista.innerHTML = "";
     resumo.innerHTML = "";
   }
 }
+function atualizarEstadoKiwix(dados) {
+  const badge = $("#zim-kiwix-status");
+  const status = $("#zim-leitor-status");
+  const link = $("#zim-leitor-link");
+  if (!badge || !status || !link) return;
+  badge.textContent = dados.executando ? "Leitor em execução" :
+    dados.instalado ? "Kiwix instalado" : "Kiwix não instalado";
+  status.textContent = dados.executando
+    ? "Leitura ativa: " + (dados.arquivo || "arquivo ZIM") + ". O servidor está disponível somente neste computador."
+    : dados.instalado ? "Pronto para iniciar sob demanda." :
+      "Instale kiwix-tools no sistema para habilitar a leitura. Nenhum serviço foi iniciado.";
+  link.innerHTML = dados.executando && dados.url
+    ? '<a href="' + esc(dados.url) + '" target="_blank" rel="noopener noreferrer">Abrir leitor Kiwix em nova aba ↗</a>'
+    : "";
+  $("#zim-fechar").disabled = !dados.executando;
+  $("#zim-abrir").disabled = !dados.instalado || !!dados.executando || !$("#zim-arquivo")?.value;
+  if (dados.executando && $("#zim-arquivo")) $("#zim-arquivo").value = dados.arquivo || "";
+}
 $("#zim-atualizar")?.addEventListener("click", carregarZim);
+$("#zim-arquivo")?.addEventListener("change", () => {
+  const badge = $("#zim-kiwix-status");
+  $("#zim-abrir").disabled = !$("#zim-arquivo").value ||
+    badge?.textContent === "Kiwix não instalado" ||
+    badge?.textContent === "Leitor em execução";
+});
+$("#zim-abrir")?.addEventListener("click", async () => {
+  const botao = $("#zim-abrir");
+  const status = $("#zim-leitor-status");
+  const arquivo = $("#zim-arquivo")?.value;
+  if (!arquivo) return;
+  botao.disabled = true;
+  status.textContent = "Iniciando leitor local…";
+  try {
+    const dados = await api("/api/zim/iniciar", { method: "POST", json: { arquivo }, tempo: 15000 });
+    atualizarEstadoKiwix(dados);
+  } catch (erro) {
+    status.textContent = "Não foi possível iniciar o leitor: " + erro.message;
+    botao.disabled = false;
+  }
+});
+$("#zim-fechar")?.addEventListener("click", async () => {
+  const botao = $("#zim-fechar");
+  botao.disabled = true;
+  $("#zim-leitor-status").textContent = "Encerrando o leitor iniciado pelo Optimus…";
+  try {
+    const dados = await api("/api/zim/parar", { method: "POST", json: {} });
+    atualizarEstadoKiwix(dados);
+  } catch (erro) {
+    $("#zim-leitor-status").textContent = "Falha ao encerrar o leitor: " + erro.message;
+    botao.disabled = false;
+  }
+});
 
 // ---------- Command Center: inventário local de integrações ----------
 async function carregarModulos() {
