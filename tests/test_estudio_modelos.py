@@ -49,3 +49,33 @@ def test_modelo_de_pacote_com_pesos_nao_fica_pronto_so_com_pip(monkeypatch, tmp_
     assert not item.instalado()
     (tmp_path / "omnivoice.ok").write_text("ok", encoding="utf-8")
     assert item.instalado()
+
+
+def test_instalar_todos_cria_diretorio_antes_de_verificar_espaco(monkeypatch, tmp_path):
+    diretorio = tmp_path / "perfil-novo" / "estudio"
+    monkeypatch.setattr(modelos, "pasta_estudio", lambda: diretorio)
+    monkeypatch.setattr(modelos, "catalogo", lambda: [])
+    Uso = namedtuple("Uso", "total used free")
+    monkeypatch.setattr(modelos.shutil, "disk_usage", lambda path: Uso(10_000, 0, 10_000 * 1024 * 1024))
+    resultado = modelos.instalar_todos()
+    assert diretorio.is_dir()
+    assert resultado["total"] == 0
+
+
+def test_instalar_todos_interrompe_quando_cancelado(monkeypatch, tmp_path):
+    itens = [_item("a"), _item("b"), _item("c")]
+    monkeypatch.setattr(modelos, "catalogo", lambda: itens)
+    Uso = namedtuple("Uso", "total used free")
+    monkeypatch.setattr(modelos.shutil, "disk_usage", lambda _: Uso(10_000, 0, 10_000 * 1024 * 1024))
+    chamados = []
+
+    def instalar(ident, progresso=None, cancelado=None):
+        chamados.append(ident)
+        return {"id": ident}
+
+    monkeypatch.setattr(modelos, "instalar", instalar)
+    checks = iter([False, False, True])
+    resultado = modelos.instalar_todos(cancelado=lambda: next(checks, True))
+    assert chamados == ["a"]
+    assert resultado["cancelado"] is True
+    assert resultado["instalados"] == 1
