@@ -70,6 +70,67 @@ def casa_dispositivos(ctx, filtro: str = ""):
     return {"total": len(itens), "itens": itens[:150]}
 
 
+@ferramenta(
+    "casa_diagnostico",
+    "Verifica a conexão real com o Home Assistant, lista domínios e câmeras disponíveis e informa "
+    "o que está configurado localmente. Não executa comandos nem altera aparelhos.",
+    grupo="casa", obrigatorios=[],
+)
+def casa_diagnostico(ctx):
+    """Diagnóstico somente de leitura; nunca informa que um aparelho foi controlado."""
+    cameras_locais = len([c for c in (ctx.config.dados.get("cameras") or [])
+                          if isinstance(c, dict) and c.get("url")]) if ctx and ctx.config else 0
+    resultado = {
+        "home_assistant_configurado": False,
+        "home_assistant_conectado": False,
+        "entidades": 0,
+        "dominios": {},
+        "cameras_home_assistant": [],
+        "cameras_locais_configuradas": cameras_locais,
+        "webcams": [],
+        "observacoes": [
+            "A descoberta de rede atual lê vizinhos que o sistema já conhece; não garante encontrar "
+            "todos os dispositivos Wi-Fi.",
+            "Câmeras RTSP/HTTP cadastradas fornecem quadros JPEG, não um fluxo de vídeo contínuo.",
+            "Acesso fora de casa exige VPN ou um acesso remoto HTTPS autenticado; não exponha a API "
+            "do Home Assistant diretamente à internet."
+        ],
+    }
+    if ctx and ctx.config:
+        try:
+            resultado["webcams"] = webcam.listar() if ctx.config.get("casa", "webcams", True) else []
+        except Exception as erro:  # noqa: BLE001 - diagnóstico não deve derrubar o agente
+            resultado["erro_webcams"] = f"{type(erro).__name__}: {erro}"
+
+        # Ausência de URL/token é estado "não configurado", não falha de conexão.
+        url_configurada = (ctx.config.get("casa", "url") or "").strip()
+        token_configurado = (ctx.config.get("casa", "token") or "").strip()
+        if url_configurada and token_configurado:
+            resultado["home_assistant_configurado"] = True
+            try:
+                url, cabecalho = _ha(ctx)
+                resposta = httpx.get(f"{url}/api/states", headers=cabecalho, timeout=8)
+                resposta.raise_for_status()
+                estados = resposta.json()
+                if not isinstance(estados, list):
+                    raise RuntimeError("A API de estados retornou um formato inesperado.")
+                dominios = {}
+                cameras = []
+                for estado in estados:
+                    ident = str(estado.get("entity_id", ""))
+                    dominio = ident.split(".", 1)[0] if "." in ident else "desconhecido"
+                    dominios[dominio] = dominios.get(dominio, 0) + 1
+                    if dominio == "camera":
+                        cameras.append({"id": ident, "nome": (estado.get("attributes") or {}).get(
+                            "friendly_name", ident), "estado": estado.get("state", "unknown")})
+                resultado.update(home_assistant_conectado=True, entidades=len(estados),
+                                 dominios=dict(sorted(dominios.items())),
+                                 cameras_home_assistant=cameras)
+            except Exception as erro:  # noqa: BLE001 - expõe a causa real sem vazar token
+                resultado["erro_home_assistant"] = f"{type(erro).__name__}: {erro}"
+    return resultado
+
+
 def _risco_casa(args, ctx) -> Avaliacao:
     entidade = str(args.get("id", "")).lower()
     acao = str(args.get("acao", "")).lower()

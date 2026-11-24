@@ -14,7 +14,7 @@
 
 | Requisito v4.0 | Evidência no repositório | Estado |
 |---|---|---|
-| Inventário de Wi-Fi/Ethernet, IP, MAC, fabricante, hostname e serviços | `optimus/tools/lan.py` descobre dispositivos Kasa; `optimus/tools/casa.py` lê câmeras e vizinhos conhecidos; `optimus/engine/rede.py` roteia motores de IA, não é scanner de LAN | **Parcial** — não existe inventário geral ativo de sub-rede, OUI, mDNS/Nmap e portas |
+| Inventário de Wi-Fi/Ethernet, IP, MAC, fabricante, hostname e serviços | `optimus/tools/rede_wifi.py` faz ping sweep limitado à sub-rede privada local (até 256 endereços) e cruza ARP/neighbor; `tools/lan.py` descobre dispositivos Kasa; `engine/rede.py` roteia motores de IA, não é scanner de LAN | **Parcial** — descoberta ativa LAN adicionada; fabricante OUI, hostname, mDNS e portas ainda não são identificados |
 | Controle direto multi-marca de lâmpadas/tomadas | `lan.py` implementa protocolo TP-Link Kasa legado; Home Assistant REST em `tools/casa.py` pode controlar entidades integradas | **Parcial** — Tuya, Yeelight, Shelly, Sonoff e Tasmota não têm drivers diretos próprios encontrados |
 | Bluetooth | `bluetooth_procurar` e `bluetooth_conectar` em `tools/casa.py`, usando extra Bleak e ferramentas do sistema | **Parcial** — pareamento/conexão dependem do SO e não há validação em cada plataforma/perfil |
 | IR e hubs Broadlink/Tuya | A API do Home Assistant pode acionar integrações IR; não foi encontrado driver próprio USB/serial ou Broadlink | **Parcial via Home Assistant; driver direto ausente** |
@@ -105,6 +105,10 @@ Arquivos de licença e metadados de pacote existem. A conformidade jurídica da 
 | Hotkey global e wake word sempre ativo | Voz ao vivo e wake phrase existem no fluxo da interface; hotkey global e wake word independente do navegador não foram comprovados | **Parcial** |
 | Córtex episódico/semântico | `tools/memoria.py` e `banco.py` oferecem memória persistente; não foi encontrado `cortex.py` | **Parcial** |
 | Fingerprint e notificação de upgrade | Detecção atual de hardware existe; comparação de snapshots e notificação proativa não foi comprovada | **Parcial** |
+
+## Atualização desta auditoria — descoberta ativa LAN
+
+Foi adicionada a ferramenta `rede_wifi_varrer` em `optimus/tools/rede_wifi.py`. Ela só permite sub-redes privadas pertencentes a interfaces IPv4 locais ativas, limita cada execução a 256 endereços e usa ping + ARP/neighbor. Não faz port scan, não autentica e não altera dispositivos. Testes cobrem redes públicas, redes fora da interface local, sub-redes amplas e cruzamento de resultados. Fabricante OUI, hostname e descoberta por mDNS continuam pendentes.
 
 ## Próximas entregas em ordem
 

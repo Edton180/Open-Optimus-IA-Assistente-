@@ -81,3 +81,12 @@ def test_bing_redireciona_para_url_real():
     )
     itens = internet.ler_bing_html(pagina)
     assert itens[0]["link"] == destino
+
+def test_pesquisa_especifica_nao_aprova_resultado_por_uma_palavra_generica():
+    variantes = internet._variantes_consulta("ações BRB hoje")
+    resultado = {
+        "nome": "Internet: uma rede global",
+        "trecho": "Ações e investimentos em tecnologia para a internet.",
+        "link": "https://example.org/internet",
+    }
+    assert internet._pontuar_resultado(resultado, variantes) == 0.0
