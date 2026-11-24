@@ -562,6 +562,19 @@
         <div id="zim-resumo" class="grade"></div>
         <ul id="zim-lista" class="lista" aria-live="polite"><li class="sutil">Consultando arquivos…</li></ul>
       </div>
+      <div class="cartao" id="zim-leitor">
+        <div class="linha entre"><div><h3>📖 Leitor Kiwix</h3><p class="sutil">Abre um arquivo ZIM local em um servidor restrito ao próprio computador.</p></div>
+          <span id="zim-kiwix-status" class="selo">Verificando Kiwix…</span></div>
+        <div class="linha">
+          <label style="flex:1">Biblioteca ZIM
+            <select id="zim-arquivo" class="campo"><option value="">Selecione um arquivo ZIM</option></select>
+          </label>
+          <button type="button" class="botao primario" id="zim-abrir" disabled>▶ Abrir leitura</button>
+          <button type="button" class="botao perigo" id="zim-fechar" disabled>■ Fechar leitor</button>
+        </div>
+        <p id="zim-leitor-status" class="sutil" role="status" aria-live="polite">O leitor não é iniciado automaticamente.</p>
+        <p id="zim-leitor-link" class="sutil"></p>
+      </div>
       <div class="cartao">
         <h3>Como adicionar conteúdo</h3>
         <ol>
@@ -569,7 +582,7 @@
           <li>Use “Atualizar biblioteca” para reler o catálogo.</li>
           <li>Somente arquivos locais regulares são listados; links simbólicos e outros formatos são ignorados.</li>
         </ol>
-        <p class="sutil">Esta versão cataloga os arquivos, mas ainda não abre nem pesquisa seu conteúdo. A próxima etapa é integrar o leitor Kiwix com inicialização manual, validação do executável e encerramento controlado.</p>
+        <p class="sutil">O leitor Kiwix é opcional: instale o pacote kiwix-tools no sistema. O Optimus inicia somente o processo que ele próprio criou, em 127.0.0.1, e não encerra outros processos Kiwix.</p>
       </div>
     </section>
     <section id="tela-modulos" class="tela">
