@@ -7,12 +7,14 @@ from __future__ import annotations
 
 import atexit
 import shutil
+import socket
 import subprocess
 import threading
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
+import unicodedata
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
@@ -29,6 +31,26 @@ _porta_ativa = PORT
 def _executavel() -> str | None:
     """Prefere a instalação privada do Optimus; PATH é fallback compatível."""
     return kiwix_manager.executavel() or shutil.which("kiwix-serve")
+
+
+def _porta_disponivel() -> int:
+    """Prefere a porta padrão, mas usa porta efêmera sem tocar em serviços externos."""
+    for porta in (PORT, 0):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            try:
+                sock.bind((HOST, porta))
+                return int(sock.getsockname()[1])
+            except OSError:
+                continue
+    raise RuntimeError("Não foi possível reservar uma porta local para o leitor Kiwix.")
+
+
+def _zim_name(nome: str) -> str:
+    """Reproduz a normalização oficial de ZIM name usada pelo kiwix-serve."""
+    base = Path(nome).stem.lower()
+    base = "".join(c for c in unicodedata.normalize("NFKD", base)
+                   if not unicodedata.combining(c))
+    return base.replace(" ", "_").replace("+", "plus")
 
 
 def _arquivo_seguro(nome: str) -> Path:
@@ -92,7 +114,7 @@ def iniciar(nome: str) -> dict:
         }
         if hasattr(subprocess, "CREATE_NO_WINDOW"):
             kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
-        _porta_ativa = PORT
+        _porta_ativa = _porta_disponivel()
         _processo = subprocess.Popen(
             [executavel, f"--address={HOST}", f"--port={_porta_ativa}", str(alvo)],
             **kwargs,
@@ -177,7 +199,7 @@ def buscar(termo: str, nome: str = "", limite: int = 10) -> dict:
                 continue
         try:
             params = urllib.parse.urlencode({
-                "pattern": termo, "content": Path(nome_arquivo).stem,
+                "pattern": termo, "books.name": _zim_name(nome_arquivo),
                 "format": "xml", "pageLength": limite,
             })
             requisicao = urllib.request.Request(
