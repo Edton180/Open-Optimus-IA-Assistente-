@@ -3,9 +3,10 @@
 ## Home Assistant integrado e gerenciado pelo Optimus
 
 A tela **Casa inteligente** possui o painel **Home Assistant gerenciado pelo Optimus**. Use
-**Instalar / configurar automaticamente** para detectar o sistema operacional, verificar o runtime
-Docker e provisionar o Home Assistant Container. O Optimus administra o ciclo de vida do container,
-a atualização e os backups sem exigir que o usuário execute comandos Docker manualmente.
+**Instalar / configurar automaticamente** para detectar o sistema operacional, instalar/preparar o runtime
+compatível, aguardar sua inicialização, provisionar o Home Assistant Container e validar a interface
+por health-check HTTP. O painel também lista entidades reais e permite executar ações seguras nos
+domínios compatíveis, sem depender de comandos Docker manuais.
 
 - **Linux Debian/Ubuntu:** se o Docker Engine não existir, o Optimus solicita autorização administrativa
   pelo diálogo do sistema (pkexec), instala o pacote Docker e inicia o serviço.
@@ -149,3 +150,17 @@ estado (`confirmed`, `estimated` ou `unavailable`). O arquivo é gravado atomica
 campos para tokens ou senhas. Esta fundação ainda não substitui o cadastro pela interface nem
 migra automaticamente as câmeras e entidades já existentes; isso será integrado nas próximas
 etapas sem apagar a configuração atual.
+
+
+## Painel de aparelhos e comandos
+
+Com o Home Assistant autenticado, **Atualizar aparelhos** consulta `/api/states` e lista entidades
+controláveis de luzes, tomadas, ventiladores, persianas/cortinas, climatização, fechaduras e
+reprodutores de mídia. Os comandos enviados pelo Optimus são limitados a serviços conhecidos
+(`turn_on`, `turn_off`, `toggle`, abrir/fechar, travar/destravar), sem aceitar nomes de serviço
+arbitrários enviados pela interface. A senha/token não é incluída nas respostas nem nos logs.
+
+Se a interface informar **API desta instalação desatualizada**, atualize o Optimus pelo atualizador
+integrado e reinicie o processo do servidor. O código atual registra explicitamente a rota
+`GET/POST /api/casa/gerenciado`; um processo antigo que ainda esteja rodando não recebe rotas novas
+apenas porque os arquivos do repositório foram atualizados.
