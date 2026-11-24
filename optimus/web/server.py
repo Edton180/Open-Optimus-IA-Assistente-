@@ -16,6 +16,7 @@ import subprocess
 import threading
 import time
 import uuid
+import urllib.error
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
