@@ -708,6 +708,30 @@ class Manipulador(BaseHTTPRequestHandler):
                                                              p.get("categoria", "Geral"))})
             banco.apagar_prompt(int(ident))
             return self._json({"ok": True})
+        if recurso == "biblioteca":
+            from optimus import biblioteca as biblioteca_docs
+
+            if metodo == "GET":
+                docs = biblioteca_docs.fontes(banco)
+                return self._json({"documentos": docs, "total": len(docs)})
+            corpo = self._corpo()
+            pasta = corpo.get("pasta", "")
+            if not pasta:
+                return self._json({"erro": "Informe o caminho da pasta."}, 400)
+            alvo = Path(pasta).expanduser()
+            if not alvo.is_absolute():
+                alvo = Path.home() / alvo
+            if metodo == "POST":
+                resultado_indexacao = biblioteca_docs.indexar_pasta(
+                    banco, alvo, recursivo=bool(corpo.get("recursivo", True)))
+                resultado_indexacao["mensagem"] = (
+                    f"Indexação: {resultado_indexacao['indexados']} arquivo(s) novo(s)/alterado(s), "
+                    f"{resultado_indexacao['trechos']} trecho(s), {resultado_indexacao['removidos']} removido(s), "
+                    f"{len(resultado_indexacao['erros'])} erro(s).")
+                return self._json(resultado_indexacao)
+            removidos = biblioteca_docs.esquecer_pasta(banco, alvo)
+            return self._json({"removidos": removidos,
+                               "mensagem": f"{removidos} documento(s) removido(s) do conhecimento."})
         if recurso == "memoria":
             if metodo == "GET":
                 return self._json({"fatos": banco.fatos()})

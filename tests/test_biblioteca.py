@@ -131,3 +131,72 @@ def test_ferramenta_pasta_inexistente(tmp_path):
     ctx = Contexto(config=None, banco=_banco(tmp_path), pasta_trabalho=tmp_path)
     r = tbib.biblioteca_indexar(ctx, str(tmp_path / "nao_existe"))
     assert "erro" in r
+
+
+# Regressões da evolução segura e formatos adicionais
+def test_pasta_inexistente_nunca_apaga_indice(tmp_path):
+    import pytest
+    docs = tmp_path / "docs"
+    _doc(docs, "a.md", "conteúdo preservado")
+    banco = _banco(tmp_path)
+    estado = tmp_path / "estado.json"
+    biblioteca.indexar_pasta(banco, docs, estado_arq=estado)
+    with pytest.raises(FileNotFoundError):
+        biblioteca.indexar_pasta(banco, tmp_path / "desconectada", estado_arq=estado)
+    assert len(biblioteca.fontes(banco)) == 1
+    assert banco.consultar("conteúdo preservado")
+
+
+def test_limite_preserva_versao_indexada(tmp_path, monkeypatch):
+    docs = tmp_path / "docs"
+    _doc(docs, "a.md", "conteúdo antigo")
+    banco = _banco(tmp_path)
+    estado = tmp_path / "estado.json"
+    biblioteca.indexar_pasta(banco, docs, estado_arq=estado)
+    monkeypatch.setattr(biblioteca, "MAX_BYTES", 1)
+    resumo = biblioteca.indexar_pasta(banco, docs, estado_arq=estado)
+    assert resumo["indexados"] == 0
+    assert resumo["erros"] and "limite" in resumo["erros"][0]["erro"]
+    assert banco.consultar("conteúdo antigo")
+
+
+def test_docx_indexa_paragrafos_e_tabelas(tmp_path):
+    import pytest
+    docx = pytest.importorskip("docx")
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    documento = docx.Document()
+    documento.add_paragraph("Manual de manutenção preventiva")
+    tabela = documento.add_table(rows=1, cols=2)
+    tabela.rows[0].cells[0].text = "Periodicidade"
+    tabela.rows[0].cells[1].text = "A cada seis meses"
+    documento.save(docs / "manual.docx")
+    banco = _banco(tmp_path)
+    resumo = biblioteca.indexar_pasta(banco, docs, estado_arq=tmp_path / "estado.json")
+    assert resumo["indexados"] == 1
+    assert banco.consultar("manutenção preventiva")
+    assert banco.consultar("periodicidade seis meses")
+
+
+def test_esquecer_pasta_desconectada_remove_apenas_do_indice(tmp_path):
+    docs = tmp_path / "docs"
+    _doc(docs, "a.md", "conteúdo que deve ser esquecido")
+    banco = _banco(tmp_path)
+    estado = tmp_path / "estado.json"
+    biblioteca.indexar_pasta(banco, docs, estado_arq=estado)
+    import shutil
+    shutil.rmtree(docs)
+    assert biblioteca.esquecer_pasta(banco, docs, estado_arq=estado) == 1
+    assert biblioteca.fontes(banco) == []
+    assert not banco.consultar("conteúdo que deve ser esquecido")
+
+
+def test_documento_corrompido_nao_interrompe_demais(tmp_path):
+    docs = tmp_path / "docs"
+    _doc(docs, "bom.md", "documento saudável indexado")
+    _doc(docs, "corrompido.docx", "isto não é um arquivo DOCX")
+    banco = _banco(tmp_path)
+    resumo = biblioteca.indexar_pasta(banco, docs, estado_arq=tmp_path / "estado.json")
+    assert resumo["indexados"] == 1
+    assert resumo["erros"] and resumo["erros"][0]["arquivo"] == "corrompido.docx"
+    assert banco.consultar("documento saudável indexado")

@@ -151,7 +151,7 @@ function irPara(tela) {
   $$(".tela").forEach((t) => t.classList.toggle("ativa", t.id === "tela-" + tela));
   document.body.classList.toggle("fora-do-chat", tela !== "chat");
   app.classList.remove("lateral-aberta");
-  const carregar = { personas: carregarPersonas, prompts: carregarPrompts, memoria: carregarMemoria, acoes: carregarAcoes, config: carregarConfig, casa: carregarCasa, estudio: () => window.carregarEstudio && window.carregarEstudio(), pdf: carregarPDF }[tela];
+  const carregar = { personas: carregarPersonas, prompts: carregarPrompts, memoria: carregarMemoria, biblioteca: carregarBiblioteca, acoes: carregarAcoes, config: carregarConfig, casa: carregarCasa, estudio: () => window.carregarEstudio && window.carregarEstudio(), pdf: carregarPDF }[tela];
   if (carregar) carregar();
 }
 // ---------- Central visual de documentos e PDF ----------
@@ -853,6 +853,41 @@ $("#tela-memoria").addEventListener("click", async (e) => {
 $("#form-fato").addEventListener("submit", async (e) => {
   e.preventDefault(); if (!e.target.texto.value.trim()) return;
   await api("/api/memoria", { method: "POST", json: { texto: e.target.texto.value } }); e.target.reset(); carregarMemoria();
+});
+
+// ---------- Biblioteca de documentos ----------
+async function carregarBiblioteca() {
+  const lista = $("#biblioteca-lista");
+  try {
+    const d = await api("/api/biblioteca");
+    $("#biblioteca-total").textContent = String(d.total || 0);
+    lista.innerHTML = (d.documentos || []).map((x) => {
+      const fonte = String(x.fonte || "").replace(/^biblioteca:/, "");
+      return `<li><span>📄 <b>${esc(x.titulo || fonte.split(/[\\\\/]/).pop() || "Documento")}</b><br><small class="sutil">${esc(fonte)} · ${Number(x.trechos || 0)} trecho(s)</small></span></li>`;
+    }).join("") || '<li class="sutil">Nenhum documento indexado. Informe uma pasta acima para começar.</li>';
+  } catch (erro) { lista.innerHTML = `<li class="erro">${esc(erro.message)}</li>`; }
+}
+$("#form-biblioteca").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const form = e.currentTarget, status = $("#biblioteca-status");
+  const botao = form.querySelector('button[type="submit"]');
+  botao.disabled = true; status.textContent = "Indexando arquivos localmente…";
+  try {
+    const r = await api("/api/biblioteca", {method:"POST", json:{pasta:form.elements.pasta.value.trim(), recursivo:form.elements.recursivo.checked}, tempo:300000});
+    status.textContent = r.mensagem + (r.erros?.length ? " Erros: " + r.erros.map(x => x.arquivo + ": " + x.erro).join(" | ") : "");
+    await carregarBiblioteca();
+  } catch (erro) { status.textContent = "Falha na indexação: " + erro.message; }
+  finally { botao.disabled = false; }
+});
+$("#atualizar-biblioteca").addEventListener("click", carregarBiblioteca);
+$("#form-biblioteca-esquecer").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const form = e.currentTarget, pasta = form.elements.pasta.value.trim();
+  if (!pasta || !confirm("Remover do conhecimento local os documentos desta pasta? Os arquivos originais não serão apagados.")) return;
+  try {
+    const r = await api("/api/biblioteca", {method:"DELETE", json:{pasta}});
+    $("#biblioteca-status").textContent = r.mensagem; form.reset(); await carregarBiblioteca();
+  } catch (erro) { $("#biblioteca-status").textContent = "Falha ao remover: " + erro.message; }
 });
 
 // ---------- Ações ----------

@@ -335,3 +335,34 @@ def test_trocar_senha_do_celular_atualiza_autenticacao_do_tunel(monkeypatch):
         server.desligar_celular()
         httpd.shutdown()
         httpd.server_close()
+
+
+def test_biblioteca_pela_interface_indexa_lista_e_esquece(tmp_path, monkeypatch):
+    from optimus import biblioteca
+
+    docs = tmp_path / "documentos"
+    docs.mkdir()
+    (docs / "manual.md").write_text("Manual de segurança do laboratório", encoding="utf-8")
+    monkeypatch.setattr(biblioteca, "_estado_padrao", lambda: tmp_path / "biblioteca.json")
+    httpd, base = _subir()
+    try:
+        pagina = urllib.request.urlopen(base + "/").read().decode()
+        assert 'data-tela="biblioteca"' in pagina
+        assert 'id="tela-biblioteca"' in pagina
+
+        resultado = _req(base + "/api/biblioteca", {"pasta": str(docs), "recursivo": True})
+        assert resultado["indexados"] == 1
+        listagem = _req(base + "/api/biblioteca")
+        assert listagem["total"] == 1
+        assert listagem["documentos"][0]["titulo"] == "manual.md"
+
+        pedido = urllib.request.Request(
+            base + "/api/biblioteca", data=json.dumps({"pasta": str(docs)}).encode(),
+            headers={"Content-Type": "application/json"}, method="DELETE")
+        with urllib.request.urlopen(pedido, timeout=10) as resposta:
+            removido = json.loads(resposta.read())
+        assert removido["removidos"] == 1
+        assert _req(base + "/api/biblioteca")["total"] == 0
+        assert (docs / "manual.md").exists()  # só remove do índice, nunca o original
+    finally:
+        httpd.shutdown()
