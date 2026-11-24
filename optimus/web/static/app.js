@@ -1073,7 +1073,7 @@ async function atualizarHomeAssistantGerenciado() {
   try {
     const d = await api("/api/casa/gerenciado");
     const rt = d.runtime || {}, c = d.container || {}, tarefa = d.tarefa || {};
-    badge.textContent = c.rodando ? "Em execução" : c.instalado ? "Instalado / parado" : rt.docker_instalado ? (rt.docker_ativo ? "Pronto para instalar" : "Docker parado") : "Não instalado";
+    badge.textContent = c.rodando ? "Em execução" : c.instalado ? "Instalado / parado" : rt.docker_instalado ? (rt.docker_ativo === null ? "Permissão necessária" : rt.docker_ativo ? "Pronto para instalar" : "Docker parado") : "Não instalado";
     diag.textContent = [
       "Sistema: " + (rt.sistema || "desconhecido"),
       "Docker: " + (rt.docker_instalado ? (rt.docker_ativo === null ? "permissão administrativa necessária" : rt.docker_ativo ? "ativo " + (rt.docker_versao || "") : "instalado, mas parado") : "não instalado"),
