@@ -81,8 +81,8 @@ def pdf_imagens_para_pdf(ctx, arquivos: str, destino: str = "",
         c = canvas.Canvas(str(temp))
         for img in imagens:
             w, h = A4
-            modo = (orientacao or "auto").lower()
-            if modo == "paisagem" or (modo == "auto" and img.width > img.height):
+            orientacao_pagina = (orientacao or "auto").lower()
+            if orientacao_pagina == "paisagem" or (orientacao_pagina == "auto" and img.width > img.height):
                 w, h = landscape(A4)
             else:
                 w, h = portrait(A4)
