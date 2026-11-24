@@ -82,3 +82,21 @@ def test_docker_nao_e_disponivel_apenas_por_ter_processo(monkeypatch):
     item = modulos._docker()
     assert item["estado"] == "instalado_parado"
     assert "daemon indisponível" in item["detalhe"]
+
+
+def test_kolibri_exige_healthcheck_e_processo(monkeypatch):
+    monkeypatch.setattr(modulos.shutil, "which", lambda _nome: "/usr/bin/kolibri")
+    monkeypatch.setattr(modulos, "_http", lambda _url: True)
+    monkeypatch.setattr(modulos, "_processo", lambda *_termos: False)
+    sem_processo = modulos._servico(
+        "Kolibri", "Plataforma", ("kolibri",), "127.0.0.1", 8080,
+        "http://127.0.0.1:8080/", processos=("kolibri",),
+    )
+    assert sem_processo["estado"] == "instalado_parado"
+
+    monkeypatch.setattr(modulos, "_processo", lambda *_termos: True)
+    ativo = modulos._servico(
+        "Kolibri", "Plataforma", ("kolibri",), "127.0.0.1", 8080,
+        "http://127.0.0.1:8080/", processos=("kolibri",),
+    )
+    assert ativo["estado"] == "disponivel"
