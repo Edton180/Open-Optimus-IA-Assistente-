@@ -94,8 +94,6 @@ INTENCOES: list[tuple[str, list[str]]] = [
      r"cotacao|quem (e|foi)|o que (e|foi|sao)|quando (e|foi)|ultimas|atual)",
      ["pesquisar_web", "ler_pagina", "noticias"]),
     (r"\bnoticia", ["noticias", "pesquisar_web"]),
-    (r"\b(x|twitter|tweets?|posts? no x|publicacoes no x|trending topics)\b",
-     ["pesquisar_x", "pesquisar_web"]),
     (r"\b(clima|previsao|vai chover|temperatura (em|de|hoje|amanha|la fora))", ["clima"]),
     (r"\b(volume|som|mudo|silenci|brilho|musica|tocar|toque|pausa|pause|proxima|anterior|"
      r"spotify)", ["volume", "brilho", "midia"]),
