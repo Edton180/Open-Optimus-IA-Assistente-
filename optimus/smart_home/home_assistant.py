@@ -10,6 +10,7 @@ import os
 import platform
 import shutil
 import subprocess
+import socket
 import tarfile
 import threading
 import time
@@ -275,6 +276,15 @@ def instalar() -> dict[str, Any]:
         if existente["rodando"]:
             return {"ok": True, "mensagem": "Home Assistant já está em execução.", "url": f"http://127.0.0.1:{PORTA}"}
         _executar(["rm", "-f", NOME], timeout=30, elevate=True)
+    # Evita remover/recriar o container quando outro serviço já ocupa a porta local.
+    teste_porta = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        teste_porta.settimeout(1)
+        if teste_porta.connect_ex(("127.0.0.1", PORTA)) == 0:
+            raise RuntimeError(f"A porta {PORTA} já está em uso por outro serviço. "
+                               "Feche o serviço conflitante ou altere sua porta antes de instalar.")
+    finally:
+        teste_porta.close()
     args = ["run", "-d", "--name", NOME, "--restart", "unless-stopped",
             "-e", f"TZ={os.environ.get('TZ', 'America/Sao_Paulo')}",
             "-v", f"{dados.resolve()}:/config"]
