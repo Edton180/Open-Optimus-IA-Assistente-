@@ -30,9 +30,12 @@ A recuperação combina cobertura lexical FTS5 com similaridade cosseno de embed
 Se um modelo de embedding compatível já estiver instalado no Ollama, o Optimus detecta
 automaticamente modelos conhecidos (EmbeddingGemma, nomic-embed-text, mxbai-embed-large,
 BGE-M3, Snowflake Arctic Embed e all-minilm). Também aceita o nome explícito via API.
-Nenhum modelo de embedding é baixado silenciosamente. Se houver um modelo conhecido já instalado,
-o Optimus o detecta; se o modelo for instalado posteriormente, os embeddings ausentes podem
-ser preenchidos sem reler os artigos ZIM. Sem um modelo local, a recuperação continua
+Ao clicar em **Indexar / continuar**, se o Ollama local estiver ativo e nenhum modelo de
+embedding estiver instalado, o Optimus baixa automaticamente `all-minilm` (46 MB) pela API
+local do Ollama. Esse download ocorre como parte da ação explícita de indexação; não há
+download em segundo plano durante conversas. Se o Ollama não estiver disponível, a indexação
+continua em modo lexical e informa a limitação. Se um modelo conhecido já estiver instalado,
+ele é detectado; embeddings ausentes podem ser preenchidos depois sem reler os artigos ZIM. Sem um modelo local, a recuperação continua
 funcionando em modo lexical e a interface deve identificar que não há vetores.
 
 ## RAG conectado ao agente
