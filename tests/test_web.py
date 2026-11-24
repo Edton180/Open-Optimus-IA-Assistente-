@@ -262,3 +262,15 @@ def test_boot_nao_pode_ficar_preso_e_arquivos_estaticos_nao_sao_cacheados():
     finally:
         httpd.shutdown()
         httpd.server_close()
+
+
+def test_seletor_do_menu_nao_interrompe_a_inicializacao():
+    """Os dois usos do menu precisam selecionar uma coleção, não um elemento único."""
+    codigo = (server.ESTATICOS / "app.js").read_text(encoding="utf-8")
+    seletores_menu = [
+        linha.strip()
+        for linha in codigo.splitlines()
+        if '".menu button"' in linha and ".forEach(" in linha
+    ]
+    assert len(seletores_menu) == 2
+    assert all(linha.startswith('$$(".menu button")') for linha in seletores_menu)

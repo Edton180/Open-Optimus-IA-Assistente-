@@ -230,7 +230,7 @@ $("#pdf-executar").addEventListener("click", async () => {
   } finally { $("#pdf-executar").disabled = !pdfEnviados.length; }
 });
 
-$(".menu button").forEach((b) => b.addEventListener("click", () => irPara(b.dataset.tela)));
+$$(".menu button").forEach((b) => b.addEventListener("click", () => irPara(b.dataset.tela)));
 $$("#hud-nav button").forEach((b) => b.addEventListener("click", () => {
   const destino = b.dataset.ir;
   if (destino === "painel-conversa") document.body.classList.toggle("transcricao-aberta");
