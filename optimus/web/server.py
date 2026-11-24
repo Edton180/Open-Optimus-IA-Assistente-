@@ -498,8 +498,8 @@ class Manipulador(BaseHTTPRequestHandler):
         estado_leitor = kiwix.estado()
         if not estado_leitor.get("executando"):
             return self._json({"erro": "O leitor Kiwix não está em execução."}, 409)
-        partes = caminho.strip("/").split("/")[3:]
-        if any(p in (".", "..") or "\\\\" in p or "\\x00" in p for p in partes):
+        partes = [unquote(p) for p in caminho.strip("/").split("/")[3:]]
+        if any(p in (".", "..") or chr(92) in p or chr(0) in p for p in partes):
             return self._json({"erro": "Caminho inválido para o leitor."}, 400)
         sufixo = "/".join(partes)
         destino = f"http://127.0.0.1:{int(estado_leitor['porta'])}/" + sufixo
@@ -507,7 +507,8 @@ class Manipulador(BaseHTTPRequestHandler):
         if consulta:
             destino += "?" + consulta
         cabecalhos = {"User-Agent": "Open-Optimus-Kiwix-Proxy/1.0"}
-        for nome in ("Range", "If-Range", "Accept", "Accept-Encoding"):
+        cabecalhos["Accept-Encoding"] = "identity"
+        for nome in ("Range", "If-Range", "Accept"):
             valor = self.headers.get(nome)
             if valor:
                 cabecalhos[nome] = valor
@@ -522,8 +523,10 @@ class Manipulador(BaseHTTPRequestHandler):
         with resposta:
             status = getattr(resposta, "status", resposta.getcode())
             tipo = resposta.headers.get("Content-Type", "application/octet-stream")
-            eh_html = "text/html" in tipo.lower()
-            if eh_html:
+            tipo_texto = tipo.lower()
+            eh_html = "text/html" in tipo_texto
+            eh_css = "text/css" in tipo_texto
+            if eh_html or eh_css:
                 corpo = resposta.read()
                 # O Kiwix gera links absolutos a partir da raiz. Reescrevemos
                 # os caminhos locais para continuarem dentro do proxy autenticado.
@@ -532,6 +535,7 @@ class Manipulador(BaseHTTPRequestHandler):
                 texto = texto.replace('src="/', 'src="/api/zim/leitor/')
                 texto = texto.replace('action="/', 'action="/api/zim/leitor/')
                 texto = texto.replace('url(/', 'url(/api/zim/leitor/')
+                texto = texto.replace('@import "/', '@import "/api/zim/leitor/')
                 corpo = texto.encode("utf-8")
                 self.send_response(status)
                 self.send_header("Content-Type", tipo)
