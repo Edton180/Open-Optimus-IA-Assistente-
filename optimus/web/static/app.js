@@ -1388,16 +1388,21 @@ async function carregarAparelhosCasa() {
       } else if (item.dominio === "lock") {
         servico = estadoAtual === "locked" ? "unlock" : "lock";
         rotulo = estadoAtual === "locked" ? "Destrancar" : "Trancar";
-      } else if (["light", "switch", "fan", "media_player", "climate"].includes(item.dominio)) {
+      } else if (["light", "switch", "fan", "media_player", "climate", "humidifier", "water_heater"].includes(item.dominio)) {
         servico = ["on", "heat", "cool", "playing"].includes(estadoAtual) ? "turn_off" : "turn_on";
         rotulo = servico === "turn_off" ? "Desligar" : "Ligar";
+      } else if (item.dominio === "vacuum") {
+        servico = estadoAtual === "cleaning" ? "stop" : "start";
+        rotulo = servico === "stop" ? "Parar" : "Iniciar limpeza";
       }
+      const controle = item.controlavel
+        ? '<button type="button" class="botao primario" data-casa-controle="' + esc(item.entity_id) +
+          '" data-casa-servico="' + esc(servico) + '">' + esc(rotulo) + '</button>'
+        : '<span class="sutil">Somente leitura</span>';
       return '<article class="cartao">' +
         '<div class="linha entre"><b>' + esc(item.nome) + '</b><span class="selo">' +
         esc(item.estado) + '</span></div><p class="sutil">' + esc(item.entity_id) +
-        (item.unidade ? ' · ' + esc(item.unidade) : '') + '</p>' +
-        '<button type="button" class="botao primario" data-casa-controle="' + esc(item.entity_id) +
-        '" data-casa-servico="' + esc(servico) + '">' + esc(rotulo) + '</button></article>';
+        (item.unidade ? ' · ' + esc(item.unidade) : '') + '</p>' + controle + '</article>';
     }).join("") : '<p class="sutil">Nenhum aparelho controlável foi encontrado. Adicione integrações e dispositivos no Home Assistant e atualize esta lista.</p>';
   } catch (erro) {
     painel.innerHTML = '<p class="sutil">⚠️ ' + esc(erro.message) +
