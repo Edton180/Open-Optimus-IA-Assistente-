@@ -131,9 +131,9 @@ com a API Cloudflare (Account ID, Zone ID, hostname e token com permissões mín
 configuração não deve ser confundida com a senha local do Optimus.
 
 A senha do Optimus deve ter pelo menos 12 caracteres. O computador precisa permanecer
-ligado enquanto o túnel estiver em uso. O status do painel representa o processo do túnel;
-a validação externa ponta a ponta ainda depende de uma checagem HTTP a partir de uma rede
-externa.
+ligado enquanto o túnel estiver em uso. O painel só exibe o endereço como conectado depois que o Optimus recebe uma resposta HTTP
+200 com conteúdo HTML pelo hostname HTTPS público. Se a verificação demorar, o estado fica
+como iniciando e continua sendo monitorado em segundo plano.
 
 No Android/Termux, o instalador seleciona o binário Linux ARM64 quando a arquitetura é
 aarch64. A execução pode depender da versão do Android, permissões do Termux e suporte
