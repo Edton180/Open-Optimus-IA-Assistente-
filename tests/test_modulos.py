@@ -4,7 +4,7 @@ from optimus import modulos
 def test_inventario_inclui_core_e_integracoes_opcionais(monkeypatch):
     monkeypatch.setattr(modulos.shutil, "which", lambda _nome: None)
     monkeypatch.setattr(modulos, "_http", lambda _url: False)
-    monkeypatch.setattr(modulos, "_processo", lambda _host, _port: False)
+    monkeypatch.setattr(modulos, "_processo", lambda *_termos: False)
 
     itens = modulos.inventario()
     por_id = {item["id"]: item for item in itens}
@@ -19,7 +19,7 @@ def test_inventario_inclui_core_e_integracoes_opcionais(monkeypatch):
 def test_inventario_identifica_servico_respondendo(monkeypatch):
     monkeypatch.setattr(modulos.shutil, "which", lambda nome: "/usr/bin/" + nome)
     monkeypatch.setattr(modulos, "_http", lambda _url: True)
-    monkeypatch.setattr(modulos, "_porta", lambda _host, _port: True)
+    monkeypatch.setattr(modulos, "_processo", lambda *_termos: True)
 
     itens = {item["id"]: item for item in modulos.inventario()}
 
@@ -30,7 +30,7 @@ def test_inventario_identifica_servico_respondendo(monkeypatch):
 def test_inventario_distingue_instalado_parado(monkeypatch):
     monkeypatch.setattr(modulos.shutil, "which", lambda nome: "/usr/bin/" + nome)
     monkeypatch.setattr(modulos, "_http", lambda _url: False)
-    monkeypatch.setattr(modulos, "_porta", lambda _host, _port: False)
+    monkeypatch.setattr(modulos, "_processo", lambda *_termos: False)
 
     itens = {item["id"]: item for item in modulos.inventario()}
 
