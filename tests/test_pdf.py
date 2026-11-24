@@ -223,3 +223,40 @@ def test_pdf_comparar_retorna_diff_textual(tmp_path):
     assert resultado["iguais"] is False
     assert "VERSAO ANTIGA" in resultado["diff"]
     assert "VERSAO NOVA" in resultado["diff"]
+
+
+def test_pdf_assinar_digital_com_certificado_pkcs12(tmp_path):
+    from datetime import datetime, timedelta, timezone
+    from cryptography import x509
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric import rsa
+    from cryptography.x509.oid import NameOID
+    from pypdf import PdfReader
+
+    origem = tmp_path / "contrato.pdf"
+    certificado = tmp_path / "teste.p12"
+    destino = tmp_path / "assinado.pdf"
+    _criar_pdf(origem, ["CONTRATO PARA ASSINAR"])
+    senha = "senha-teste"
+    chave = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    nome = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "Optimus Test")])
+    agora = datetime.now(timezone.utc)
+    cert = (x509.CertificateBuilder().subject_name(nome).issuer_name(nome)
+            .public_key(chave.public_key()).serial_number(x509.random_serial_number())
+            .not_valid_before(agora - timedelta(minutes=1))
+            .not_valid_after(agora + timedelta(days=1))
+            .add_extension(x509.BasicConstraints(ca=True, path_length=None), critical=True)
+            .sign(chave, hashes.SHA256()))
+    p12 = serialization.pkcs12.serialize_key_and_certificates(
+        b"Optimus Test", chave, cert, None,
+        serialization.BestAvailableEncryption(senha.encode())
+    )
+    certificado.write_bytes(p12)
+
+    resultado = pdf_suite.pdf_assinar_digital(
+        _ctx(tmp_path), str(origem), str(certificado), senha, "AssinaturaTeste", str(destino)
+    )
+
+    assert "erro" not in resultado
+    campos = PdfReader(str(destino)).get_fields()
+    assert any(campo.get("/FT") == "/Sig" and campo.get("/V") for campo in campos.values())
