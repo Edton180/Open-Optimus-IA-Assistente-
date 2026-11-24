@@ -807,7 +807,7 @@ def pdf_pdfa(ctx, arquivo: str, perfil_icc: str, versao: str = "2", destino: str
     out.parent.mkdir(parents=True, exist_ok=True)
     temp = out.with_name(out.name + ".tmp")
     definicao = out.with_name(f".{out.stem}_pdfa_def.ps")
-    caminho_icc = str(perfil).replace("\\\\", "/").replace("(", "\\\\(").replace(")", "\\\\)")
+    caminho_icc = str(perfil).replace("\\", "/").replace("(", "\\(").replace(")", "\\)")
     ps = f"""/ICCProfile ({caminho_icc}) def
 [/_objdef {{icc_PDFA}} /type /stream /OBJ pdfmark
 [{{icc_PDFA}} << /N 3 >> /PUT pdfmark
