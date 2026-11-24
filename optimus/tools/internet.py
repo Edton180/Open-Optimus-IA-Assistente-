@@ -278,55 +278,6 @@ def pesquisar_web(ctx, consulta: str, quantidade: int = 0):
             "itens": pontuados[:limite]}
 
 
-@ferramenta(
-    "pesquisar_x",
-    "Pesquisa publicações públicas recentes no X (Twitter) em tempo real. Requer um Bearer "
-    "Token da API oficial do X configurado em provedores.x_api_chave. Use para tendências, "
-    "declarações públicas e reações; diferencie posts de fatos confirmados.",
-    {"consulta": texto("Termos da pesquisa no X"),
-     "quantidade": numero("Quantidade de posts (1 a 10)")},
-    grupo="internet", obrigatorios=["consulta"],
-)
-def pesquisar_x(ctx, consulta: str, quantidade: int = 0):
-    token = ctx.config.get("provedores", "x_api_chave", "") or ""
-    if not token:
-        return {"erro": "A pesquisa no X exige um Bearer Token da API oficial. Configure "
-                "provedores.x_api_chave no cofre do Optimus; a pesquisa web comum continua disponível."}
-    limite = max(1, min(10, int(quantidade or 10)))
-    try:
-        resposta = httpx.get(
-            "https://api.x.com/2/tweets/search/recent",
-            headers={"Authorization": f"Bearer {token}", **_AGENTE},
-            params={"query": f"({consulta}) -is:retweet", "max_results": max(10, limite),
-                    "tweet.fields": "created_at,public_metrics,lang,author_id",
-                    "expansions": "author_id", "user.fields": "name,username,verified"},
-            timeout=10,
-        )
-        if resposta.status_code in (401, 403):
-            return {"erro": "A API do X recusou o token ou não liberou a pesquisa recente. "
-                    "Verifique as permissões e o plano do projeto no portal de desenvolvedores."}
-        resposta.raise_for_status()
-        dados = resposta.json()
-    except (httpx.HTTPError, ValueError) as erro:
-        return {"erro": f"Não consegui consultar a API do X: {type(erro).__name__}: {erro}"}
-    usuarios = {u["id"]: u for u in dados.get("includes", {}).get("users", [])}
-    itens = []
-    for post in dados.get("data", [])[:limite]:
-        autor = usuarios.get(post.get("author_id"), {})
-        username = autor.get("username", "")
-        itens.append({
-            "autor": autor.get("name", ""),
-            "usuario": "@" + username if username else "",
-            "verificado": bool(autor.get("verified", False)),
-            "texto": post.get("text", ""),
-            "data": post.get("created_at", ""),
-            "metricas": post.get("public_metrics", {}),
-            "link": f"https://x.com/{username}/status/{post['id']}" if username else "",
-        })
-    return {"consulta": consulta, "fonte": "API oficial do X",
-            "total": len(itens), "itens": itens}
-
-
 def ler_rss(conteudo: str, limite: int = 10) -> list[dict]:
     itens = []
     for bloco in re.findall(r"(?s)<item>(.*?)</item>", conteudo)[:limite]:
