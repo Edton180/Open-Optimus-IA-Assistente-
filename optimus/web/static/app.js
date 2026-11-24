@@ -1070,9 +1070,30 @@ async function carregarCasa() {
   atualizar(); vigiaCameras = setInterval(atualizar, 1200);
 }
 async function executarFerramenta(texto) { irPara("chat"); entrada.value = texto; enviar(); }
+async function testarHomeAssistant() {
+  const status = $("#casa-conexao-status");
+  status.textContent = "Testando endereço e token…";
+  try {
+    const r = await api("/api/casa/testar", { method: "POST", json: {
+      url: $("#casa-url").value.trim(), token: $("#casa-token").value.trim()
+    }});
+    status.textContent = r.ok ? "✅ " + r.mensagem : "⚠️ " + (r.erro || "Não foi possível conectar.");
+    return !!r.ok;
+  } catch (e) {
+    status.textContent = "⚠️ " + e.message;
+    return false;
+  }
+}
+$("#casa-testar").onclick = testarHomeAssistant;
 $("#casa-salvar").onclick = async () => {
-  await api("/api/config", { method: "POST", json: { casa: { url: $("#casa-url").value.trim(), token: $("#casa-token").value.trim() } } });
-  executarFerramenta("Liste os aparelhos da minha casa");
+  const status = $("#casa-conexao-status");
+  status.textContent = "Salvando configuração local…";
+  try {
+    await api("/api/config", { method: "POST", json: { casa: {
+      url: $("#casa-url").value.trim(), token: $("#casa-token").value.trim()
+    }}});
+    if (await testarHomeAssistant()) executarFerramenta("Liste os aparelhos da minha casa");
+  } catch (e) { status.textContent = "⚠️ Não foi possível salvar: " + e.message; }
 };
 $("#casa-atualizar").onclick = () => executarFerramenta("Liste os aparelhos da minha casa e o estado de cada um");
 $("#casa-diagnostico").onclick = () => executarFerramenta("Execute casa_diagnostico e informe quais integrações, dispositivos e câmeras estão realmente disponíveis.");
