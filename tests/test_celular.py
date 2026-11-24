@@ -126,3 +126,47 @@ def test_ligar_acesso_pelo_celular_pela_interface(monkeypatch):
     finally:
         server.desligar_celular()
         httpd.shutdown()
+
+def test_tunel_captura_url_e_aponta_para_a_porta_correta(monkeypatch):
+    import io
+
+    class ProcessoFalso:
+        def __init__(self, comando, **kwargs):
+            self.comando = comando
+            self.stdout = io.StringIO(
+                "INF Registered tunnel connection\n"
+                "https://optimus-teste.trycloudflare.com\n"
+            )
+            self.returncode = None
+
+        def poll(self):
+            return self.returncode
+
+        def terminate(self):
+            self.returncode = 0
+
+        def wait(self, timeout=None):
+            self.returncode = 0
+            return 0
+
+        def kill(self):
+            self.returncode = -9
+
+    processos = []
+
+    def iniciar_falso(comando, **kwargs):
+        processo = ProcessoFalso(comando, **kwargs)
+        processos.append(processo)
+        return processo
+
+    monkeypatch.setattr(server.shutil, "which", lambda nome: "/usr/bin/cloudflared")
+    monkeypatch.setattr(server.subprocess, "Popen", iniciar_falso)
+    try:
+        resultado = server.iniciar_tunel(9876, "senha-remota-segura-123")
+        assert resultado["ligado"] is True
+        assert resultado["url"] == "https://optimus-teste.trycloudflare.com"
+        assert processos[0].comando[-2:] == ["--url", "http://127.0.0.1:9876"]
+    finally:
+        server.parar_tunel()
+    assert server.estado_tunel()["ligado"] is False
+

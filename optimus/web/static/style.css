@@ -405,13 +405,14 @@ body.modo-hud #lateral { background: rgba(4,11,20,.96); border-right-color: rgba
 #gestos-dica.oculto { display: none; }
 #botao-gestos.ligado { background: rgba(63,183,255,.16); border-color: #3fd8ff; color: #d6f6ff; }
 /* QR codes responsivos: não deixam a figura da agenda ser cortada em telas estreitas. */
-#celular-qr, .qr-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+#celular-qr, .qr-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
   gap: 14px; align-items: start; width: 100%; min-width: 0; overflow: visible; }
-.qr { box-sizing: border-box; min-width: 0; width: 100%; margin: 8px 0; padding: 12px;
-  display: flex; flex-direction: column; align-items: center; text-align: center;
-  background: var(--cartao); border: 1px solid var(--borda); border-radius: 12px; }
-.qr svg { display: block; width: min(100%, 260px); max-width: 100%; height: auto; aspect-ratio: 1;
-  max-height: 260px; object-fit: contain; padding: 8px; background: #fff; border-radius: 8px; }
+.qr { box-sizing: border-box; min-width: 0; max-width: 100%; width: 100%; margin: 8px 0; padding: 12px;
+  display: flex; flex: 0 1 auto; flex-direction: column; align-items: center; justify-content: flex-start;
+  text-align: center; overflow: visible; background: var(--cartao); border: 1px solid var(--borda); border-radius: 12px; }
+.qr svg { display: block; flex: none; width: min(100%, 280px); max-width: 100%; height: auto; max-height: none;
+  aspect-ratio: auto; object-fit: contain; overflow: visible; padding: 8px; background: #fff;
+  border-radius: 8px; shape-rendering: crispEdges; }
 .qr figcaption { max-width: 100%; font-size: 13px; margin-top: 8px; overflow-wrap: anywhere; }
 #celular-estado code, #tunel-estado code { word-break: break-all; overflow-wrap: anywhere; }
 #cartao-celular .linha { flex-wrap: wrap; min-width: 0; }
@@ -422,7 +423,8 @@ body.modo-hud #lateral { background: rgba(4,11,20,.96); border-right-color: rgba
 @media (max-width: 760px) {
   #tela-config { padding: 14px; }
   #celular-qr, .qr-grid { grid-template-columns: minmax(0, 1fr); }
-  .qr svg { width: min(100%, 280px); max-height: 280px; }
+  .qr { justify-self: stretch; }
+  .qr svg { width: min(100%, 300px); max-height: none; }
   #cartao-celular .linha > .botao { flex: 1 1 auto; white-space: normal; }
 }
 
