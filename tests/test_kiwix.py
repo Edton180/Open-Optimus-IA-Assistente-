@@ -153,17 +153,28 @@ def test_busca_rejeita_consulta_curta(monkeypatch):
 
 
 def test_instalador_usa_pacote_local_sem_path_global(tmp_path, monkeypatch):
+    import tarfile
     import zipfile
     from optimus import kiwix_manager
 
     raiz = tmp_path / "kiwix-tools"
     monkeypatch.setattr(kiwix_manager, "diretorio", lambda: raiz)
-    monkeypatch.setattr(kiwix_manager.platform, "system", lambda: "Windows")
-    monkeypatch.setattr(kiwix_manager.platform, "machine", lambda: "AMD64")
+    sistema = kiwix_manager.platform.system()
+    maquina = kiwix_manager.platform.machine()
+    monkeypatch.setattr(kiwix_manager.platform, "system", lambda: sistema)
+    monkeypatch.setattr(kiwix_manager.platform, "machine", lambda: maquina)
+    windows = sistema.lower() == "windows"
+    nome_binario = "kiwix-serve.exe" if windows else "kiwix-serve"
 
     def baixar(url, destino):
-        with zipfile.ZipFile(destino, "w") as pacote:
-            pacote.writestr("kiwix-tools/kiwix-serve.exe", b"fake-exe")
+        if windows:
+            with zipfile.ZipFile(destino, "w") as pacote:
+                pacote.writestr("kiwix-tools/" + nome_binario, b"fake-exe")
+        else:
+            temporario = tmp_path / nome_binario
+            temporario.write_bytes(b"fake-exe")
+            with tarfile.open(destino, "w:gz") as pacote:
+                pacote.add(temporario, arcname="kiwix-tools/" + nome_binario)
 
     monkeypatch.setattr(kiwix_manager, "_baixar", baixar)
     dados = kiwix_manager.instalar()
