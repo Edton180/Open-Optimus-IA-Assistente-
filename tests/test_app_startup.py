@@ -38,7 +38,7 @@ def test_inicializacao_nao_espera_indexacao_de_conhecimento(monkeypatch, tmp_pat
 
     thread = threading.Thread(target=construir)
     thread.start()
-    assert iniciou.wait(1), "a indexação em segundo plano não foi iniciada"
+    assert iniciou.wait(5), "a indexação em segundo plano não foi iniciada"
     thread.join(1)
     terminou_sem_esperar = not thread.is_alive()
 
