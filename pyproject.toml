@@ -27,7 +27,11 @@ voz = ["faster-whisper>=1.0", "sounddevice>=0.4", "numpy>=1.24", "kokoro-onnx>=0
 casa = ["bleak>=0.22"]
 documentos = ["pypdf>=4.0", "reportlab>=4.0", "python-docx>=1.1"]
 # Suite PDF local: conversão de imagens e renderização de páginas (Tesseract é instalado no SO)
-pdf = ["pypdf>=4.0", "reportlab>=4.0", "python-docx>=1.1", "Pillow>=10.0", "pypdfium2>=4.28", "pytesseract>=0.3.10", "pdfplumber>=0.11", "openpyxl>=3.1", "python-pptx>=1.0"]
+pdf = [
+    "pypdf>=4.0", "reportlab>=4.0", "python-docx>=1.1", "Pillow>=10.0",
+    "pypdfium2>=4.28", "pytesseract>=0.3.10", "pdfplumber>=0.11",
+    "openpyxl>=3.1", "python-pptx>=1.0",
+]
 # Controle de mouse, teclado e capturas de tela
 desktop = ["pyautogui>=0.9", "mss>=9.0", "pyperclip>=1.8"]
 # Cofre do sistema para as chaves de API (Windows, macOS e Linux)
