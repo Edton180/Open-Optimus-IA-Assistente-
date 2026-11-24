@@ -88,8 +88,9 @@ def catalogo() -> list[Item]:
     from optimus.estudio import diarizar, piper, transcrever
 
     itens = [
-        Item("omnivoice", "OmniVoice", "clonagem", "Apache-2.0", 2500,
-             "Clonagem, criação de voz por descrição e 600+ idiomas (modelo do Hugging Face)",
+        Item("omnivoice", "OmniVoice", "clonagem",
+             "Apache-2.0 (código) / CC-BY-NC-4.0 (pesos)", 2500,
+             "Clonagem e criação de voz em 600+ idiomas. Atenção: os pesos oficiais são CC-BY-NC-4.0 (uso não comercial).",
              "pacote", "omnivoice", "omnivoice"),
         Item("chatterbox", "Chatterbox Multilingual", "clonagem", "MIT", 3000,
              "Clonagem em 23 idiomas e conversor de voz (voz para voz)",
