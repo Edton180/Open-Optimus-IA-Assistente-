@@ -1260,6 +1260,9 @@ async function atualizarHomeAssistantGerenciado() {
     ].filter(Boolean).join(" · ");
     abrir.disabled = !c.rodando;
     abrir.dataset.url = d.url || "";
+    if (c.rodando && $("#casa-url") && !$("#casa-url").value.trim()) {
+      $("#casa-url").value = d.url || "";
+    }
     if (tarefa.estado === "executando") {
       status.textContent = tarefa.mensagem || "Operação em andamento…";
       return true;
@@ -1311,7 +1314,8 @@ $$("[data-ha-acao]").forEach((b) => b.addEventListener("click", () => executarAc
 async function carregarCasa() {
   await atualizarHomeAssistantGerenciado();
   const d = await api("/api/config");
-  $("#casa-url").value = d.config.casa.url || ""; $("#casa-token").value = d.config.casa.token || "";
+  $("#casa-url").value = d.config.casa.url || $("#ha-gerenciado-abrir").dataset.url || "";
+  $("#casa-token").value = d.config.casa.token || "";
   try {
     const c = await api("/api/cameras");
     $("#cameras").innerHTML = c.cameras.map((x) => `<figure class="cartao camera"><img data-camera="${esc(x.id)}" alt="${esc(x.nome)}">${String(x.id).startsWith("ip:") ? `<button class="icone" data-apagar-camera="${esc(x.id)}" title="Remover câmera">🗑️</button>` : ""}<figcaption>${esc(x.nome)} <span class="sutil">prévia ~1,2 s</span></figcaption></figure>`).join("")
@@ -1334,6 +1338,51 @@ async function carregarCasa() {
   };
   atualizar(); vigiaCameras = setInterval(atualizar, 1200);
 }
+async function carregarAparelhosCasa() {
+  const painel = $("#casa-aparelhos");
+  painel.innerHTML = '<p class="sutil">Consultando aparelhos no Home Assistant…</p>';
+  try {
+    const dados = await api("/api/casa/aparelhos");
+    const itens = dados.aparelhos || [];
+    painel.innerHTML = itens.length ? itens.map((item) => {
+      const estadoAtual = String(item.estado || "unknown").toLowerCase();
+      let servico = "turn_on", rotulo = "Ligar";
+      if (item.dominio === "cover") {
+        servico = estadoAtual === "open" ? "close_cover" : "open_cover";
+        rotulo = estadoAtual === "open" ? "Fechar" : "Abrir";
+      } else if (item.dominio === "lock") {
+        servico = estadoAtual === "locked" ? "unlock" : "lock";
+        rotulo = estadoAtual === "locked" ? "Destrancar" : "Trancar";
+      } else if (["light", "switch", "fan", "media_player", "climate"].includes(item.dominio)) {
+        servico = ["on", "heat", "cool", "playing"].includes(estadoAtual) ? "turn_off" : "turn_on";
+        rotulo = servico === "turn_off" ? "Desligar" : "Ligar";
+      }
+      return '<article class="cartao">' +
+        '<div class="linha entre"><b>' + esc(item.nome) + '</b><span class="selo">' +
+        esc(item.estado) + '</span></div><p class="sutil">' + esc(item.entity_id) +
+        (item.unidade ? ' · ' + esc(item.unidade) : '') + '</p>' +
+        '<button type="button" class="botao primario" data-casa-controle="' + esc(item.entity_id) +
+        '" data-casa-servico="' + esc(servico) + '">' + esc(rotulo) + '</button></article>';
+    }).join("") : '<p class="sutil">Nenhum aparelho controlável foi encontrado. Adicione integrações e dispositivos no Home Assistant e atualize esta lista.</p>';
+  } catch (erro) {
+    painel.innerHTML = '<p class="sutil">⚠️ ' + esc(erro.message) +
+      '. Conclua o onboarding do Home Assistant e salve um token de acesso válido.</p>';
+  }
+}
+$("#casa-aparelhos").addEventListener("click", async (evento) => {
+  const botao = evento.target.closest("[data-casa-controle]");
+  if (!botao) return;
+  botao.disabled = true;
+  try {
+    await api("/api/casa/controle", { method: "POST", json: {
+      entity_id: botao.dataset.casaControle, servico: botao.dataset.casaServico
+    }});
+    await carregarAparelhosCasa();
+  } catch (erro) {
+    botao.disabled = false;
+    $("#casa-conexao-status").textContent = "⚠️ " + erro.message;
+  }
+});
 async function executarFerramenta(texto) { irPara("chat"); entrada.value = texto; enviar(); }
 async function testarHomeAssistant() {
   const status = $("#casa-conexao-status");
@@ -1370,11 +1419,21 @@ $("#casa-salvar").onclick = async () => {
     await api("/api/config", { method: "POST", json: { casa: {
       url: $("#casa-url").value.trim(), token: $("#casa-token").value.trim()
     }}});
-    if (await testarHomeAssistant()) executarFerramenta("Liste os aparelhos da minha casa");
+    if (await testarHomeAssistant()) await carregarAparelhosCasa();
   } catch (e) { status.textContent = "⚠️ Não foi possível salvar: " + e.message; }
 };
-$("#casa-atualizar").onclick = () => executarFerramenta("Liste os aparelhos da minha casa e o estado de cada um");
-$("#casa-diagnostico").onclick = () => executarFerramenta("Execute casa_diagnostico e informe quais integrações, dispositivos e câmeras estão realmente disponíveis.");
+$("#casa-atualizar").onclick = carregarAparelhosCasa;
+$("#casa-diagnostico").onclick = async () => {
+  const status = $("#casa-conexao-status");
+  status.textContent = "Verificando serviço, API e credenciais…";
+  await atualizarHomeAssistantGerenciado();
+  try {
+    const d = await api("/api/casa/aparelhos");
+    status.textContent = "✅ Home Assistant conectado · " + d.total + " aparelho(s) controlável(is) encontrado(s).";
+  } catch (erro) {
+    status.textContent = "Diagnóstico: " + erro.message;
+  }
+};
 $("#casa-bluetooth").onclick = () => executarFerramenta("Procure aparelhos Bluetooth por perto");
 $("#casa-rede").onclick = () => executarFerramenta("Quais aparelhos estão conectados na rede da casa?");
 $("#cam-adicionar").onclick = async () => {
