@@ -77,9 +77,15 @@ def _slug(nome: str) -> str:
 # ---------------------------------------------------------------------- vozes prontas
 def _prontas() -> list[Perfil]:
     from optimus.voice import tts
+    # Importar antes de consultar o estado do motor; o módulo também é usado
+    # para montar a instrução de voz quando os pesos já estão preparados.
+    from optimus.estudio import omnivoice, piper
 
+    # O perfil Edton Braz do Estúdio é uma configuração própria (OmniVoice
+    # quando disponível, Prime como reserva). Não deixar a voz ElevenLabs
+    # homônima de tts.VOZES sombreá-lo na busca por id/nome.
     saida = [Perfil(v.id, v.nome, "pronta", "padrao", v.id, v.genero, "pt-BR",
-                    descricao=v.descricao) for v in tts.VOZES]
+                    descricao=v.descricao) for v in tts.VOZES if v.id != "edton-braz"]
     # Perfil de narração PT-BR do proprietário. Quando os pesos do OmniVoice estão
     # preparados localmente, usa voice design; caso contrário, cai para a voz Prime.
     pesos_omnivoice = pasta_base() / "estudio" / "modelos" / ".prontos" / "omnivoice.ok"
@@ -103,8 +109,6 @@ def _prontas() -> list[Perfil]:
     saida.append(Perfil("mordomo", "Mordomo", "pronta", "padrao", "nexus", "masculina",
                         velocidade=0.92, tom=-1.5,
                         descricao="Original do Optimus: mordomo calmo, formal e grave"))
-    from optimus.estudio import omnivoice, piper
-
     if piper.instalado():
         saida += [Perfil(v.perfil_id, v.nome, "pronta", "piper", v.id, v.genero, v.idioma,
                          descricao=f"Offline e leve (Piper, {v.licenca}); baixa "
