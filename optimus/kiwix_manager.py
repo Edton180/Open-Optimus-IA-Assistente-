@@ -10,7 +10,9 @@ import hashlib
 import json
 import os
 import platform
+import posixpath
 import shutil
+import stat
 import tarfile
 import tempfile
 import urllib.error
@@ -142,10 +144,6 @@ def _extrair_tar(arquivo: Path, destino: Path) -> None:
                 saida.mkdir(parents=True, exist_ok=True)
                 continue
             if membro.issym():
-                links.append((membro.name, membro.linkname))
-                continue
-            if membro.islnk():
-                # Hardlinks são recriados como cópia segura após extrair os arquivos regulares.
                 links.append((membro.name, membro.linkname))
                 continue
             if not membro.isfile():
