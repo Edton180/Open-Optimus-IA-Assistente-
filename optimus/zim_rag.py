@@ -140,11 +140,11 @@ def _db() -> sqlite3.Connection:
 
 
 def _modelo_auto(url: str, configurado: str = "") -> str:
-    """Usa apenas um modelo de embedding já instalado; nunca baixa modelos sem consentimento."""
+    """Detecta embeddings apenas no Ollama local; nunca consulta endpoints remotos."""
+    if not url or urlsplit(url).hostname not in {"127.0.0.1", "localhost", "::1"}:
+        return ""
     if configurado:
         return configurado
-    if not url:
-        return ""
     try:
         import httpx
         resposta = httpx.get(url.rstrip("/") + "/api/tags", timeout=2.5)
@@ -164,11 +164,11 @@ def _modelo_auto(url: str, configurado: str = "") -> str:
 
 def preparar_embedding(url: str, modelo: str = "") -> dict[str, Any]:
     """Garante um modelo leve local após ação explícita de indexação do usuário."""
+    if not url or urlsplit(url).hostname not in {"127.0.0.1", "localhost", "::1"}:
+        return {"instalado": False, "erro": "Ollama local indisponível; a indexação continuará em modo lexical."}
     existente = _modelo_auto(url, modelo)
     if existente:
         return {"instalado": True, "modelo": existente, "origem": "existente"}
-    if not url or urlsplit(url).hostname not in {"127.0.0.1", "localhost", "::1"}:
-        return {"instalado": False, "erro": "Ollama local indisponível; a indexação continuará em modo lexical."}
     try:
         import httpx
         with httpx.stream(
