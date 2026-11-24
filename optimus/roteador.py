@@ -175,8 +175,7 @@ def selecionar_ferramentas(texto: str, disponiveis: dict[str, Any], pequeno: boo
 # Pedidos que buscamos ANTES de chamar o modelo (bom para modelos pequenos, que erram
 # chamadas de ferramenta): o resultado vai junto com a pergunta.
 _PRE = [
-    (r"^(qual (e|o|a) |quanto (vale|esta|custa) |valor |cotacao |preco ).{0,70}"
-     r"\b(acoes?|bolsa|ticker|brb)\b(?P<q>.*)", "pesquisar_web", "consulta"),
+    (r"^(?P<q>.*\b(acoes?|bolsa|ticker|brb)\b.*)$", "pesquisar_web", "consulta"),
     (r"^(pesquise|pesquisa|pesquisar|procure|busque|busca|google)( na internet| na web| no google)?"
      r"( sobre| por| o que e| quem e)? (?P<q>.+)", "pesquisar_web", "consulta"),
     (r"^(quais (sao )?as )?(ultimas )?noticias( de hoje)?( sobre| de| do| da)? ?(?P<q>.*)",
