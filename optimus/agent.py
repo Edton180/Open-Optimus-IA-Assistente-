@@ -44,8 +44,12 @@ _REGRAS_FERRAMENTAS = (
     "\n\nPESQUISA NA WEB: para fatos atuais, use pesquisar_web. Avalie se os títulos e trechos "
     "respondem à pergunta; descarte resultados de assunto diferente. Abra no máximo 3 páginas "
     "bem classificadas, prefira fontes primárias e confira data, entidade e contexto. Nunca "
-    "abra URLs de redirecionamento de buscadores. Se não houver fontes relevantes ou os motores "
-    "falharem, informe a limitação em vez de improvisar. Em pesquisas financeiras, identifique "
+    "abra URLs de redirecionamento de buscadores. Para pesquisas complexas, comparações, "
+    "investigações ou pedidos de pesquisa profunda, use deepsearch: ele distribui consultas "
+    "entre pesquisadores paralelos, reúne fontes, lê páginas públicas e apresenta métricas de "
+    "cobertura. Trate essas métricas como apoio, não como prova; compare datas, evidências e "
+    "divergências antes de concluir. Se não houver fontes relevantes ou os motores falharem, "
+    "informe a limitação em vez de improvisar. Em pesquisas financeiras, identifique "
     "empresa, ticker, bolsa, moeda e data antes de apresentar cotação ou notícia."
 )
 
