@@ -201,3 +201,35 @@ def test_fluxo_pdf_upload_e_execucao_pela_interface():
     finally:
         httpd.shutdown()
 
+def test_status_do_motor_nao_bloqueia_resposta_da_api(monkeypatch):
+    """Um Ollama/servidor remoto que não responde não pode congelar a tela inicial."""
+    from optimus.engine.demo import MotorDemo
+    from optimus.web.server import Estado
+
+    config = Config()
+    config.definir("motor", "backend", "demo")
+    optimus = Optimus(config)
+    iniciou = threading.Event()
+    liberar = threading.Event()
+
+    class MotorLento(MotorDemo):
+        def disponivel(self):
+            iniciou.set()
+            liberar.wait(timeout=2)
+            return True
+
+        def modelos(self):
+            return ["modelo-teste"]
+
+    optimus.motor = MotorLento()
+    estado = Estado(optimus)
+    inicio = time.monotonic()
+    disponivel, modelos = estado.motor_status()
+    duracao = time.monotonic() - inicio
+    try:
+        assert duracao < 0.2
+        assert disponivel is False and modelos == []
+        assert iniciou.wait(timeout=1)
+    finally:
+        liberar.set()
+
