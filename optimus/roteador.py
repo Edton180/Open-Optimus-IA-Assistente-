@@ -61,6 +61,8 @@ INTENCOES: list[tuple[str, list[str]]] = [
      ["sortear"]),
     (r"\b(quantos dias|faltam? quantos|dias (ate|para|pro|pra)|que dia (da semana )?cai)",
      ["dias_ate"]),
+    (r"\b(acoes?|bolsa|ticker|papel|mercado financeiro|brb)\b",
+     ["pesquisar_web", "noticias"]),
     (r"\b(dolar|euro|libra|bitcoin|btc|cotacao|cambio|moeda)\b", ["cotacao"]),
     (r"\b(pix|copia (meu|minha)|texto rapido|textos rapidos|guarda (meu|minha))",
      ["texto_rapido_copiar", "texto_rapido_salvar", "textos_rapidos_listar",
@@ -173,6 +175,8 @@ def selecionar_ferramentas(texto: str, disponiveis: dict[str, Any], pequeno: boo
 # Pedidos que buscamos ANTES de chamar o modelo (bom para modelos pequenos, que erram
 # chamadas de ferramenta): o resultado vai junto com a pergunta.
 _PRE = [
+    (r"^(qual (e|o|a) |quanto (vale|esta|custa) |valor |cotacao |preco ).{0,70}"
+     r"\b(acoes?|bolsa|ticker|brb)\b(?P<q>.*)", "pesquisar_web", "consulta"),
     (r"^(pesquise|pesquisa|pesquisar|procure|busque|busca|google)( na internet| na web| no google)?"
      r"( sobre| por| o que e| quem e)? (?P<q>.+)", "pesquisar_web", "consulta"),
     (r"^(quais (sao )?as )?(ultimas )?noticias( de hoje)?( sobre| de| do| da)? ?(?P<q>.*)",
