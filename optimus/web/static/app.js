@@ -58,15 +58,18 @@ function esc(t) {
 }
 function markdown(texto) {
   const blocos = [];
-  let t = String(texto || "").replace(/```(\w*)\n?([\s\S]*?)```/g, (_, l, c) => { blocos.push(c); return `\u0000${blocos.length - 1}\u0000`; });
+  let t = String(texto || "").replace(/```(\w*)
+?([\s\S]*?)```/g, (_, l, c) => { blocos.push(c); return `\u0000${blocos.length - 1}\u0000`; });
   t = esc(t)
     .replace(/`([^`]+)`/g, "<code>$1</code>")
     .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
-    .replace(/(^|[^*])\*([^*\n]+)\*/g, "$1<em>$2</em>")
+    .replace(/(^|[^*])\*([^*
+]+)\*/g, "$1<em>$2</em>")
     .replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
     .replace(/(^|[\s(])(https?:\/\/[^\s<)]+)/g, '$1<a href="$2" target="_blank" rel="noopener">$2</a>')
     .replace(/^#{1,4} (.+)$/gm, "<strong>$1</strong>");
-  const linhas = t.split("\n"); let html = ""; let lista = null;
+  const linhas = t.split("
+"); let html = ""; let lista = null;
   for (const linha of linhas) {
     const item = linha.match(/^\s*(?:[-*•]|(\d+)[.)])\s+(.*)/);
     if (item) {
@@ -754,7 +757,8 @@ $("#casa-salvar").onclick = async () => {
   await api("/api/config", { method: "POST", json: { casa: { url: $("#casa-url").value.trim(), token: $("#casa-token").value.trim() } } });
   executarFerramenta("Liste os aparelhos da minha casa");
 };
-$("#casa-atualizar").onclick = () => executarFerramenta("Liste os aparelhos da minha casa e o estado de cada um");\n$("#casa-diagnostico").onclick = () => executarFerramenta("Execute casa_diagnostico e informe quais integrações, dispositivos e câmeras estão realmente disponíveis.");
+$("#casa-atualizar").onclick = () => executarFerramenta("Liste os aparelhos da minha casa e o estado de cada um");
+$("#casa-diagnostico").onclick = () => executarFerramenta("Execute casa_diagnostico e informe quais integrações, dispositivos e câmeras estão realmente disponíveis.");
 $("#casa-bluetooth").onclick = () => executarFerramenta("Procure aparelhos Bluetooth por perto");
 $("#casa-rede").onclick = () => executarFerramenta("Quais aparelhos estão conectados na rede da casa?");
 $("#cam-adicionar").onclick = async () => {
