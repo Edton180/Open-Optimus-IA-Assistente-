@@ -71,6 +71,7 @@
       <button data-tela="estudio"><span>🎙️</span>Estúdio de voz</button>
       <button data-tela="pdf"><span>📄</span>Documentos e PDF</button>
       <button data-tela="casa"><span>🏠</span>Casa inteligente</button>
+      <button data-tela="modulos"><span>🧩</span>Central de módulos</button>
       <button data-tela="acoes"><span>🛡️</span>Ações e segurança</button>
       <button data-tela="config"><span>⚙️</span>Configurações</button>
     </nav>
@@ -516,6 +517,23 @@
       <div id="casa-aparelhos" class="grade"></div>
     </section>
 
+    <section id="tela-modulos" class="tela">
+      <div class="tela-cabecalho"><h2>🧩 Central de módulos</h2>
+        <p>Inventário real das integrações locais relacionadas ao Project NOMAD. O Optimus apenas detecta serviços e ferramentas; não instala nada nem inicia containers sem sua autorização.</p></div>
+      <div class="cartao">
+        <div class="linha entre"><div><h3>Estado do ambiente</h3><p class="sutil">Detecção local, sem enviar dados para serviços externos.</p></div>
+          <button type="button" class="botao primario" id="modulos-atualizar">↻ Atualizar inventário</button></div>
+        <p id="modulos-estado" class="sutil" role="status" aria-live="polite">Consultando ferramentas locais…</p>
+        <div id="modulos-grade" class="grade"></div>
+      </div>
+      <div class="cartao">
+        <h3>Como interpretar</h3>
+        <p><b>Disponível:</b> executável ou serviço detectado e respondendo.</p>
+        <p><b>Instalado / parado:</b> executável existe, mas o serviço não respondeu ao teste.</p>
+        <p><b>Não instalado:</b> não foi encontrado no sistema. O Optimus não finge que o recurso está pronto.</p>
+        <p class="sutil">Esta é a primeira etapa do Command Center. Instalação, configuração e gerenciamento individual serão liberados somente com adaptadores, permissões e testes específicos.</p>
+      </div>
+    </section>
     <section id="tela-acoes" class="tela">
       <div class="tela-cabecalho"><h2>Ações e segurança</h2>
         <p>Tudo que o Optimus executou no seu PC, com o nível de risco e a sua decisão. Senhas e chaves aparecem mascaradas.</p></div>
