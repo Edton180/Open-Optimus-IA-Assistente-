@@ -729,7 +729,7 @@ async function carregarCasa() {
   $("#casa-url").value = d.config.casa.url || ""; $("#casa-token").value = d.config.casa.token || "";
   try {
     const c = await api("/api/cameras");
-    $("#cameras").innerHTML = c.cameras.map((x) => `<figure class="cartao camera"><img data-camera="${esc(x.id)}" alt="${esc(x.nome)}">${String(x.id).startsWith("ip:") ? `<button class="icone" data-apagar-camera="${esc(x.id)}" title="Remover câmera">🗑️</button>` : ""}<figcaption>${esc(x.nome)} <span class="sutil">ao vivo</span></figcaption></figure>`).join("")
+    $("#cameras").innerHTML = c.cameras.map((x) => `<figure class="cartao camera"><img data-camera="${esc(x.id)}" alt="${esc(x.nome)}">${String(x.id).startsWith("ip:") ? `<button class="icone" data-apagar-camera="${esc(x.id)}" title="Remover câmera">🗑️</button>` : ""}<figcaption>${esc(x.nome)} <span class="sutil">prévia ~1,2 s</span></figcaption></figure>`).join("")
       || '<p class="sutil">Nenhuma câmera adicionada ainda. Adicione uma câmera Wi-Fi acima, ligue uma webcam no cabo USB, ou conecte o Home Assistant.</p>';
   } catch (e) { $("#cameras").innerHTML = `<p class="sutil">⚠️ ${esc(e.message)}</p>`; }
   clearInterval(vigiaCameras);
@@ -754,7 +754,7 @@ $("#casa-salvar").onclick = async () => {
   await api("/api/config", { method: "POST", json: { casa: { url: $("#casa-url").value.trim(), token: $("#casa-token").value.trim() } } });
   executarFerramenta("Liste os aparelhos da minha casa");
 };
-$("#casa-atualizar").onclick = () => executarFerramenta("Liste os aparelhos da minha casa e o estado de cada um");
+$("#casa-atualizar").onclick = () => executarFerramenta("Liste os aparelhos da minha casa e o estado de cada um");\n$("#casa-diagnostico").onclick = () => executarFerramenta("Execute casa_diagnostico e informe quais integrações, dispositivos e câmeras estão realmente disponíveis.");
 $("#casa-bluetooth").onclick = () => executarFerramenta("Procure aparelhos Bluetooth por perto");
 $("#casa-rede").onclick = () => executarFerramenta("Quais aparelhos estão conectados na rede da casa?");
 $("#cam-adicionar").onclick = async () => {
