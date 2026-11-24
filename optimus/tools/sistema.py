@@ -76,10 +76,13 @@ def info_sistema(ctx):
     memoria = psutil.virtual_memory()
     raiz = "C:\\" if sistema() == "windows" else "/"
     disco = psutil.disk_usage(raiz)
-    bateria = psutil.sensors_battery() if hasattr(psutil, "sensors_battery") else None
+    try:
+        bateria = psutil.sensors_battery() if hasattr(psutil, "sensors_battery") else None
+    except (AttributeError, OSError, NotImplementedError, psutil.Error):
+        bateria = None
     try:
         cargas = list(psutil.getloadavg())
-    except (AttributeError, OSError):
+    except (AttributeError, OSError, NotImplementedError, psutil.Error):
         cargas = None
     temperatura = None
     try:
@@ -87,7 +90,7 @@ def info_sistema(ctx):
         leituras = [s.current for grupo in sensores.values() for s in grupo
                     if s.current is not None]
         temperatura = round(max(leituras), 1) if leituras else None
-    except (AttributeError, OSError):
+    except (AttributeError, OSError, NotImplementedError, psutil.Error):
         pass
     return {
         "sistema": f"{hw.sistema} {hw.versao_sistema}",
