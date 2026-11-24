@@ -35,3 +35,12 @@ def test_inventario_distingue_instalado_parado(monkeypatch):
     itens = {item["id"]: item for item in modulos.inventario()}
 
     assert itens["Kiwix"]["estado"] == "instalado_parado"
+
+
+def test_recursos_retorna_metricas_sem_caminhos_pessoais(monkeypatch):
+    dados = modulos.recursos()
+    assert 0 <= dados["cpu_percentual"] <= 100
+    assert dados["memoria_total_bytes"] > 0
+    assert dados["memoria_disponivel_bytes"] >= 0
+    assert dados["cpu_nucleos_logicos"] >= 1
+    assert "home" not in str(dados).lower()
