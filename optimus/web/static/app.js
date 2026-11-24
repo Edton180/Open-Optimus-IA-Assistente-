@@ -302,7 +302,7 @@ $("#zim-busca-form")?.addEventListener("submit", async (evento) => {
       '<li><div><b>' + esc(r.titulo || "Resultado") + '</b><small class="sutil"> ' +
       esc(r.tipo_fonte || "Fonte") + ' · ' + esc(r.citacao || r.arquivo_zim || "") +
       '</small><p>' + esc(r.trecho || "Trecho não fornecido pelo índice.") + '</p>' +
-      (r.url ? '<a href="' + esc(r.url) + '" target="_blank" rel="noopener noreferrer">Abrir fonte local ↗</a>' : "") +
+      (r.url && r.url.startsWith("http://127.0.0.1") ? '<a href="' + esc(r.url) + '" target="_blank" rel="noopener noreferrer">Abrir fonte local ↗</a>' : "") +
       '</div></li>'
     ).join("") : '<li class="sutil">Nenhum resultado encontrado nas fontes selecionadas.</li>';
     status.textContent = itens.length + " resultado(s) · recuperação híbrida ZIM + documentos locais. " +
@@ -333,7 +333,8 @@ $("#zim-indexar")?.addEventListener("click", async () => {
     const erros = resultado.erros || [];
     status.textContent = (resultado.artigos_processados || 0) + " entradas processadas · " +
       (resultado.indexados || 0) + " artigos indexados · " +
-      (resultado.trechos || 0) + " trechos atualizados." +
+      (resultado.trechos || 0) + " trechos atualizados · " +
+      (resultado.embeddings_atualizados || 0) + " embeddings preenchidos." +
       (erros.length ? " Avisos: " + erros.slice(0, 2).map(e => e.erro).join(" | ") : "");
     await atualizarStatusIndiceZim();
   } catch (erro) {
