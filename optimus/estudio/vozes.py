@@ -151,7 +151,9 @@ def obter(nome: str) -> Perfil:
 
 def _novo_id(nome: str) -> str:
     base, n = _slug(nome), 1
-    existentes = {p.id for p in listar()}
+    # IDs de vozes prontas podem ser sobrescritos por um perfil pessoal
+    # (ex.: a voz pública "Edton Braz" será substituída pela amostra do proprietário).
+    existentes = {p.id for p in salvas()}
     novo = base
     while novo in existentes:
         n += 1

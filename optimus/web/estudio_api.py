@@ -226,8 +226,14 @@ def atender(metodo: str, partes: list[str], consulta: dict, tipo: str, corpo: by
             if recurso == "clonar":
                 if not _verdade(dados.get("consentimento")):
                     return 400, {"erro": vozes.DECLARACAO}
-                p = vozes.clonar(dados.get("nome", ""), dados.get("arquivo", ""), True,
-                                 dados.get("idioma") or "pt-BR")
+                nome = str(dados.get("nome", "") or "").strip()
+                edton = nome.casefold() in ("edton braz", "edton braz — voz personalizada",
+                                             "edton braz - voz personalizada")
+                p = vozes.clonar(nome, dados.get("arquivo", ""), True,
+                                 dados.get("idioma") or "pt-BR",
+                                 genero="masculina" if edton else "",
+                                 descricao="Voz pessoal Edton Braz, clonada de amostra autorizada"
+                                 if edton else "")
                 return 200, {"voz": p.para_dict()}
             if recurso == "pronuncia":
                 pronuncia.adicionar(dados.get("escrito", ""), dados.get("falado", ""))

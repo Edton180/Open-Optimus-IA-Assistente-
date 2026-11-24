@@ -114,3 +114,27 @@ em execução. Use `Ctrl+C` para encerrar o servidor e o túnel.
 - O resultado diferencia dispositivos que responderam ao ping dos que só estavam no cache. MAC pode não estar disponível e o fabricante/hostname ainda não são inferidos nesta versão; aparelhos que bloqueiam ping e não aparecem no cache podem não ser encontrados.
 
 A varredura ativa pede confirmação pelo mecanismo de risco do Optimus. Faça isso apenas em redes que você administra ou tem autorização para diagnosticar.
+
+
+## Acesso externo com Cloudflare Tunnel
+
+A opção **Acesso externo** usa um Cloudflare Quick Tunnel, encaminhando apenas para
+`127.0.0.1` na porta local do Optimus. O módulo `optimus.network.cloudflare_tunnel`
+localiza o `cloudflared` instalado ou baixa o executável oficial da versão estável mais
+recente. A instalação automática só é aceita quando o GitHub fornece um digest SHA-256
+para o asset e a verificação confere. O executável fica na pasta privada de dados do Optimus.
+
+O Quick Tunnel gera um endereço temporário `trycloudflare.com`; ele não cria hostname
+permanente, não altera DNS e não precisa de token Cloudflare. Para domínio próprio,
+hostname estável, DNS gerenciado e túnel nomeado, será necessária a integração autenticada
+com a API Cloudflare (Account ID, Zone ID, hostname e token com permissões mínimas). Essa
+configuração não deve ser confundida com a senha local do Optimus.
+
+A senha do Optimus deve ter pelo menos 12 caracteres. O computador precisa permanecer
+ligado enquanto o túnel estiver em uso. O painel só exibe o endereço como conectado depois que o Optimus recebe uma resposta HTTP
+200 com conteúdo HTML pelo hostname HTTPS público. Se a verificação demorar, o estado fica
+como iniciando e continua sendo monitorado em segundo plano.
+
+No Android/Termux, o instalador seleciona o binário Linux ARM64 quando a arquitetura é
+aarch64. A execução pode depender da versão do Android, permissões do Termux e suporte
+do binário no dispositivo.

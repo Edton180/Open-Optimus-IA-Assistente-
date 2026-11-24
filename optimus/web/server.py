@@ -12,7 +12,6 @@ import logging
 import mimetypes
 import queue
 import re
-import shutil
 import subprocess
 import threading
 import time
@@ -33,6 +32,7 @@ from optimus.engine.rede import PROVEDORES, MotorRede
 from optimus.hardware import resumo
 from optimus.safety import interpretar_confirmacao
 from optimus.voice import tts
+from optimus.network import cloudflare_tunnel
 
 log = logging.getLogger(__name__)
 ESTATICOS = Path(__file__).parent / "static"
@@ -698,7 +698,7 @@ class Manipulador(BaseHTTPRequestHandler):
                 Manipulador.senha = senha
                 if _servidor_celular is not None:
                     _servidor_celular.RequestHandlerClass.senha = senha
-                resultado = iniciar_tunel(_porta_principal or self.server.server_address[1], senha)
+                resultado = iniciar_tunel(self.server.server_address[1], senha)
                 if resultado.get("erro"):
                     return self._json(resultado, 503)
             url_externa = estado_tunel().get("url", "")
@@ -917,89 +917,18 @@ def aquecer_modelos(optimus: Optimus) -> list[str]:
 
 _servidor_celular: ThreadingHTTPServer | None = None
 _trava_celular = threading.Lock()
-_trava_tunel = threading.RLock()
-_processo_tunel: subprocess.Popen | None = None
-_porta_principal: int | None = None
-_url_tunel = ""
-_erro_tunel = ""
-
-
 def estado_tunel() -> dict[str, str | bool]:
-    with _trava_tunel:
-        processo = _processo_tunel
-        if processo is not None and processo.poll() is not None:
-            return {"ligado": False, "url": "", "erro": _erro_tunel or
-                    f"cloudflared encerrou com código {processo.returncode}."}
-        return {"ligado": bool(processo and processo.poll() is None and _url_tunel),
-                "iniciando": bool(processo and processo.poll() is None and not _url_tunel),
-                "url": _url_tunel, "erro": _erro_tunel}
+    """Estado reportado pelo gerenciador único do Cloudflare Tunnel."""
+    return cloudflare_tunnel.estado()
 
 
 def iniciar_tunel(porta: int, senha: str) -> dict[str, str | bool]:
-    """Inicia Cloudflare Quick Tunnel sem expor a porta local diretamente."""
-    global _processo_tunel, _url_tunel, _erro_tunel
-    if len(senha or "") < 12:
-        return {"erro": "Acesso externo exige senha com pelo menos 12 caracteres."}
-    executavel = shutil.which("cloudflared")
-    if not executavel:
-        return {"erro": "cloudflared não foi encontrado. Instale-o e tente novamente."}
-    with _trava_tunel:
-        if _processo_tunel is not None and _processo_tunel.poll() is None:
-            return estado_tunel()
-        _url_tunel = ""
-        _erro_tunel = ""
-        try:
-            processo = subprocess.Popen(
-                [executavel, "tunnel", "--no-autoupdate", "--url",
-                 f"http://127.0.0.1:{int(porta)}"],
-                stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                text=True, encoding="utf-8", errors="replace", bufsize=1)
-        except OSError as erro:
-            _processo_tunel = None
-            _erro_tunel = str(erro)
-            return {"erro": f"Não foi possível iniciar o Cloudflare Tunnel: {erro}"}
-        _processo_tunel = processo
+    """Instala (com verificação SHA-256) e inicia o Cloudflare Quick Tunnel."""
+    return cloudflare_tunnel.iniciar(porta, senha)
 
-    def ler_saida():
-        global _url_tunel
-        try:
-            for linha in processo.stdout or ():
-                achado = re.search(r"https://[a-z0-9-]+[.]trycloudflare[.]com", linha, re.I)
-                if achado:
-                    with _trava_tunel:
-                        _url_tunel = achado.group(0)
-        except (OSError, ValueError):
-            pass
-
-    threading.Thread(target=ler_saida, daemon=True, name="optimus-cloudflare-log").start()
-    limite = time.monotonic() + 10
-    while time.monotonic() < limite:
-        if processo.poll() is not None:
-            with _trava_tunel:
-                _erro_tunel = f"cloudflared encerrou com código {processo.returncode}."
-            break
-        if estado_tunel().get("url"):
-            return estado_tunel()
-        time.sleep(0.1)
-    if estado_tunel().get("url"):
-        return estado_tunel()
-    return {"ligado": False, "iniciando": processo.poll() is None, "url": "",
-            "erro": _erro_tunel if processo.poll() is not None else ""}
 
 def parar_tunel() -> None:
-    global _processo_tunel, _url_tunel, _erro_tunel
-    with _trava_tunel:
-        processo = _processo_tunel
-        _processo_tunel = None
-        _url_tunel = ""
-        _erro_tunel = ""
-    if processo is not None and processo.poll() is None:
-        processo.terminate()
-        try:
-            processo.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            processo.kill()
-            processo.wait(timeout=2)
+    cloudflare_tunnel.parar()
 
 
 def porta_celular(config, porta_principal: int) -> int:
@@ -1047,7 +976,7 @@ def iniciar(host: str = "127.0.0.1", porta: int = 8765, abrir_navegador: bool = 
     Manipulador.estado = Estado(optimus)
     threading.Thread(target=aquecer_modelos, args=(optimus,), daemon=True).start()
     # A senha protege o acesso de outros aparelhos; só neste PC (127.0.0.1) não é pedida.
-    Manipulador.senha = senha if (tunel or host not in ("127.0.0.1", "localhost")) else ""
+    Manipulador.senha = senha if (senha or tunel or host not in ("127.0.0.1", "localhost")) else ""
     servidor = ThreadingHTTPServer((host, porta), Manipulador)
     _porta_principal = servidor.server_address[1]
     servidor.daemon_threads = True

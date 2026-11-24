@@ -140,3 +140,32 @@ def test_estado_usa_cache_do_motor():
     est = server.Estado(optimus)
     est.motor_status(); est.motor_status(); est.motor_status()
     assert chamadas["n"] == 1  # as três chamadas seguidas vêm do cache
+
+
+
+def test_rota_tunel_existe_e_retorna_estado(monkeypatch):
+    httpd, base = _subir()
+    try:
+        # GET do painel deve responder estado JSON; rota ausente seria 404.
+        dados = _req(base + "/api/tunel")
+        assert "ligado" in dados and "url" in dados
+        # POST desligar é idempotente e não deve cair no fallback "rota não encontrada".
+        dados = _req(base + "/api/tunel/desligar", {})
+        assert "ligado" in dados and dados["ligado"] is False
+    finally:
+        httpd.shutdown()
+
+
+def test_rota_tunel_retorna_erro_operacional_sem_404(monkeypatch):
+    httpd, base = _subir()
+    monkeypatch.setattr(server, "iniciar_tunel",
+                        lambda porta, senha: {"erro": "cloudflared indisponível"})
+    try:
+        try:
+            _req(base + "/api/tunel", {"senha": "senha-forte-para-testes"})
+            assert False, "deveria retornar erro operacional"
+        except urllib.error.HTTPError as erro:
+            assert erro.code == 503
+            assert json.loads(erro.read())["erro"] == "cloudflared indisponível"
+    finally:
+        httpd.shutdown()
