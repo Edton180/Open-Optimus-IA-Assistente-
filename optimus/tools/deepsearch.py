@@ -184,7 +184,7 @@ def _especialistas_ia(ctx, consulta: str, fontes: list[dict], analise: dict,
     "deepsearch",
     "Pesquisa profunda em paralelo. Divide a pergunta entre pesquisadores de busca exata, "
     "contexto e fontes primárias; reúne resultados, abre páginas públicas, extrai evidências "
-    "e verifica diversidade/corroboracão entre domínios. Depois, dois subagentes LLM independentes "
+    "e verifica diversidade/corroboração entre domínios. Depois, dois subagentes LLM independentes "
     "atuam em paralelo: um analista sintetiza e um verificador audita as alegações. Use para pesquisas complexas, "
     "comparações, investigações e assuntos que exigem várias fontes. Sempre cite os links "
     "retornados e diferencie fatos confirmados de pontos ainda não verificados. Em modo econômico "
