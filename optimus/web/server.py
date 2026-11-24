@@ -806,7 +806,7 @@ _erro_tunel = ""
 def estado_tunel() -> dict[str, str | bool]:
     with _trava_tunel:
         processo = _processo_tunel
-        if processo is not None and processo.poll() is not None and not _url_tunel:
+        if processo is not None and processo.poll() is not None:
             return {"ligado": False, "url": "", "erro": _erro_tunel or
                     f"cloudflared encerrou com código {processo.returncode}."}
         return {"ligado": bool(processo and processo.poll() is None and _url_tunel),
