@@ -57,9 +57,13 @@ def verificar(config) -> dict:
     git = _git(config)
     try:
         if git:
-            saida = git.verificar()
-            saida["modo"] = "git"
-            return saida
+            try:
+                saida = git.verificar()
+                saida["modo"] = "git"
+                return saida
+            except ErroGit as erro_git:
+                # Rede/DNS/proxy: tenta o caminho sem Git (API/Atom do GitHub) antes de desistir.
+                log.info("Verificação via Git falhou (%s); tentando modo GitHub.", erro_git)
         try:
             decisao = decidir(config)
         except releases.ErroRelease:
@@ -73,6 +77,8 @@ def verificar(config) -> dict:
         return verificar_github(config)
     except (ErroGit, releases.ErroRelease) as erro:
         return {"erro": str(erro)}
+    except Exception as erro:  # noqa: BLE001 - nunca derruba o painel
+        return {"erro": f"Não consegui verificar atualização: {erro}"}
 
 
 def baixar(config) -> dict:
@@ -80,7 +86,10 @@ def baixar(config) -> dict:
     git = _git(config)
     try:
         if git:
-            return git.atualizar()
+            try:
+                return git.atualizar()
+            except ErroGit as erro_git:
+                log.info("Atualização via Git falhou (%s); tentando modo GitHub.", erro_git)
         try:
             decisao = decidir(config)
         except releases.ErroRelease:
@@ -90,6 +99,8 @@ def baixar(config) -> dict:
         return baixar_github(config)
     except (ErroGit, releases.ErroRelease) as erro:
         return {"ok": False, "erro": str(erro)}
+    except Exception as erro:  # noqa: BLE001
+        return {"ok": False, "erro": f"Não consegui aplicar a atualização: {erro}"}
 
 
 def _por_release(decisao, config) -> dict:
@@ -190,21 +201,23 @@ def _ramo(config) -> str:
 
 
 def _commit_remoto_atom(repo: str, ramo: str) -> dict:
-    """Consulta o feed público quando a API REST está limitada (403/429/5xx)."""
+    """Consulta o feed público Atom (não depende da API REST e costuma passar em redes restritas)."""
     import xml.etree.ElementTree as ET
     from urllib.parse import quote
 
     import httpx
 
     url = f"https://github.com/{repo}/commits/{quote(ramo, safe='/')}.atom"
-    r = httpx.get(url, timeout=15, follow_redirects=True,
-                  headers={"User-Agent": "open-optimus-updater"})
+    r = httpx.get(url, timeout=25, follow_redirects=True,
+                  headers={"User-Agent": "open-optimus-updater/1.0",
+                           "Accept": "application/atom+xml, application/xml, text/xml, */*"})
     r.raise_for_status()
     raiz = ET.fromstring(r.text)
     ns = {"atom": "http://www.w3.org/2005/Atom"}
     entrada = raiz.find("atom:entry", ns)
     if entrada is None:
-        raise ValueError("O feed do GitHub não contém commits.")
+        # Alguns proxies devolvem HTML em vez do Atom.
+        raise ValueError("O feed do GitHub não contém commits (resposta inesperada).")
     identificador = entrada.findtext("atom:id", default="", namespaces=ns)
     # O feed usa tag:github.com,2008:Grit::Commit/<SHA>.
     sha = identificador.rsplit("/", 1)[-1].strip()
@@ -215,30 +228,50 @@ def _commit_remoto_atom(repo: str, ramo: str) -> dict:
     return {"sha": sha, "data": atualizado[:10], "titulo": titulo[:120]}
 
 
-def _commit_remoto_padrao(repo: str, ramo: str) -> dict:
+def _commit_remoto_api(repo: str, ramo: str) -> dict:
     import httpx
 
-    try:
-        r = httpx.get(f"https://api.github.com/repos/{repo}/commits/{ramo}", timeout=15,
-                      follow_redirects=True,
-                      headers={"Accept": "application/vnd.github+json",
-                               "User-Agent": "open-optimus-updater"})
-        r.raise_for_status()
-        dado = r.json()
-        commit = dado.get("commit") or {}
-        return {"sha": dado.get("sha", ""),
-                "data": ((commit.get("committer") or {}).get("date") or "")[:10],
-                "titulo": (commit.get("message") or "").splitlines()[0][:120]
-                if commit.get("message") else ""}
-    except httpx.HTTPStatusError as erro:
-        # GitHub pode limitar a API REST mesmo quando o repositório está público.
-        if erro.response.status_code not in (403, 429, 500, 502, 503, 504):
-            raise
+    r = httpx.get(f"https://api.github.com/repos/{repo}/commits/{ramo}", timeout=25,
+                  follow_redirects=True,
+                  headers={"Accept": "application/vnd.github+json",
+                           "User-Agent": "open-optimus-updater/1.0"})
+    r.raise_for_status()
+    dado = r.json()
+    commit = dado.get("commit") or {}
+    return {"sha": dado.get("sha", ""),
+            "data": ((commit.get("committer") or {}).get("date") or "")[:10],
+            "titulo": (commit.get("message") or "").splitlines()[0][:120]
+            if commit.get("message") else ""}
+
+
+def _commit_remoto_padrao(repo: str, ramo: str) -> dict:
+    """Obtém o último commit: tenta API e, em qualquer falha de rede/limite, o feed Atom.
+
+    Em várias redes (CGNAT, DNS filtrado, rate-limit anônimo da API) só o Atom responde.
+    """
+    import httpx
+
+    erros: list[str] = []
+    for nome, fn in (("api", _commit_remoto_api), ("atom", _commit_remoto_atom)):
         try:
-            return _commit_remoto_atom(repo, ramo)
-        except Exception:
-            # Mantém a exceção original para que a interface informe o erro HTTP real.
-            raise erro
+            return fn(repo, ramo)
+        except httpx.HTTPStatusError as erro:
+            erros.append(f"{nome}=HTTP {erro.response.status_code}")
+            continue
+        except httpx.TimeoutException:
+            erros.append(f"{nome}=timeout")
+            continue
+        except httpx.TransportError as erro:
+            erros.append(f"{nome}={type(erro).__name__}")
+            continue
+        except (ValueError, OSError) as erro:
+            erros.append(f"{nome}={erro}")
+            continue
+    detalhe = "; ".join(erros) if erros else "sem detalhe"
+    raise RuntimeError(
+        "Não consegui consultar o GitHub (API e feed Atom falharam). "
+        f"Detalhes: {detalhe}. Confira a internet, DNS e se github.com está acessível."
+    )
 
 
 def _pip_padrao(url: str) -> tuple[int, str]:
