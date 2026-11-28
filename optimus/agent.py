@@ -113,29 +113,79 @@ class Agente:
     def modo(self) -> str:
         return (self.config.get("agente", "modo") or "equilibrado").lower()
 
-    def modelo_principal(self) -> str:
-        return self.config.get("motor", "modelo") or (self.perfil.modelo if self.perfil else "")
+    def _instalados(self) -> list[str]:
+        """Modelos que o motor tem agora (guardado por 30 s). Vazio: não dá para saber."""
+        agora = time.monotonic()
+        cache = getattr(self, "_cache_instalados", None)
+        if cache and agora - cache[0] < 30:
+            return cache[1]
+        try:
+            nomes = list(self.motor.modelos() or [])
+        except Exception:  # noqa: BLE001 - sem lista, não filtra
+            nomes = []
+        self._cache_instalados = (agora, nomes)
+        return nomes
+
+    def _instalado(self, nome: str) -> bool:
+        instalados = self._instalados()
+        if not nome:
+            return False
+        if not instalados:  # motor sem lista (nuvem, demonstração): confia na configuração
+            return True
+        alvo = nome if ":" in nome else nome + ":latest"
+        return nome in instalados or alvo in instalados
 
     def modelo_rapido(self) -> str:
-        return (self.config.get("motor", "modelo_rapido")
-                or (self.perfil.modelo_rapido if self.perfil else "")
-                or self.modelo_principal())
+        """O modelo rápido configurado, mas só se estiver instalado. Senão, o menor modelo
+        instalado que seja menor que o principal; e, por último, o principal."""
+        for nome in (self.config.get("motor", "modelo_rapido"),
+                     self.perfil.modelo_rapido if self.perfil else ""):
+            if nome and self._instalado(nome):
+                return nome
+        principal = self.modelo_principal()
+        tamanho_principal = tamanho_modelo(principal) or 999.0
+        menores = sorted((tamanho_modelo(n) or 999.0, n) for n in self._instalados()
+                         if not re.search(r"embed|minilm|bge|nomic", n, re.I))
+        for tamanho, nome in menores:
+            if tamanho < tamanho_principal:
+                return nome
+        return principal
+
+    def modelo_principal(self, avisar: bool = False) -> str:
+        """O modelo configurado; se ele não estiver instalado, outro modelo instalado
+        (o mais parecido no tamanho, sem passar do configurado) para não dar erro."""
+        nome = self.config.get("motor", "modelo") or (self.perfil.modelo if self.perfil else "")
+        if self._instalado(nome):
+            return nome
+        candidatos = [n for n in self._instalados()
+                      if not re.search(r"embed|minilm|bge|nomic", n, re.I)]
+        if not candidatos:
+            return nome
+        limite = tamanho_modelo(nome) or 999.0
+        cabem = sorted(((tamanho_modelo(n) or 0.0, n) for n in candidatos), reverse=True)
+        escolhido = next((n for t, n in cabem if t <= limite), cabem[-1][1])
+        if avisar:
+            self._emitir("aviso", texto=f"O modelo '{nome}' não está instalado; usando "
+                                        f"'{escolhido}', que já está no PC.")
+        return escolhido
 
     def escolher_modelo(self, texto: str, por_voz: bool, persona: dict | None = None) -> str:
         if persona and persona.get("modelo"):
             return persona["modelo"]
         livre_gb = psutil.virtual_memory().available / 1024**3
         if livre_gb < float(self.config.get("recursos", "ram_minima_gb", 1.5)):
-            self._emitir("aviso", texto="Pouca RAM livre: usando o modelo rápido para não "
-                                        "travar o PC.")
-            return self.modelo_rapido()
+            rapido = self.modelo_rapido()
+            if rapido != self.modelo_principal():
+                self._emitir("aviso", texto="Pouca RAM livre: usando o modelo rápido "
+                                            f"({rapido}) para não travar o PC.")
+            return rapido
         # Pergunta curta e leve: o modelo rápido já resolve. Vale por voz e em PCs fracos
         # (modo econômico), onde o modelo grande custa caro à toa.
         economico = self.config.get("recursos", "uso", "equilibrado") == "economico"
         if (por_voz or economico) and len(texto) < 120 and not re.search(
                 r"(pesquis|crie|escrev|program|analis|organiz|planej|codigo|código)", texto, re.I):
             return self.modelo_rapido()
-        return self.modelo_principal()
+        return self.modelo_principal(avisar=True)
 
     def opcoes(self, por_voz: bool = False) -> dict[str, Any]:
         perfil = self.perfil

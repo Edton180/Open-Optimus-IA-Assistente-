@@ -222,15 +222,34 @@ def _executar_pedido(estado: Estado, tarefa: Tarefa, corpo: dict[str, Any]) -> N
 
 
 def _baixar_modelo(estado: Estado, modelo: str) -> None:
+    """Baixa em segundo plano. Sempre termina com `terminou` (nunca fica em "Baixando…")
+    e, se falhar, guarda o motivo em `erro` para a tela mostrar."""
     info = estado.downloads[modelo]
 
     def progresso(dados):
+        if dados.get("error"):
+            info["erro"] = str(dados["error"])
+            return
         if dados.get("total"):
             info["pct"] = round(100 * dados.get("completed", 0) / dados["total"], 1)
         info["status"] = dados.get("status", "")
 
-    ok = estado.optimus.motor.baixar(modelo, progresso)
+    try:
+        motor = estado.optimus.motor
+        if not motor.disponivel():
+            ok = False
+            info["erro"] = "o Ollama não está ligado neste PC. Abra o Ollama e tente de novo."
+        else:
+            ok = bool(motor.baixar(modelo, progresso))
+            if not ok and not info.get("erro"):
+                info["erro"] = "o Ollama não conseguiu baixar este modelo (o nome existe?)."
+    except Exception as erro:  # noqa: BLE001 - a falha vai para a tela
+        log.exception("Falha ao baixar %s", modelo)
+        ok = False
+        info["erro"] = f"{type(erro).__name__}: {erro}"
     info.update({"terminou": True, "ok": ok, "pct": 100 if ok else info.get("pct", 0)})
+    if ok:
+        info.pop("erro", None)
 
 
 class Manipulador(BaseHTTPRequestHandler):
@@ -601,11 +620,12 @@ class Manipulador(BaseHTTPRequestHandler):
             else:
                 url = celular.endereco_rede(porta, host)
             ligado = rede or _servidor_celular is not None
+            seguro = endereco_seguro() if ligado else ""
             agenda = f"{url}/api/agenda.ics?chave={celular.token_agenda(config)}"
             return self._json({
-                "url": url, "rede": ligado, "ligado": ligado,
+                "url": url, "rede": ligado, "ligado": ligado, "url_seguro": seguro,
                 "tem_senha": bool(config.get("web", "senha", "")),
-                "qr": celular.qr_svg(url) if ligado else "",
+                "qr": celular.qr_svg(seguro or url) if ligado else "",
                 "agenda": agenda, "agenda_qr": celular.qr_svg(agenda) if ligado else "",
                 "dica": "" if ligado else "O acesso pelo celular está desligado. Crie uma senha "
                                           "e clique em \"Ligar acesso pelo celular\"."})
@@ -718,7 +738,13 @@ class Manipulador(BaseHTTPRequestHandler):
             from optimus import modelos
 
             memoria, gpu = modelos.memoria_util_gb(optimus.hardware)
+            try:
+                instalados = optimus.motor.modelos()
+            except Exception:  # noqa: BLE001
+                instalados = []
             return self._json({"memoria_util_gb": memoria, "gpu": gpu,
+                               "instalados": instalados,
+                               "downloads": estado.downloads,
                                "familias": modelos.melhores_por_familia(optimus.hardware),
                                "catalogo": [m.para_dict() for m in modelos.CATALOGO]})
         if recurso == "modelo" and ident in ("atualizar", "dispensar") and metodo == "POST":
@@ -758,7 +784,13 @@ def aquecer_modelos(optimus: Optimus) -> list[str]:
     for m in motores:
         if not hasattr(m, "aquecer"):
             continue
+        try:
+            instalados = m.modelos()
+        except Exception:  # noqa: BLE001
+            instalados = []
         for nome in modelos:
+            if instalados and nome not in instalados and f"{nome}:latest" not in instalados:
+                continue  # não instalado: o Ollama só daria erro
             if m.aquecer(nome, manter):
                 aquecidos.append(nome)
     return aquecidos
@@ -775,6 +807,70 @@ def porta_celular(config, porta_principal: int) -> int:
     return int(config.get("web", "porta_celular", 0) or (int(porta_principal) + 1))
 
 
+class ServidorHttps(ThreadingHTTPServer):
+    """Mesmo servidor, em https. O aperto de mão TLS roda na linha de cada pedido, para um
+    celular lento não travar quem chega depois."""
+
+    def __init__(self, endereco, manipulador, contexto):
+        super().__init__(endereco, manipulador)
+        self.contexto = contexto
+
+    def get_request(self):
+        sock, endereco = super().get_request()
+        return self.contexto.wrap_socket(sock, server_side=True,
+                                         do_handshake_on_connect=False), endereco
+
+    def handle_error(self, request, client_address):  # certificado recusado etc.: sem susto
+        log.debug("Pedido https de %s falhou", client_address, exc_info=True)
+
+
+_servidor_https: ThreadingHTTPServer | None = None
+
+
+def porta_https(config, porta_http: int) -> int:
+    return int(config.get("web", "porta_https", 0) or (int(porta_http) + 1))
+
+
+def ligar_https(config, manipulador, porta: int) -> ThreadingHTTPServer | None:
+    """Abre a porta https (para o microfone funcionar no celular). None se não der."""
+    global _servidor_https
+    if config.get("web", "https", True) is False:
+        return None
+    if _servidor_https is not None:
+        return _servidor_https
+    from optimus.web import celular, certificado
+
+    try:
+        ctx = certificado.contexto([celular.ip_local()])
+        if ctx is None:
+            log.info("Sem https: instale o extra [celular] (cryptography) ou o openssl.")
+            return None
+        servidor = ServidorHttps(("0.0.0.0", porta), manipulador, ctx)
+    except (OSError, ValueError) as erro:
+        log.warning("A porta https %s não abriu: %s", porta, erro)
+        return None
+    servidor.daemon_threads = True
+    threading.Thread(target=servidor.serve_forever, daemon=True, name="optimus-https").start()
+    _servidor_https = servidor
+    return servidor
+
+
+def desligar_https() -> None:
+    global _servidor_https
+    if _servidor_https is not None:
+        _servidor_https.shutdown()
+        _servidor_https.server_close()
+        _servidor_https = None
+
+
+def endereco_seguro() -> str:
+    if _servidor_https is None:
+        return ""
+    from optimus.web import celular
+
+    return f"https://{celular.ip_local()}:{_servidor_https.server_address[1]}"
+
+
 def ligar_celular(optimus: Optimus, porta: int) -> ThreadingHTTPServer:
     global _servidor_celular
     senha = optimus.config.get("web", "senha", "") or ""
@@ -783,6 +879,11 @@ def ligar_celular(optimus: Optimus, porta: int) -> ThreadingHTTPServer:
     with _trava_celular:
         if _servidor_celular is not None:
             _servidor_celular.RequestHandlerClass.senha = senha  # senha nova vale na hora
+            if _servidor_https is not None:
+                _servidor_https.RequestHandlerClass.senha = senha
+            else:  # o https não tinha aberto antes (ex.: faltava o cryptography): tenta de novo
+                ligar_https(optimus.config, _servidor_celular.RequestHandlerClass,
+                            porta_https(optimus.config, _servidor_celular.server_address[1]))
             return _servidor_celular
         manipulador = type("ManipuladorCelular", (Manipulador,), {"senha": senha})
         servidor = ThreadingHTTPServer(("0.0.0.0", porta), manipulador)
@@ -790,12 +891,14 @@ def ligar_celular(optimus: Optimus, porta: int) -> ThreadingHTTPServer:
         threading.Thread(target=servidor.serve_forever, daemon=True,
                          name="optimus-celular").start()
         _servidor_celular = servidor
+        ligar_https(optimus.config, manipulador, porta_https(optimus.config, porta))
         return servidor
 
 
 def desligar_celular() -> None:
     global _servidor_celular
     with _trava_celular:
+        desligar_https()
         if _servidor_celular is not None:
             _servidor_celular.shutdown()
             _servidor_celular.server_close()
@@ -828,6 +931,10 @@ def iniciar(host: str = "127.0.0.1", porta: int = 8765, abrir_navegador: bool = 
 
         no_celular = celular.endereco_rede(porta, host)
         print(f"No celular (mesma rede Wi-Fi): {no_celular}")
+        if ligar_https(optimus.config, Manipulador, porta_https(optimus.config, porta)):
+            no_celular = endereco_seguro()
+            print(f"Com microfone (https): {no_celular}  (aceite o aviso do certificado "
+                  "na primeira vez)")
         celular.qr_terminal(no_celular)
     elif optimus.config.get("web", "celular", False) and senha:
         try:
@@ -836,6 +943,8 @@ def iniciar(host: str = "127.0.0.1", porta: int = 8765, abrir_navegador: bool = 
 
             print("No celular (mesma rede Wi-Fi): "
                   + celular.endereco_rede(porta_celular(optimus.config, porta)))
+            if endereco_seguro():
+                print(f"Com microfone (https): {endereco_seguro()}")
         except OSError as erro:
             print(f"Acesso pelo celular não abriu: {erro}")
     if abrir_navegador:

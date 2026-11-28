@@ -2,6 +2,22 @@
 
 ## 0.2 (em andamento)
 
+Correções do uso real (PC sem placa de vídeo, acesso pelo celular):
+
+- **Modelo rápido só se estiver instalado.** Com pouca RAM o Optimus escolhia `qwen3.5:0.8b` mesmo
+  sem ele no Ollama e dava erro. Agora usa o rápido configurado se existir, senão o menor modelo
+  instalado, e por último o principal. Se o principal não estiver instalado, usa outro que esteja.
+- **Download de modelos honesto.** "Instalado" só aparece quando o Ollama diz que terminou e o
+  modelo está na lista. Um erro do Ollama (nome errado, sem internet, disco cheio) aparece na tela,
+  e o botão nunca mais fica preso em "Baixando…". Os cartões das famílias mostram o que já está
+  instalado e o progresso do download.
+- **Motores do estúdio reconhecidos sem reiniciar.** Um pacote instalado com o Optimus aberto
+  passa a valer na hora. A aba Modelos mostra o Python do Optimus e o comando `pip` exato para
+  ele, confere depois de instalar e avisa se o pacote não apareceu.
+- **Microfone no celular:** o navegador só libera o microfone em https. O acesso pelo celular
+  ganhou um endereço https (certificado próprio deste PC, na porta ao lado). O QR code já aponta
+  para ele, e o aviso do microfone mostra o link certo.
+
 Fase 1 do plano de novas funções:
 
 - **Atualização pelo GitHub para qualquer instalação:** `optimus atualizar` (com `--verificar`,

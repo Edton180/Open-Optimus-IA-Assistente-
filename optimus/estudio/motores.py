@@ -56,9 +56,9 @@ def dispositivo() -> str:
 
 def chatterbox_instalado() -> bool:
     try:
-        import importlib.util
+        from optimus.pacotes import modulo_instalado
 
-        return importlib.util.find_spec("chatterbox") is not None
+        return modulo_instalado("chatterbox")
     except (ImportError, ValueError):
         return False
 

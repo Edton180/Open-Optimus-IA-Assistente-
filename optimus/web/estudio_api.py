@@ -183,7 +183,9 @@ def atender(metodo: str, partes: list[str], consulta: dict, tipo: str, corpo: by
                 from optimus.estudio import desempenho, modelos
 
                 atual = desempenho.atual(config)
-                return 200, {"modelos": modelos.listar(),
+                from optimus.pacotes import python_do_optimus
+
+                return 200, {"modelos": modelos.listar(), "python": python_do_optimus(),
                              "desempenho": str(config.get("estudio", "desempenho", "auto")),
                              "atual": atual.para_dict(), "recomendada": desempenho.recomendar()}
             if recurso == "receitas":

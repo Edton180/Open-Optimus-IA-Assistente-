@@ -8,7 +8,6 @@ Opcional: `pip install demucs` (usa o PyTorch; com placa de vídeo é bem mais r
 from __future__ import annotations
 
 import hashlib
-import importlib.util
 import subprocess
 import sys
 from pathlib import Path
@@ -21,7 +20,9 @@ MODELO = "htdemucs"
 
 def instalado() -> bool:
     try:
-        return importlib.util.find_spec("demucs") is not None
+        from optimus.pacotes import modulo_instalado
+
+        return modulo_instalado("demucs")
     except (ImportError, ValueError):
         return False
 

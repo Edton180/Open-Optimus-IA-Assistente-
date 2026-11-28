@@ -38,10 +38,15 @@ class Item:
 
     def instalado(self) -> bool:
         if self.forma == "pacote":
-            try:
-                return importlib.util.find_spec(self.modulo) is not None
-            except (ImportError, ValueError):
+            from optimus.pacotes import modulo_instalado
+
+            if not modulo_instalado(self.modulo):
                 return False
+            if self.id == "kokoro":  # o pacote sozinho não fala: precisa dos arquivos de voz
+                from optimus.voice import tts
+
+                return tts.kokoro_instalado()
+            return True
         return bool(self.pastas) and all(p.exists() for p in self.pastas)
 
     def ocupado_mb(self) -> float:
@@ -57,7 +62,14 @@ class Item:
         return {"id": self.id, "nome": self.nome, "tipo": self.tipo, "licenca": self.licenca,
                 "tamanho_mb": self.tamanho_mb, "descricao": self.descricao,
                 "forma": self.forma, "pacote": self.pacote, "instalado": self.instalado(),
+                "comando": _comando(self.pacote) if self.forma == "pacote" else "",
                 "ocupado_mb": self.ocupado_mb() if self.forma == "arquivo" else None}
+
+
+def _comando(pacote: str) -> str:
+    from optimus.pacotes import comando_pip
+
+    return comando_pip(pacote)
 
 
 def catalogo() -> list[Item]:
@@ -135,6 +147,15 @@ def instalar(ident: str, progresso=None) -> dict:
         from optimus.voice import tts
 
         tts.baixar_kokoro(progresso)
+    if not item.instalado():  # nunca dizer que instalou sem conferir
+        if item.forma == "pacote":
+            from optimus.pacotes import python_do_optimus
+
+            raise ErroEstudio(f"O pip terminou, mas o Optimus ainda não encontra {item.nome} "
+                              f"(módulo {item.modulo}) no Python {python_do_optimus()}. "
+                              "Feche e abra o Optimus; se continuar, instale com: "
+                              + _comando(item.pacote))
+        raise ErroEstudio(f"O download de {item.nome} terminou incompleto. Tente de novo.")
     return item.para_dict()
 
 

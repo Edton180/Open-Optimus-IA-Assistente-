@@ -9,7 +9,6 @@ Piper sozinha).
 
 from __future__ import annotations
 
-import importlib.util
 import shutil
 import threading
 from dataclasses import dataclass
@@ -54,7 +53,9 @@ _TRAVA = threading.Lock()
 
 def instalado() -> bool:
     try:
-        return importlib.util.find_spec("sherpa_onnx") is not None
+        from optimus.pacotes import modulo_instalado
+
+        return modulo_instalado("sherpa_onnx")
     except (ImportError, ValueError):
         return False
 

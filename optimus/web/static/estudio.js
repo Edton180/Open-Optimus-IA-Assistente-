@@ -304,9 +304,9 @@ const NOMES_TIPO = { voz: "voz", clonagem: "clonagem", transcricao: "transcriç�
 async function estModelos() {
   const r = await estApi("modelos");
   $("#est-desempenho").value = r.desempenho || "auto";
-  $("#est-desempenho-info").textContent = `Agora: ${r.atual.descricao} (transcrição ${r.atual.transcricao}). Recomendado para este PC: ${r.recomendada}.`;
+  $("#est-desempenho-info").textContent = `Agora: ${r.atual.descricao} (transcrição ${r.atual.transcricao}). Recomendado para este PC: ${r.recomendada}. Python do Optimus: ${r.python || "?"} (instale os motores nele; um pip solto pode ir para outro Python).`;
   $("#est-modelos").innerHTML = r.modelos.map((m) => `<tr><td>${m.instalado ? "✅" : ""}</td>
-    <td><b>${esc(m.nome)}</b><div class="sutil">${esc(m.descricao)}</div></td><td>${esc(NOMES_TIPO[m.tipo] || m.tipo)}</td>
+    <td><b>${esc(m.nome)}</b><div class="sutil">${esc(m.descricao)}</div>${!m.instalado && m.comando ? `<div class="sutil">À mão: <code>${esc(m.comando)}</code></div>` : ""}</td><td>${esc(NOMES_TIPO[m.tipo] || m.tipo)}</td>
     <td>${esc(m.licenca)}</td><td>${m.ocupado_mb ? esc(m.ocupado_mb + " MB") : "~" + esc(m.tamanho_mb) + " MB"}</td>
     <td>${m.instalado ? `<button class="botao" data-modelo-remover="${esc(m.id)}">Remover</button>` : `<button class="botao primario" data-modelo-instalar="${esc(m.id)}">Instalar</button>`}</td></tr>`).join("");
 }
@@ -324,8 +324,27 @@ $("#est-modelos").addEventListener("click", async (e) => {
   if (r && !confirm("Remover " + id + "?")) return;
   botao.disabled = true;
   try {
-    await estApi(`modelos/${encodeURIComponent(id)}/${i ? "instalar" : "remover"}`, { method: "POST" });
-    if (i) estVigiar(); else estModelos();
+    const resp = await estApi(`modelos/${encodeURIComponent(id)}/${i ? "instalar" : "remover"}`, { method: "POST" });
+    if (!i) return estModelos();
+    const idTarefa = resp && resp.tarefa;
+    botao.textContent = "Instalando…"; estVigiar();
+    // A instalação roda em Tarefas; a lista se atualiza sozinha quando ela termina.
+    let voltas = 0;
+    const vigia = setInterval(async () => {
+      voltas++;
+      try {
+        const lista = (await estApi("modelos")).modelos;
+        const item = lista.find((m) => m.id === id);
+        const tarefas = (await estApi("tarefas")).tarefas || [];
+        const minha = tarefas.find((t) => t.id === idTarefa);
+        const rodando = minha ? (minha.estado === "rodando" || minha.estado === "na_fila") : voltas < 3;
+        if (minha && minha.estado === "falhou") {
+          clearInterval(vigia); await estModelos();
+          return estAviso($("#est-desempenho-info"), "Não instalou " + id + ": " + (minha.erro || "veja em Tarefas"), true);
+        }
+        if ((item && item.instalado) || !rodando || voltas > 600) { clearInterval(vigia); estModelos(); }
+      } catch (erro) { clearInterval(vigia); estModelos(); }
+    }, 3000);
   } catch (erro) { alert(erro.message); botao.disabled = false; }
 });
 

@@ -15,7 +15,6 @@ Brasil, use "large-v3-turbo" (com placa de vídeo) ou "medium"/"small" no CPU.
 
 from __future__ import annotations
 
-import importlib.util
 import shutil
 import tarfile
 from pathlib import Path
@@ -34,7 +33,9 @@ _SHERPA = {"tiny": "tiny", "base": "base", "small": "small", "medium": "medium",
 
 def _tem(modulo: str) -> bool:
     try:
-        return importlib.util.find_spec(modulo) is not None
+        from optimus.pacotes import modulo_instalado
+
+        return modulo_instalado(modulo)
     except (ImportError, ValueError):
         return False
 

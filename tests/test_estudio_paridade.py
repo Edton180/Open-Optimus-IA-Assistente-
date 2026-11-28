@@ -223,9 +223,15 @@ def test_gerenciador_de_modelos_lista_e_remove(monkeypatch):
     assert not piper.pasta_voz(v).exists()
     pip = []
     monkeypatch.setattr(modelos, "_pip", lambda *a: pip.append(a) or "")
-    modelos.instalar("omnivoice")
+    # pip "terminou" mas o pacote não apareceu: não pode dizer que instalou
+    monkeypatch.setattr("optimus.pacotes.modulo_instalado", lambda m: False)
+    with pytest.raises(ErroEstudio, match="ainda não encontra"):
+        modelos.instalar("omnivoice")
+    monkeypatch.setattr("optimus.pacotes.modulo_instalado", lambda m: True)
+    assert modelos.instalar("omnivoice")["instalado"]
     modelos.remover("sherpa-onnx")
-    assert pip == [("install", "omnivoice"), ("uninstall", "-y", "sherpa-onnx")]
+    assert pip == [("install", "omnivoice"), ("install", "omnivoice"),
+                   ("uninstall", "-y", "sherpa-onnx")]
     with pytest.raises(ErroEstudio):
         modelos.obter("nao-existe")
 
