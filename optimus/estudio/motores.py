@@ -270,6 +270,33 @@ def _gerar_clone(texto: str, perfil: Perfil, idioma: idiomas.Idioma):
     return _para_numpy(onda, getattr(modelo, "sr", TAXA))
 
 
+# ---------------------------------------------------------------------- Edton Braz exata
+def _chave_elevenlabs(config) -> str:
+    try:
+        if config is None:
+            from optimus.config import carregar
+
+            config = carregar()
+        from optimus.chaves import resolver
+
+        return resolver(config.get("voz", "elevenlabs_chave", "") or "") or ""
+    except Exception:  # noqa: BLE001 - sem config legível: segue sem a ElevenLabs
+        return ""
+
+
+def _edton_pela_elevenlabs(perfil: Perfil, config):
+    """A voz pronta "Edton Braz" é a "Matheus" da biblioteca da ElevenLabs. Com a chave da
+    ElevenLabs configurada, o Estúdio usa essa voz original pela API (idêntica, em qualquer
+    idioma do modelo multilíngue) em vez da aproximação local, sem mexer no tom e no ritmo.
+    Uma voz pessoal clonada com o mesmo nome continua tendo prioridade."""
+    from dataclasses import replace
+
+    if perfil.id != "edton-braz" or perfil.tipo != "pronta" or not _chave_elevenlabs(config):
+        return None
+    return replace(perfil, motor="elevenlabs", base="edton-braz", velocidade=1.0, tom=0.0,
+                   efeito="")
+
+
 # ---------------------------------------------------------------------- API pública
 def _uma_frase(frase: str, perfil: Perfil, lingua: idiomas.Idioma, velocidade: float, config,
                duracao: float, passos: int):
@@ -277,6 +304,15 @@ def _uma_frase(frase: str, perfil: Perfil, lingua: idiomas.Idioma, velocidade: f
     from optimus.estudio import expressao, omnivoice, piper, remoto
 
     ritmo = velocidade * (perfil.velocidade or 1.0)
+    if perfil.motor == "elevenlabs":
+        frase = expressao.sem_sons(frase)
+        if not frase:
+            return None, 1.0
+        if config is None:
+            from optimus.config import carregar
+
+            config = carregar()
+        return _gerar_padrao(frase, perfil, velocidade, config), 1.0
     if perfil.motor in ("clone", "omnivoice"):
         qual = motor_clone(lingua, config) if perfil.motor == "clone" else "omnivoice"
         if qual == "omnivoice":
@@ -319,6 +355,7 @@ def gerar(texto: str, voz: str | Perfil = "", idioma: str = "", velocidade: floa
     from optimus.estudio import desempenho, expressao
 
     perfil = voz if isinstance(voz, Perfil) else obter(voz)
+    perfil = _edton_pela_elevenlabs(perfil, config) or perfil
     lingua = idiomas.idioma(idioma or perfil.idioma)
     texto = pronuncia.aplicar(texto.strip(), lingua.codigo)
     if not texto:

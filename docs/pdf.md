@@ -1,0 +1,110 @@
+# Suite de documentos e PDF
+
+O Optimus processa documentos localmente por meio de ferramentas do agente, CLI e API local.
+A suite foi organizada para cobrir as categorias do iLovePDF sem depender de enviar documentos
+a um serviço externo.
+
+## Instalação
+
+\`\`\`bash
+pip install "optimus-assistente[pdf]"
+\`\`\`
+
+O extra instala pypdf, ReportLab, python-docx, Pillow, pypdfium2, pytesseract, pdfplumber, openpyxl, python-pptx e pyHanko. A interface visual possui a tela **Documentos e PDF** no menu lateral, com catálogo pesquisável por categoria, seleção de ferramentas, envio de vários arquivos, parâmetros e download dos resultados. O catálogo é montado a partir das ferramentas realmente registradas, sem botões fictícios. O processamento acontece localmente, sem envio a serviços externos.
+OCR gera PDF pesquisável (texto invisível sobre as páginas renderizadas) e/ou TXT. PDF para Excel extrai tabelas quando detectáveis e usa OCR como fallback de texto; PDF para Word usa OCR em páginas escaneadas; PDF para PowerPoint cria slides com imagens das páginas. O editor adiciona elementos em coordenadas, sem edição livre do conteúdo existente. Também requer o executável Tesseract e os pacotes de idioma no sistema operacional.
+Conversão Office/HTML para PDF requer LibreOffice. Alguns recursos avançados podem exigir
+ferramentas externas específicas; o Optimus informa a dependência ausente em vez de simular
+uma operação concluída.
+
+## Ferramentas disponíveis
+
+| Categoria | Ferramentas |
+|---|---|
+| Organizar | \`pdf_juntar\`, \`pdf_unir_documentos\` (PDF + imagens + Office), \`pdf_dividir\`, \`pdf_extrair\`, \`pdf_remover\`, \`pdf_organizar\`, \`pdf_girar\` |
+| Otimizar | \`pdf_comprimir\`, \`pdf_reparar\`, \`pdf_ocr\` |
+| Converter para PDF | \`pdf_imagens_para_pdf\` (JPG/PNG/TIFF/BMP), \`pdf_documento_para_pdf\` (DOC/DOCX/XLS/XLSX/PPT/PPTX/ODT/ODS/ODP/RTF/TXT/CSV) e \`pdf_html_para_pdf\` via LibreOffice |
+| Converter de PDF | \`pdf_converter\` (TXT/HTML/CSV/DOCX), \`pdf_para_imagens\` (JPG/PNG), \`pdf_para_markdown\` |
+| Editar | \`pdf_cortar\`, \`pdf_marca\`, \`pdf_numeros\`, \`pdf_girar\` |
+| Segurança | \`pdf_proteger\`, \`pdf_desbloquear\`, \`pdf_localizar_termos\`, \`pdf_censurar\` (OCR + rasterização destrutiva, exige revisão visual) |
+| Inteligência | \`pdf_comparar\`, \`pdf_resumir\`, \`pdf_formularios\`, \`pdf_metadados\` |
+
+## Exemplos no chat
+
+- "Junte contrato.pdf e anexo.pdf em um arquivo."
+- "Converta estas fotos JPG em um PDF A4."
+- "Digitalize estas fotos em preto e branco e gere um PDF."
+- "Extraia as páginas 2, 4 e 7 e salve como recortes.pdf."
+- "Converta o PDF para imagens JPG e gere um ZIP."
+- "Corte 20 pontos de cada margem das páginas 1 a 3."
+- "Liste os campos preenchíveis deste formulário PDF."
+- "Remova os metadados do documento e salve uma cópia."
+- "Compare estes dois PDFs e mostre o que mudou."
+- "Censure o CPF 123.456.789-00 no documento, gere uma cópia e informe as páginas afetadas."
+- "Assine digitalmente contrato.pdf com certificado certificado.p12."
+- "Converta o documento para PDF/A-2b usando meu perfil sRGB.icc."
+- "Compare visualmente as duas versões e gere um ZIP das diferenças."
+- "Preencha os campos do formulário PDF com os dados que informei."
+- "Crie um formulário PDF com campos de nome, CPF e uma caixa de aceite."
+- "Extraia todas as imagens incorporadas neste PDF."
+- "Salve um fluxo chamado preparar_contrato: OCR, remover metadados e proteger com senha."
+- "Converta o PDF escaneado para Word usando OCR."
+
+## Terminal
+
+As ferramentas registradas podem ser chamadas pelo agente. Os comandos diretos existentes incluem:
+
+\`\`\`bash
+optimus pdf info contrato.pdf
+optimus pdf ler contrato.pdf --paginas 1-2
+optimus pdf juntar a.pdf b.pdf --destino juntos.pdf
+optimus pdf extrair contrato.pdf --paginas 2-4 --destino trecho.pdf
+optimus pdf remover contrato.pdf --paginas 1
+optimus pdf organizar contrato.pdf --paginas 3,1,2
+optimus pdf dividir contrato.pdf --a-cada 1 --destino ./partes
+optimus pdf girar contrato.pdf --graus 90
+optimus pdf comprimir contrato.pdf
+optimus pdf proteger contrato.pdf --senha segredo
+optimus pdf desbloquear contrato.pdf --senha segredo
+optimus pdf marca contrato.pdf --texto RASCUNHO
+optimus pdf numeros contrato.pdf
+optimus pdf comparar a.pdf b.pdf
+optimus pdf ocr escaneado.pdf --idioma por
+\`\`\`
+
+## Limites técnicos e segurança
+
+- \`pdf_assinar\` existente é um carimbo visual, não assinatura digital ICP-Brasil.
+- \`pdf_censurar\` rasteriza todas as páginas, localiza ocorrências por OCR, cobre as regiões e descarta o conteúdo original selecionável. OCR pode não reconhecer todo conteúdo; revise visualmente cada página e mantenha o original. A ferramenta aborta se a verificação OCR ainda detectar o termo.
+- A conversão de PDF para DOCX/HTML/CSV baseada em extração de texto não preserva perfeitamente
+  a diagramação original. PDF para Office com fidelidade visual exige um motor especializado.
+- \`pdf_comprimir\` com pypdf faz otimização estrutural; recompressão de imagens depende de
+  ferramentas externas e pode reduzir qualidade.
+- \`pdf_reparar\` é best-effort e não recupera bytes ou páginas já perdidos.
+- `pdf_pdfa` usa Ghostscript com perfil ICC fornecido e política estrita de compatibilidade. A validação formal só é declarada quando veraPDF está instalado e aprova o arquivo; sem ele, o resultado fica marcado como não verificado.
+- Formulários XFA, assinaturas digitais existentes e PDFs com conteúdo complexo podem ter
+  limitações. O editor insere objetos sobre páginas, não é um editor livre de texto existente. O arquivo original é preservado e as saídas devem ser verificadas.
+- Senhas e arquivos são processados localmente; não envie senhas para serviços de terceiros.
+
+Consulte o resultado da ferramenta e valide o arquivo final antes de utilizá-lo oficialmente.
+
+
+### Conversão Office e união de formatos mistos
+
+- Para converter DOC/DOCX, XLS/XLSX, PPT/PPTX, ODT/ODS/ODP, RTF, TXT ou CSV, use `pdf_documento_para_pdf`. É necessário ter LibreOffice instalado e acessível no PATH.
+- Para unir arquivos de tipos diferentes em uma única saída e manter a ordem selecionada, use `pdf_unir_documentos`. Aceita PDFs, imagens e os formatos Office suportados pelo LibreOffice.
+- A interface visual aceita esses formatos na etapa de envio e disponibiliza as operações no catálogo pesquisável.
+- Acesso externo via Cloudflare Tunnel exige senha; chamadas originadas no navegador local do próprio computador continuam locais e não exibem o pedido de senha.
+
+
+### Separar, economizar papel e imprimir livreto
+
+- `pdf_dividir_pares_impares`: cria arquivos separados com as páginas ímpares e pares. Mantém texto selecionável e elementos vetoriais.
+- `pdf_paginas_por_folha`: organiza 2, 4, 6 ou 9 páginas em cada folha, preservando o conteúdo vetorial.
+- `pdf_imprimir_livreto`: faz a imposição de páginas para impressão frente e verso, duas páginas por lado. Na impressora, selecione frente e verso com virada pela borda curta e confira uma folha de teste antes de imprimir a tiragem.
+- Essas operações não alteram o PDF de origem. A ordem do livreto é preparada para folhas dobradas; a configuração física da impressora pode variar.
+
+
+### Ajuste de cores e senha forte
+
+- `pdf_ajustar_cores`: cria uma cópia em escala de cinza ou com cores invertidas. Para aplicar o filtro, rasteriza as páginas; o texto deixa de ser selecionável. Confira a qualidade visual e preserve o PDF original.
+- `pdf_gerar_senha`: cria uma senha aleatória com letras maiúsculas e minúsculas, números e símbolos (12 a 64 caracteres). Copie e guarde a senha antes de fechar o resultado; ela não é recuperável pelo Optimus.

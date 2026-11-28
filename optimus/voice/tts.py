@@ -69,7 +69,9 @@ VOZES: list[Voz] = [
         "Ultrarrealista pela ElevenLabs (precisa de chave)", VOZ_ELEVENLABS_PADRAO,
         reservas=("prime", "titan", "sistema-masculina")),
     Voz("edton-braz", "Edton Braz", "masculina", "elevenlabs", False,
-        "Brasileira, jovem, simpática e animada (ElevenLabs; sem chave usa a Titan)",
+        "Narrador brasileiro jovem-adulto para vídeos educativos e tecnologia: claro, articulado, " \
+        "dinâmico e conversacional, com energia controlada e pausas naturais (ElevenLabs; " \
+        "sem chave usa a voz neural Titan ajustada)",
         VOZ_EDTON_BRAZ, reservas=("titan", "prime", "sistema-masculina")),
     Voz("aurora", "Aurora", "feminina", "edge", False, "Feminina neural, online",
         "pt-BR-FranciscaNeural", reservas=("valkyrie", "sistema-feminina")),
@@ -260,6 +262,23 @@ class Falante:
         self.voz_elevenlabs = voz_cfg.get("elevenlabs_voz", "") or VOZ_ELEVENLABS_PADRAO
         self.pedida = voz
         self.voz = escolher_voz(voz, online, self.chave_elevenlabs)
+        self._perfil_edton = None
+        # Quando o proprietário importar a própria amostra no Estúdio com o nome
+        # "Edton Braz", o perfil pessoal substitui a voz pública de mesmo nome
+        # em todas as chamadas do Falante, inclusive na conversa ao vivo.
+        if _normal(voz) in ("edton", "edton braz", "edton-braz"):
+            try:
+                from optimus.estudio import vozes as perfis
+
+                perfil = perfis.obter("edton-braz")
+                amostra = perfil.caminho_amostra()
+                if perfil.tipo == "clonada" and amostra and amostra.is_file():
+                    self._perfil_edton = perfil
+                    self.voz = Voz("edton-braz", "Edton Braz", "masculina", "omnivoice",
+                                   True, "Voz pessoal clonada localmente")
+            except (ImportError, OSError, AttributeError):
+                # Sem amostra pessoal, mantém o comportamento compatível anterior.
+                self._perfil_edton = None
         # O efeito (Cyber, Stealth) continua mesmo quando a voz cai para uma reserva.
         self.efeito = (buscar_voz(voz) or self.voz).efeito
         self.velocidade = float(velocidade or 1.0)
@@ -270,6 +289,14 @@ class Falante:
     # Síntese
     def sintetizar(self, texto: str) -> tuple[bytes, str]:
         """Devolve (áudio, formato) com formato 'wav' ou 'mp3'."""
+        if self._perfil_edton is not None:
+            from optimus.estudio import omnivoice
+
+            amostra = self._perfil_edton.caminho_amostra()
+            onda = omnivoice.gerar(texto, amostra=amostra, genero="masculina",
+                                   velocidade=self.velocidade,
+                                   passos=32)
+            return _wav_bytes(onda, 24000), "wav"
         motor = self.voz.motor
         if motor == "kokoro":
             return self._com_efeito(self._kokoro_wav(texto)), "wav"
@@ -317,12 +344,19 @@ class Falante:
     def _elevenlabs_mp3(self, texto: str) -> bytes:
         import httpx
 
+        # Edton Braz: locução educativa moderna, clara e energética sem soar publicitária.
+        if self.voz.id == "edton-braz":
+            ajustes_voz = {"stability": 0.36, "similarity_boost": 0.82,
+                           "style": 0.68, "use_speaker_boost": True,
+                           "speed": max(0.9, min(1.2, self.velocidade * 1.08))}
+        else:
+            ajustes_voz = {"stability": 0.5, "similarity_boost": 0.8,
+                           "speed": max(0.7, min(1.2, self.velocidade))}
         resposta = httpx.post(
             URL_ELEVENLABS + self._id_elevenlabs(), params={"output_format": "mp3_44100_128"},
             headers={"xi-api-key": self.chave_elevenlabs, "Content-Type": "application/json"},
             json={"text": texto, "model_id": "eleven_multilingual_v2",
-                  "voice_settings": {"stability": 0.5, "similarity_boost": 0.8,
-                                     "speed": max(0.7, min(1.2, self.velocidade))}},
+                  "voice_settings": ajustes_voz},
             timeout=60)
         resposta.raise_for_status()
         return resposta.content
@@ -333,7 +367,9 @@ class Falante:
         taxa = f"{int(round((self.velocidade * self.voz.velocidade - 1) * 100)):+d}%"
 
         async def gerar() -> bytes:
-            comunicador = edge_tts.Communicate(texto, self.voz.base, rate=taxa)
+            edton = _normal(self.pedida) in ("edton", "edton braz", "edton-braz")
+            pitch = "+2Hz" if edton else "+0Hz"
+            comunicador = edge_tts.Communicate(texto, self.voz.base, rate=taxa, pitch=pitch)
             pedacos = []
             async for parte in comunicador.stream():
                 if parte["type"] == "audio":

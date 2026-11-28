@@ -264,6 +264,19 @@ class Banco:
         return self._todos("SELECT fonte, titulo, trecho FROM conhecimento WHERE conhecimento "
                            "MATCH ? ORDER BY bm25(conhecimento) LIMIT ?", (expressao, limite))
 
+    def consultar_biblioteca(self, consulta: str, limite: int = 20) -> list[dict[str, Any]]:
+        """Consulta FTS5 limitando a candidatos da biblioteca antes do LIMIT."""
+        termos = [t for t in re.findall(r"\w+", consulta) if len(t) > 2]
+        if not termos:
+            return []
+        expressao = " OR ".join(f'"{t.replace(chr(34), chr(34) * 2)}"' for t in termos)
+        return self._todos(
+            "SELECT fonte, titulo, trecho FROM conhecimento "
+            "WHERE conhecimento MATCH ? AND fonte LIKE ? "
+            "ORDER BY bm25(conhecimento) LIMIT ?",
+            (expressao, "biblioteca:%", max(1, min(int(limite), 500))),
+        )
+
     def fontes(self) -> list[dict[str, Any]]:
         return self._todos("SELECT fonte, titulo, COUNT(*) AS trechos, MAX(quando) AS quando "
                            "FROM conhecimento GROUP BY fonte ORDER BY quando DESC")

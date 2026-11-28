@@ -624,9 +624,28 @@ def estudio_instalar_modelo(ctx, modelo: str):
     item = modelos.obter(modelo)
 
     def trabalho(progresso, cancelado, **_):
-        return modelos.instalar(item.id, progresso)
+        return modelos.instalar(item.id, progresso, cancelado=cancelado)
 
     return _na_fila(ctx, "modelo", f"Instalar {item.nome}", trabalho)
+
+
+
+
+@ferramenta(
+    "estudio_instalar_todos_modelos",
+    "Baixa e integra em sequência todos os motores, modelos Whisper ONNX, vozes Piper e "
+    "modelos de diarização. Verifica o espaço em disco e registra falhas individuais.",
+    {}, grupo="estudio", risco=MODERADO,
+)
+def estudio_instalar_todos_modelos(ctx):
+    from optimus.estudio import modelos
+
+    def trabalho(progresso, cancelado, **_):
+        if cancelado and cancelado():
+            return {"cancelado": True}
+        return modelos.instalar_todos(progresso, cancelado=cancelado)
+
+    return _na_fila(ctx, "modelo", "Instalar todos os motores e modelos", trabalho)
 
 
 @ferramenta(

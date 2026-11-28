@@ -77,15 +77,39 @@ def _slug(nome: str) -> str:
 # ---------------------------------------------------------------------- vozes prontas
 def _prontas() -> list[Perfil]:
     from optimus.voice import tts
+    # Importar antes de consultar o estado do motor; o módulo também é usado
+    # para montar a instrução de voz quando os pesos já estão preparados.
+    from optimus.estudio import omnivoice, piper
 
+    # O perfil Edton Braz do Estúdio é uma configuração própria (OmniVoice
+    # quando disponível, Prime como reserva). Não deixar a voz ElevenLabs
+    # homônima de tts.VOZES sombreá-lo na busca por id/nome.
     saida = [Perfil(v.id, v.nome, "pronta", "padrao", v.id, v.genero, "pt-BR",
-                    descricao=v.descricao) for v in tts.VOZES]
+                    descricao=v.descricao) for v in tts.VOZES if v.id != "edton-braz"]
+    # Perfil de narração PT-BR do proprietário. Quando os pesos do OmniVoice estão
+    # preparados localmente, usa voice design; caso contrário, cai para a voz Prime.
+    pesos_omnivoice = pasta_base() / "estudio" / "modelos" / ".prontos" / "omnivoice.ok"
+    motor_edton = "omnivoice" if omnivoice.instalado() and pesos_omnivoice.is_file() else "padrao"
+    descricao_edton = ("Narrador jovem-adulto de ciência e tecnologia; PT-BR urbano neutro, "
+                       "dicção nítida e coloquial, timbre médio/médio-agudo claro, projeção "
+                       "próxima e seca, ritmo ágil sem atropelar, micro-pausas estratégicas, "
+                       "perguntas curiosas, ênfase controlada em números e contrastes, "
+                       "fechamentos firmes e amigáveis. Com a chave da ElevenLabs em "
+                       "Configurações, usa a voz original (Matheus) pela API.")
+    instrucao_edton = omnivoice.instrucao(
+        "narrador masculino jovem brasileiro, voz clara e brilhante, timbre médio-agudo, "
+        "estilo educativo de ciência e tecnologia, conversacional e confiante, ritmo ágil, "
+        "dicção precisa e entonação expressiva", "masculina"
+    ) if motor_edton == "omnivoice" else ""
+    saida.append(Perfil(
+        "edton-braz", "Edton Braz", "pronta", motor_edton,
+        "" if motor_edton == "omnivoice" else "prime", "masculina", "pt-BR",
+        velocidade=1.08, tom=0.5, expressividade=0.75,
+        descricao=descricao_edton, instrucao=instrucao_edton))
     # Voz original do Optimus: um mordomo calmo e formal (não imita nenhuma voz existente).
     saida.append(Perfil("mordomo", "Mordomo", "pronta", "padrao", "nexus", "masculina",
                         velocidade=0.92, tom=-1.5,
                         descricao="Original do Optimus: mordomo calmo, formal e grave"))
-    from optimus.estudio import omnivoice, piper
-
     if piper.instalado():
         saida += [Perfil(v.perfil_id, v.nome, "pronta", "piper", v.id, v.genero, v.idioma,
                          descricao=f"Offline e leve (Piper, {v.licenca}); baixa "
@@ -151,7 +175,9 @@ def obter(nome: str) -> Perfil:
 
 def _novo_id(nome: str) -> str:
     base, n = _slug(nome), 1
-    existentes = {p.id for p in listar()}
+    # IDs de vozes prontas podem ser sobrescritos por um perfil pessoal
+    # (ex.: a voz pública "Edton Braz" será substituída pela amostra do proprietário).
+    existentes = {p.id for p in salvas()}
     novo = base
     while novo in existentes:
         n += 1

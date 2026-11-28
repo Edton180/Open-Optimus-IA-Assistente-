@@ -316,6 +316,18 @@ $("#est-desempenho").addEventListener("change", async (e) => {
   catch (erro) { alert(erro.message); }
 });
 
+$("#est-modelos-instalar-todos").addEventListener("click", async (e) => {
+  const botao = e.currentTarget;
+  if (!confirm("Isso pode baixar vários gigabytes e ocupar bastante espaço. Deseja instalar todos os motores e modelos?")) return;
+  botao.disabled = true; botao.textContent = "⏳ Preparando downloads…";
+  try {
+    const r = await estApi("modelos/instalar-todos", { method: "POST" });
+    estAviso("#est-desempenho-info", r.mensagem || "Instalação adicionada à fila. Acompanhe em Tarefas.");
+    estVigiar();
+  } catch (erro) { alert(erro.message); }
+  finally { botao.disabled = false; botao.textContent = "⬇ Baixar e integrar todos"; }
+});
+
 $("#est-modelos").addEventListener("click", async (e) => {
   const i = e.target.closest("[data-modelo-instalar]"), r = e.target.closest("[data-modelo-remover]");
   if (!i && !r) return;

@@ -29,8 +29,10 @@ class Optimus:
 
         self.aviso_modelo = verificar_upgrade(self.config, self.hardware, self.perfil)
         base = cfg.pasta_base()
+        from optimus.smart_home.registry import RegistroDispositivos
+        self.registro_casa = RegistroDispositivos(base / "casa" / "dispositivos.json")
         self.banco = Banco(base / "optimus.db")
-        self._indexar_conhecimento(base)
+        self._iniciar_indexacao_conhecimento(base)
         self.auditoria = Auditoria(base / "registros" / "acoes.jsonl")
         self.motor = criar_motor(self.config)
         self._lembretes: threading.Thread | None = None
@@ -41,6 +43,11 @@ class Optimus:
                              name="atualizacao").start()
         if self.config.get("recursos", "prioridade_baixa", True):
             _baixar_prioridade()
+
+    def _iniciar_indexacao_conhecimento(self, base) -> None:
+        """Indexa a base embutida em segundo plano para não atrasar a abertura do servidor."""
+        threading.Thread(target=self._indexar_conhecimento, args=(base,), daemon=True,
+                         name="indexacao-conhecimento").start()
 
     def _indexar_conhecimento(self, base) -> None:
         """Indexa a base de conhecimento embutida no banco (idempotente, só o que mudou).

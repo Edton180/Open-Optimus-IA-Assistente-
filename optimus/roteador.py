@@ -61,6 +61,8 @@ INTENCOES: list[tuple[str, list[str]]] = [
      ["sortear"]),
     (r"\b(quantos dias|faltam? quantos|dias (ate|para|pro|pra)|que dia (da semana )?cai)",
      ["dias_ate"]),
+    (r"\b(acoes?|bolsa|ticker|papel|mercado financeiro|brb)\b",
+     ["pesquisar_web", "noticias"]),
     (r"\b(dolar|euro|libra|bitcoin|btc|cotacao|cambio|moeda)\b", ["cotacao"]),
     (r"\b(pix|copia (meu|minha)|texto rapido|textos rapidos|guarda (meu|minha))",
      ["texto_rapido_copiar", "texto_rapido_salvar", "textos_rapidos_listar",
@@ -83,6 +85,10 @@ INTENCOES: list[tuple[str, list[str]]] = [
      ["rotina_criar", "rotinas_listar", "rotina_executar", "rotina_apagar"]),
     (r"\b(lembre que|guarde|memoriz|anote que|meu nome e|eu (gosto|moro|trabalho|sou|tenho)|"
      r"o que (voce )?sabe (sobre|de) mim|recorda|esqueca)", ["lembrar", "recordar"]),
+    (r"\b(qual resultado|o que (eu|nos) (falamos|decidimos|combinamos)|"
+     r"o que foi (decidido|combinado)|conversas? anteriores?|historico de conversas|"
+     r"pesquisa anterior|o que eu pesquisei|como (eu|nos) combinamos|lembra do que)",
+     ["buscar_conversas", "recordar"]),
     (r"\b(aprend|estud|base de conhecimento)", ["aprender", "consultar_conhecimento"]),
     (r"\b(pesquis|procur[ea] na|busqu|internet|google|site|pagina|link|https?://|preco|"
      r"cotacao|quem (e|foi)|o que (e|foi|sao)|quando (e|foi)|ultimas|atual)",
@@ -167,6 +173,7 @@ def selecionar_ferramentas(texto: str, disponiveis: dict[str, Any], pequeno: boo
 # Pedidos que buscamos ANTES de chamar o modelo (bom para modelos pequenos, que erram
 # chamadas de ferramenta): o resultado vai junto com a pergunta.
 _PRE = [
+    (r"^(?P<q>.*\b(acoes?|bolsa|ticker|brb)\b.*)$", "pesquisar_web", "consulta"),
     (r"^(pesquise|pesquisa|pesquisar|procure|busque|busca|google)( na internet| na web| no google)?"
      r"( sobre| por| o que e| quem e)? (?P<q>.+)", "pesquisar_web", "consulta"),
     (r"^(quais (sao )?as )?(ultimas )?noticias( de hoje)?( sobre| de| do| da)? ?(?P<q>.*)",

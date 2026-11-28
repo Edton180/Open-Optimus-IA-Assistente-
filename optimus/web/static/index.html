@@ -9,6 +9,7 @@
 <link rel="apple-touch-icon" href="/icone-192.png">
 <link rel="manifest" href="/manifest.json">
 <link rel="stylesheet" href="/style.css">
+<link rel="stylesheet" href="/mobile.css?v=fda06ca">
 </head>
 <body class="modo-hud">
 <div id="boot" aria-hidden="true">
@@ -16,6 +17,43 @@
   <div class="boot-barra"><i></i></div>
   <ul id="boot-linhas"></ul>
 </div>
+<script>
+/* Recuperação independente dos demais scripts: nenhum erro JS pode prender a tela no logo. */
+(() => {
+  let encerrado = false;
+  const boot = () => document.getElementById("boot");
+  function liberar(mensagem) {
+    if (encerrado) return;
+    encerrado = true;
+    const tela = boot();
+    if (tela) tela.remove();
+    if (!mensagem) return;
+    let aviso = document.getElementById("boot-failsafe-aviso");
+    if (!aviso) {
+      aviso = document.createElement("div");
+      aviso.id = "boot-failsafe-aviso";
+      aviso.setAttribute("role", "alert");
+      aviso.style.cssText = "position:fixed;z-index:9999;left:16px;right:16px;bottom:16px;padding:14px 18px;border:1px solid #d99b45;border-radius:10px;background:#20190f;color:#ffe2b5;font:14px/1.5 system-ui;box-shadow:0 8px 32px #0009";
+      document.body.appendChild(aviso);
+    }
+    aviso.textContent = mensagem + " Atualize a página com Ctrl+Shift+R. Se persistir, envie este aviso e o log do terminal ao suporte.";
+  }
+  window.addEventListener("error", (evento) => {
+    const alvo = evento.target;
+    if (alvo && alvo !== window && alvo.tagName !== "SCRIPT") return;
+    const origem = evento.filename ? " (" + evento.filename.split("/").pop() + ":" + (evento.lineno || 0) + ")" : "";
+    liberar("Falha ao iniciar a interface: " + (evento.message || "um script não carregou") + origem);
+  }, true);
+  window.addEventListener("unhandledrejection", (evento) => {
+    const motivo = evento.reason;
+    liberar("Falha assíncrona ao iniciar: " + (motivo && motivo.message ? motivo.message : String(motivo || "erro desconhecido")));
+  });
+  window.setTimeout(() => {
+    if (boot()) liberar("A inicialização ultrapassou 10 segundos. A tela foi liberada para evitar bloqueio infinito.");
+  }, 10000);
+  window.__optimusLiberarBoot = liberar;
+})();
+</script>
 <div id="app">
   <aside id="lateral">
     <div class="marca">
@@ -30,8 +68,13 @@
       <button data-tela="personas"><span>🎭</span>Personas</button>
       <button data-tela="prompts"><span>📚</span>Biblioteca de prompts</button>
       <button data-tela="memoria"><span>🧠</span>Memória e lembretes</button>
+      <button data-tela="biblioteca"><span>📚</span>Biblioteca de documentos</button>
       <button data-tela="estudio"><span>🎙️</span>Estúdio de voz</button>
+      <button data-tela="pdf"><span>📄</span>Documentos e PDF</button>
       <button data-tela="casa"><span>🏠</span>Casa inteligente</button>
+      <button data-tela="modulos"><span>🧩</span>Central de módulos</button>
+      <button data-tela="laboratorio"><span>🧪</span>Laboratório de dados</button>
+      <button data-tela="zim"><span>🌐</span>Conhecimento offline (ZIM)</button>
       <button data-tela="acoes"><span>🛡️</span>Ações e segurança</button>
       <button data-tela="config"><span>⚙️</span>Configurações</button>
     </nav>
@@ -114,6 +157,55 @@
       </div>
     </section>
 
+    <section id="tela-pdf" class="tela">
+      <div class="tela-cabecalho"><h2>📄 Documentos e PDF</h2>
+        <p>Organize, converta, proteja e analise documentos no computador que executa o Optimus. Ao acessar remotamente, os arquivos trafegam pela conexão HTTPS do Cloudflare Tunnel até esse computador; o processamento continua local.</p></div>
+      <div class="cartao pdf-upload">
+        <h3>1. Adicionar documentos</h3>
+        <div class="linha">
+          <input id="pdf-arquivos" type="file" accept=".pdf,.jpg,.jpeg,.png,.tif,.tiff,.bmp,.html,.htm,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.odt,.ods,.odp,.rtf,.txt,.csv,.p12,.pfx,.icc,application/pdf,image/*" multiple>
+          <button type="button" class="botao primario" id="pdf-enviar">Adicionar arquivos</button>
+        </div>
+        <p class="sutil">PDFs, imagens, Word, Excel, PowerPoint, LibreOffice e arquivos auxiliares de até 200 MB. Os arquivos ficam na pasta local de documentos do Optimus.</p>
+        <div id="pdf-lista-arquivos" class="pdf-arquivos"></div>
+      </div>
+      <div class="cartao">
+        <h3>2. Central de ferramentas</h3>
+        <p class="sutil">Escolha uma categoria ou pesquise pelo que deseja fazer. As ferramentas disponíveis são executadas no próprio computador.</p>
+        <input id="pdf-busca" class="campo" type="search" placeholder="Buscar: unir, assinar, comprimir, Word, OCR…" aria-label="Buscar ferramenta PDF">
+        <div id="pdf-filtros" class="pdf-filtros" aria-label="Categorias de PDF"></div>
+        <div id="pdf-ferramentas-grid" class="pdf-ferramentas-grid" aria-live="polite"></div>
+        <input id="pdf-ferramenta" type="hidden" value="">
+        <div id="pdf-operacao-selecionada" class="pdf-operacao-selecionada oculto">
+          <div class="pdf-operacao-topo"><div><small>OPERAÇÃO SELECIONADA</small><h3 id="pdf-titulo-operacao"></h3></div>
+            <button type="button" class="botao pequeno" id="pdf-limpar-operacao">Trocar ferramenta</button></div>
+          <p id="pdf-descricao" class="sutil"></p>
+          <div id="pdf-parametros" class="grade pdf-parametros"></div>
+          <div class="linha fim">
+            <button type="button" class="botao primario" id="pdf-executar" disabled>▶ Executar operação</button>
+            <span id="pdf-estado" class="sutil" role="status" aria-live="polite"></span>
+          </div>
+        </div>
+        <p id="pdf-estado-inicial" class="sutil" role="status" aria-live="polite">Carregando catálogo de ferramentas…</p>
+      </div>
+      <div class="cartao">
+        <h3>3. Resultado</h3>
+        <div id="pdf-resultado" class="pdf-resultado sutil">Selecione os arquivos e uma operação para começar.</div>
+      </div>
+      <div class="cartao">
+        <h3>Recursos disponíveis</h3>
+        <div class="pdf-categorias">
+          <div><b>Organizar</b><span>Juntar, dividir, extrair, remover, reordenar e girar páginas.</span></div>
+          <div><b>Otimizar</b><span>Comprimir, reparar e aplicar OCR.</span></div>
+          <div><b>Converter</b><span>PDF para Word, Excel, PowerPoint, imagens, texto e Markdown; imagens para PDF.</span></div>
+          <div><b>Editar</b><span>Cortar páginas, adicionar marca d'água, numeração e anotações.</span></div>
+          <div><b>Segurança</b><span>Proteger, desbloquear, localizar termos e gerenciar metadados.</span></div>
+          <div><b>Inteligência</b><span>Comparar documentos, resumir e trabalhar com formulários.</span></div>
+        </div>
+        <p class="sutil">Algumas operações exigem dependências opcionais, como Tesseract OCR, LibreOffice ou Ghostscript. O Optimus informa quando algo estiver ausente, sem simular sucesso.</p>
+      </div>
+    </section>
+
     <section id="tela-personas" class="tela">
       <div class="tela-cabecalho"><h2>Personas</h2>
         <p>Cada persona tem sua própria personalidade (prompt de sistema), modelo e voz. Você decide o que ela é e como responde.</p></div>
@@ -155,6 +247,42 @@
       <div class="cartao"><h3>📖 Base de conhecimento</h3>
         <p class="sutil">Conteúdos que o Optimus estudou e consulta sozinho, mesmo offline. Peça no chat: "aprenda este site: https://…" ou "estude o arquivo ~/Documentos/manual.pdf".</p>
         <ul id="lista-conhecimento" class="lista"></ul></div>
+    </section>
+
+    <section id="tela-biblioteca" class="tela">
+      <div class="tela-cabecalho"><h2>📚 Biblioteca de documentos</h2>
+        <p>Indexe pastas do computador que executa o Optimus. Os documentos permanecem no dispositivo e são pesquisados localmente pelo SQLite FTS5. Esta biblioteca é diferente da biblioteca de prompts.</p></div>
+      <div class="cartao">
+        <h3>Adicionar uma pasta à biblioteca</h3>
+        <form id="form-biblioteca" class="formulario">
+          <label>Caminho da pasta no computador do Optimus
+            <input class="campo" name="pasta" placeholder="Ex.: C:\\Users\\Você\\Documents ou /home/voce/Documentos" required>
+          </label>
+          <label class="linha"><input type="checkbox" name="recursivo" checked> Incluir subpastas</label>
+          <div class="linha"><button class="botao primario" type="submit">Indexar / atualizar documentos</button>
+            <button class="botao" type="button" id="atualizar-biblioteca">Atualizar lista</button></div>
+        </form>
+        <p id="biblioteca-status" class="sutil" role="status">Indexação local. Formatos: TXT, Markdown, CSV, HTML, JSON, YAML, PDF e DOCX.</p>
+      </div>
+      <div class="cartao">
+        <h3>Pesquisar nos documentos</h3>
+        <form id="form-biblioteca-busca" class="formulario">
+          <label>Pergunta ou termos para localizar
+            <input class="campo" name="q" placeholder="Ex.: procedimento de segurança em altura" required>
+          </label>
+          <button class="botao primario" type="submit">Pesquisar na biblioteca</button>
+        </form>
+        <p id="biblioteca-busca-status" class="sutil" role="status">Busca local por texto. Cada resultado mostra o arquivo e o trecho de origem.</p>
+        <div id="biblioteca-resultados" class="lista" aria-live="polite"></div>
+        <div class="linha entre"><h3>Documentos indexados</h3><strong id="biblioteca-total">0</strong></div>
+        <ul id="biblioteca-lista" class="lista"><li class="sutil">Carregando…</li></ul>
+        <form id="form-biblioteca-esquecer" class="formulario">
+          <label>Remover do conhecimento todos os documentos de uma pasta
+            <input class="campo" name="pasta" placeholder="Caminho da pasta que deseja esquecer" required>
+          </label>
+          <button class="botao perigo" type="submit">Esquecer documentos desta pasta</button>
+        </form>
+      </div>
     </section>
 
     <section id="tela-estudio" class="tela">
@@ -216,7 +344,7 @@
             <div class="linha fim"><button class="botao" id="est-criar">Criar voz</button></div></div>
           <div class="cartao"><h3>Clonar uma voz</h3>
             <p class="sutil">De 5 a 90 segundos de fala limpa, sem música.</p>
-            <input id="est-clonar-nome" class="campo" placeholder="Nome (ex.: Minha voz)">
+            <input id="est-clonar-nome" class="campo" value="Edton Braz" placeholder="Edton Braz">
             <input type="file" id="est-clonar-arquivo" accept="audio/*,video/*" style="margin-top:.5rem">
             <label style="display:block;margin-top:.5rem"><input type="checkbox" id="est-clonar-consent"> <span class="est-declaracao"></span></label>
             <div class="linha fim"><button class="botao primario" id="est-clonar">Clonar</button></div></div>
@@ -294,7 +422,8 @@
 
       <div class="cartao estudio-aba oculto" data-aba="modelos">
         <div class="linha entre"><h3>Motores e modelos</h3>
-          <label>Desempenho<select id="est-desempenho" class="campo"><option value="auto">Automático</option><option value="rapido">Rápido</option><option value="equilibrado">Equilibrado</option><option value="qualidade">Qualidade máxima</option></select></label></div>
+          <div class="linha"><button type="button" class="botao primario" id="est-modelos-instalar-todos">⬇ Baixar e integrar todos</button>
+          <label>Desempenho<select id="est-desempenho" class="campo"><option value="auto">Automático</option><option value="rapido">Rápido</option><option value="equilibrado">Equilibrado</option><option value="qualidade">Qualidade máxima</option></select></label></div></div>
         <p class="sutil" id="est-desempenho-info"></p>
         <table class="tabela"><thead><tr><th></th><th>Modelo</th><th>Para</th><th>Licença</th><th>Tamanho</th><th></th></tr></thead><tbody id="est-modelos"></tbody></table>
       </div>
@@ -316,9 +445,42 @@
 
     <section id="tela-casa" class="tela">
       <div class="tela-cabecalho"><h2>Casa inteligente</h2>
-        <p>Luzes, tomadas e câmeras pela rede. Você <b>não precisa</b> do Home Assistant: tomadas TP-Link Kasa e câmeras IP funcionam direto. O Home Assistant é opcional, para quem já usa e quer trazer tudo junto.</p></div>
-      <h3 class="subtitulo">📷 Câmeras ao vivo</h3>
-      <p class="sutil">Uma câmera Wi-Fi (Intelbras e outras) só mostra a imagem para quem tem o <b>login dela</b> — por isso o Optimus acha a câmera na rede, mas precisa do usuário e senha para ver. Adicione abaixo; nada sai do seu PC.</p>
+        <p>Controle de dispositivos pelo Home Assistant, descoberta de câmeras ONVIF e prévias de câmeras IP cadastradas. O Home Assistant é opcional, mas necessário para a integração ampla de luzes, tomadas, sensores e outros aparelhos. A integração direta TP-Link Kasa ainda não está disponível nesta versão.</p></div>
+      <div class="cartao" id="ha-gerenciado">
+        <div class="linha entre"><h3>⚙️ Home Assistant gerenciado pelo Optimus</h3>
+          <span id="ha-gerenciado-badge" class="selo">Verificando…</span></div>
+        <p>Configure o Home Assistant sem sair do Optimus. O assistente detecta o sistema, instala o ambiente Docker quando suportado e provisiona o Home Assistant automaticamente. No Linux, a instalação do serviço solicita autorização administrativa do sistema; no Windows, o Docker Desktop pode exigir reinicialização e uma primeira abertura para concluir a inicialização.</p>
+        <p class="sutil">O modo provisionado é Home Assistant Container: controle de dispositivos e integrações pela interface oficial. Ele não inclui o Supervisor nem a loja de add-ons do Home Assistant OS. O Optimus preserva a pasta de dados ao atualizar ou remover o container.</p>
+        <div id="ha-gerenciado-diagnostico" class="sutil" role="status" aria-live="polite">Detectando compatibilidade e serviço…</div>
+        <div class="linha">
+          <button class="botao primario" id="ha-gerenciado-instalar">Instalar / configurar automaticamente</button>
+          <button class="botao" id="ha-gerenciado-atualizar">Atualizar status</button>
+          <button class="botao" id="ha-gerenciado-abrir" disabled>Abrir Home Assistant</button>
+        </div>
+        <div class="linha">
+          <button class="botao" data-ha-acao="iniciar">Iniciar</button>
+          <button class="botao" data-ha-acao="parar">Parar</button>
+          <button class="botao" data-ha-acao="reiniciar">Reiniciar</button>
+          <button class="botao" data-ha-acao="atualizar">Atualizar Home Assistant</button>
+          <button class="botao" data-ha-acao="logs">Ver logs</button>
+          <button class="botao" data-ha-acao="backup">Criar backup</button>
+          <button class="botao perigo" data-ha-acao="desinstalar">Remover serviço (preservar dados)</button>
+        </div>
+        <p id="ha-gerenciado-status" class="sutil" role="status" aria-live="polite">Nenhuma operação em andamento.</p>
+        <pre id="ha-gerenciado-logs" class="oculto" aria-label="Logs do Home Assistant"></pre>
+        <details><summary>O que será instalado e o que ainda exige participação?</summary>
+          <ul>
+            <li>O Optimus instala e administra o container e mantém a configuração em uma pasta local.</li>
+            <li>A primeira abertura do Home Assistant exige criar a conta local e concluir o onboarding na interface dele.</li>
+            <li>Pareamento físico de Zigbee, Matter, Bluetooth e credenciais de serviços/fabricantes pode exigir hardware ou login do usuário.</li>
+            <li>Descoberta automática depende da rede e do suporte do dispositivo. Acesso remoto seguro deve usar VPN ou HTTPS autenticado.</li>
+          </ul>
+        </details>
+      </div>
+      <h3 class="subtitulo">📷 Prévia das câmeras</h3>
+      <p class="sutil">A prévia é uma imagem JPEG atualizada periodicamente, não vídeo contínuo. Use a busca ONVIF para localizar câmeras compatíveis na rede; depois informe o endereço RTSP ou snapshot e as credenciais no cadastro. A descoberta identifica endpoints, mas não adivinha a senha nem o endereço RTSP.</p>
+      <div class="linha"><button class="botao" id="casa-onvif-descobrir">🔎 Descobrir câmeras ONVIF na rede</button></div>
+      <div id="casa-onvif-resultados" class="lista" aria-live="polite"></div>
       <div class="cartao formulario" id="form-camera">
         <div class="linha">
           <label>Nome<input id="cam-nome" class="campo" placeholder="Portão"></label>
@@ -336,16 +498,158 @@
         <button class="botao" id="casa-rede">Procurar aparelhos no Wi-Fi</button>
         <button class="botao" id="casa-bluetooth">Procurar Bluetooth</button>
       </div>
-      <details class="cartao">
-        <summary>Home Assistant (opcional)</summary>
-        <div class="linha" style="margin-top:.6rem"><label>Endereço do Home Assistant<input id="casa-url" class="campo" placeholder="http://192.168.0.10:8123"></label>
-          <label>Token de acesso<input id="casa-token" class="campo" type="password" placeholder="token de longa duração"></label></div>
-        <div class="linha"><button class="botao primario" id="casa-salvar">Salvar e conectar</button>
-          <button class="botao" id="casa-atualizar">Atualizar aparelhos</button></div>
+      <details class="cartao" open>
+        <summary>Conectar ao Home Assistant (opcional)</summary>
+        <div class="sutil" style="margin-top:.7rem">
+          <p><b>Se você instalou o Home Assistant pelo painel acima, o Optimus preenche o endereço local automaticamente.</b> Para listar e controlar aparelhos pelo painel, conclua o primeiro acesso do Home Assistant e salve um token de acesso local. Se já possui outro servidor, informe o endereço dele aqui.</p>
+          <ol>
+            <li>Se ainda não existe um servidor, use <b>Instalar / configurar automaticamente</b> no painel acima. Guia oficial: <a href="https://www.home-assistant.io/installation/" target="_blank" rel="noopener noreferrer">instalação do Home Assistant</a>.</li>
+            <li>Abra a interface dele. Normalmente: <code>http://homeassistant.local:8123</code> ou <code>http://IP-DO-SERVIDOR:8123</code>. O endereço <code>192.168.0.10</code> é apenas exemplo: use o IP real exibido no roteador ou no próprio Home Assistant.</li>
+            <li>No Home Assistant, clique no seu perfil (canto inferior esquerdo), vá até <b>Tokens de acesso de longa duração</b>, crie um token e copie-o. A documentação oficial explica esse processo: <a href="https://www.home-assistant.io/docs/authentication/#your-account-profile" target="_blank" rel="noopener noreferrer">perfil e autenticação</a>.</li>
+          </ol>
+          <p>O token é uma senha secreta: não o envie em conversas nem compartilhe capturas de tela que o mostrem. O Optimus o guarda na configuração local e o mascara na interface.</p>
+        </div>
+        <div class="linha" style="margin-top:.7rem"><label>Endereço do Home Assistant<input id="casa-url" class="campo" placeholder="http://homeassistant.local:8123 ou http://IP:8123"></label>
+          <label>Token de acesso<input id="casa-token" class="campo" type="password" autocomplete="new-password" placeholder="Cole o token de longa duração"></label></div>
+        <div class="linha"><button class="botao" id="casa-testar">Testar conexão</button>
+          <button class="botao primario" id="casa-salvar">Salvar e conectar</button>
+          <button class="botao" id="casa-atualizar">Atualizar aparelhos</button>
+          <button class="botao" id="casa-diagnostico">Diagnosticar integrações</button></div>
+        <p id="casa-conexao-status" class="sutil" role="status" aria-live="polite">Ainda não conectado. Primeiro teste o endereço e o token.</p>
       </details>
-      <div id="casa-aparelhos" class="grade"></div>
+      <div id="casa-aparelhos" class="grade" aria-live="polite"><p class="sutil">Conecte o Home Assistant para listar aparelhos.</p></div>
+      <details class="cartao" id="casa-inventario-detalhes">
+        <summary>Inventário local de dispositivos</summary>
+        <p class="sutil">Entidades descobertas e dispositivos cadastrados ficam salvos neste computador, sem guardar tokens ou senhas.</p>
+        <div id="casa-inventario" aria-live="polite"><p class="sutil">O inventário será carregado ao abrir esta tela.</p></div>
+      </details>
     </section>
 
+    <section id="tela-laboratorio" class="tela">
+      <div class="tela-cabecalho"><h2>🧪 Laboratório de dados</h2>
+        <p>Transformações locais de texto e dados, sem executar scripts ou comandos. Limite de entrada de 2 MiB; descompressão Gzip limitada a 8 MiB.</p></div>
+      <div class="cartao">
+        <label for="lab-operacao"><b>Operação</b></label>
+        <select id="lab-operacao" class="campo">
+          <option value="base64_codificar">Base64 · codificar</option>
+          <option value="base64_decodificar">Base64 · decodificar</option>
+          <option value="url_codificar">URL · codificar</option>
+          <option value="url_decodificar">URL · decodificar</option>
+          <option value="html_escapar">HTML · escapar</option>
+          <option value="html_desescapar">HTML · interpretar entidades</option>
+          <option value="hex_codificar">Hexadecimal · codificar</option>
+          <option value="hex_decodificar">Hexadecimal · decodificar</option>
+          <option value="sha256">Hash SHA-256</option>
+          <option value="sha512">Hash SHA-512</option>
+          <option value="md5">Hash MD5 (legado; não usar para segurança)</option>
+          <option value="gzip_comprimir">Gzip · comprimir para Base64</option>
+          <option value="gzip_descomprimir">Gzip · descomprimir de Base64</option>
+        </select>
+        <label for="lab-entrada"><b>Entrada</b></label>
+        <textarea id="lab-entrada" class="campo" rows="8" maxlength="2097152" placeholder="Digite ou cole o conteúdo aqui…"></textarea>
+        <div class="linha">
+          <button type="button" class="botao primario" id="lab-executar">▶ Executar localmente</button>
+          <button type="button" class="botao" id="lab-limpar">Limpar</button>
+          <span id="lab-estado" class="sutil" role="status" aria-live="polite"></span>
+        </div>
+      </div>
+      <div class="cartao">
+        <div class="linha entre"><h3>Resultado</h3><button type="button" class="botao" id="lab-copiar" disabled>Copiar resultado</button></div>
+        <textarea id="lab-resultado" class="campo" rows="8" readonly placeholder="O resultado aparecerá aqui…"></textarea>
+      </div>
+    </section>
+    <section id="tela-zim" class="tela">
+      <div class="tela-cabecalho"><h2>🌐 Conhecimento offline</h2>
+        <p>Biblioteca local de conteúdos no formato ZIM, usado por enciclopédias e materiais de consulta offline. Os arquivos permanecem no computador e não são enviados para a nuvem.</p></div>
+      <div class="cartao">
+        <div class="linha entre"><div><h3>Arquivos disponíveis</h3><p class="sutil">O Optimus identifica arquivos ZIM na pasta gerenciada da biblioteca.</p></div>
+          <button type="button" class="botao primario" id="zim-atualizar">↻ Atualizar biblioteca</button></div>
+        <div class="linha" style="margin-top:.75rem"><button type="button" class="botao secundario" id="zim-nomad-inicial">⬇ Adicionar conteúdo inicial do Project NOMAD (4,5 MB)</button><span class="sutil">Baixa a mini-Wikipédia usada na instalação oficial do Kiwix. Só ocorre quando você solicitar.</span></div>
+        <p id="zim-status" class="sutil" role="status" aria-live="polite">Carregando biblioteca…</p>
+        <div id="zim-resumo" class="grade"></div>
+        <ul id="zim-lista" class="lista" aria-live="polite"><li class="sutil">Consultando arquivos…</li></ul>
+      </div>
+      <div class="cartao">
+        <div class="linha entre"><div><h3>📚 Catálogo de coleções NOMAD</h3>
+          <p class="sutil">Coleções Essential, Standard e Comprehensive disponíveis no catálogo do Optimus. Os arquivos grandes são baixados das fontes dos produtores, não armazenados no GitHub.</p></div>
+          <span id="zim-catalogo-resumo" class="selo">Carregando catálogo…</span></div>
+        <div id="zim-catalogo" class="grade" aria-live="polite"><p class="sutil">Carregando coleções…</p></div>
+        <p class="sutil">Essential: coleção recomendada. Standard e Comprehensive: disponíveis para consulta e instalação futura. A presença no catálogo não significa que o arquivo esteja instalado.</p>
+      </div>
+      <div class="cartao" id="zim-leitor">
+        <div class="linha entre"><div><h3>📖 Leitor Kiwix</h3><p class="sutil">Abre um arquivo ZIM local em um servidor restrito ao próprio computador.</p></div>
+          <span id="zim-kiwix-status" class="selo">Verificando Kiwix…</span></div>
+        <div class="linha">
+          <button type="button" class="botao primario" id="zim-instalar-kiwix">⬇ Instalar Kiwix automaticamente</button>
+          <span id="zim-instalacao-status" class="sutil" role="status" aria-live="polite">O instalador oficial será baixado para a pasta privada do Optimus, sem alterar o PATH.</span>
+        </div>
+        <div class="linha">
+          <label style="flex:1">Biblioteca ZIM
+            <select id="zim-arquivo" class="campo"><option value="">Selecione um arquivo ZIM</option></select>
+          </label>
+          <button type="button" class="botao primario" id="zim-abrir" disabled>▶ Abrir leitura</button>
+          <button type="button" class="botao perigo" id="zim-fechar" disabled>■ Fechar leitor</button>
+        </div>
+        <p id="zim-leitor-status" class="sutil" role="status" aria-live="polite">O leitor não é iniciado automaticamente.</p>
+        <p id="zim-leitor-link" class="sutil"></p>
+      </div>
+      <div class="cartao">
+        <h3>🔎 Busca unificada: ZIM + documentos</h3>
+        <p class="sutil">Pesquisa nos índices de texto completo dos ZIMs e na biblioteca de documentos do Optimus. Resultados mostram a fonte e o trecho disponível; arquivos ZIM sem índice de texto completo não podem ser pesquisados.</p>
+        <form id="zim-busca-form" class="formulario">
+          <label>O que deseja encontrar?
+            <input id="zim-busca-termo" class="campo" type="search" minlength="2" maxlength="300" placeholder="Ex.: primeiros socorros, segurança do trabalho…" required>
+          </label>
+          <div class="linha">
+            <label>Fonte
+              <select id="zim-busca-fonte" class="campo"><option value="todas">Todas as fontes</option><option value="zim">Somente ZIM</option><option value="documentos">Somente documentos</option></select>
+            </label>
+            <button type="submit" class="botao primario" id="zim-buscar">Pesquisar</button>
+          </div>
+        </form>
+        <p id="zim-busca-status" class="sutil" role="status" aria-live="polite">A busca é local. O Optimus não envia seus arquivos para a internet.</p>
+        <div id="zim-busca-resultados" class="lista" aria-live="polite"></div>
+        <div class="linha entre" style="margin-top:1rem">
+          <div><b>🧠 Indexação incremental e RAG local</b>
+            <p class="sutil">Quando houver arquivos ZIM, leia artigos, gere trechos rastreáveis e habilite busca lexical ou híbrida. A busca só fica disponível depois da indexação. O Optimus prepara libzim em pasta privada e, somente após sua solicitação de indexação, pode baixar o modelo granite-embedding:278m no Ollama local. O processo é retomável em lotes.</p></div>
+          <button type="button" class="botao primario" id="zim-indexar">Indexar / continuar</button>
+        </div>
+        <p id="zim-index-status" class="sutil" role="status" aria-live="polite">A indexação usa libzim local. Nenhum artigo é enviado à nuvem.</p>
+      </div>
+      <div class="cartao">
+        <h3>Como adicionar conteúdo</h3>
+        <ol>
+          <li>Coloque seus arquivos <code>.zim</code> na pasta <code>biblioteca_zim</code> dentro da pasta de dados do Optimus.</li>
+          <li>Use “Atualizar biblioteca” para reler o catálogo.</li>
+          <li>Somente arquivos locais regulares são listados; links simbólicos e outros formatos são ignorados.</li>
+        </ol>
+        <p class="sutil">O Kiwix Tools é instalado pelo Optimus em uma pasta privada, sem PATH global nem privilégios administrativos. O Optimus só encerra processos que ele próprio iniciou; processos Kiwix de terceiros nunca são interrompidos. O conteúdo ZIM deve ser obtido de fontes legítimas e adicionado por você.</p>
+      </div>
+    </section>
+    <section id="tela-modulos" class="tela">
+      <div class="tela-cabecalho"><h2>🧩 Central de módulos</h2>
+        <p>Inventário local inicial de integrações relacionadas ao Project NOMAD; ainda não representa todos os módulos do projeto. O Optimus apenas detecta serviços e ferramentas; não instala nada nem inicia containers sem sua autorização.</p></div>
+      <div class="cartao">
+        <div class="linha entre"><div><h3>Estado do ambiente</h3><p class="sutil">Detecção local, sem enviar dados para serviços externos.</p></div>
+          <button type="button" class="botao primario" id="modulos-atualizar">↻ Atualizar inventário</button></div>
+        <p id="modulos-estado" class="sutil" role="status" aria-live="polite">Consultando ferramentas locais…</p>
+        <div id="modulos-grade" class="grade"></div>
+      </div>
+      <div class="cartao">
+        <div class="linha entre"><div><h3>Recursos deste computador</h3><p class="sutil">Métricas locais, sem telemetria ou envio externo.</p></div>
+          <span id="modulos-recursos-atualizado" class="sutil">Aguardando leitura</span></div>
+        <div id="modulos-recursos" class="grade">
+          <p class="sutil">Abra a Central de módulos para consultar CPU, memória e armazenamento.</p>
+        </div>
+      </div>
+      <div class="cartao">
+        <h3>Como interpretar</h3>
+        <p><b>Disponível:</b> serviço ou daemon testado e respondendo.</p>
+        <p><b>Instalado / parado:</b> executável existe, mas o serviço ou daemon não respondeu ao teste.</p>
+        <p><b>Não instalado:</b> não foi encontrado no sistema. O Optimus não finge que o recurso está pronto.</p>
+        <p class="sutil">Esta é a primeira etapa do Command Center. Instalação, configuração e gerenciamento individual serão liberados somente com adaptadores, permissões e testes específicos.</p>
+      </div>
+    </section>
     <section id="tela-acoes" class="tela">
       <div class="tela-cabecalho"><h2>Ações e segurança</h2>
         <p>Tudo que o Optimus executou no seu PC, com o nível de risco e a sua decisão. Senhas e chaves aparecem mascaradas.</p></div>
@@ -360,9 +664,9 @@
       </div>
       <div class="cartao" id="cartao-celular">
         <h3>📱 Celular e agenda</h3>
-        <p class="sutil">Aponte a câmera do celular para o QR code para abrir o Optimus (mesma rede Wi-Fi). O link da agenda põe seus lembretes no calendário do iPhone, Google Agenda ou Outlook (no iPhone: Ajustes › Calendário › Contas › Adicionar conta › Outra › Calendário assinado).</p>
+        <p class="sutil">Acesso pela rede local: conecte o celular ao mesmo Wi-Fi e leia o QR Code. Para acessar de fora de casa por 4G/5G ou outro Wi-Fi, use a seção Acesso externo com Cloudflare Tunnel. O QR Code da agenda assina seus lembretes no iPhone, Google Agenda ou Outlook.</p>
         <div class="linha">
-          <input id="celular-senha" type="password" autocomplete="new-password" placeholder="Senha para o celular (mín. 4 caracteres)" aria-label="Senha para o celular">
+          <input id="celular-senha" type="password" autocomplete="new-password" placeholder="Senha da rede local (mín. 4 caracteres; acesso externo exige 12)" aria-label="Senha para o celular">
           <button class="botao primario" id="ligar-celular">📶 Ligar acesso pelo celular</button>
           <button class="botao oculto" id="desligar-celular">Desligar acesso</button>
         </div>
@@ -372,6 +676,17 @@
         </div>
         <div id="celular-estado" class="sutil" aria-live="polite"></div>
         <div class="linha" id="celular-qr"></div>
+        <hr>
+        <h4>🌐 Acesso externo (4G/5G ou outro Wi-Fi)</h4>
+        <p class="sutil">Cria um endereço HTTPS temporário pelo Cloudflare Tunnel. O computador precisa permanecer ligado e conectado à internet. Defina uma senha exclusiva com pelo menos 12 caracteres.</p>
+        <div class="linha">
+          <input id="tunel-senha" type="password" autocomplete="new-password" placeholder="Senha forte (mínimo 12 caracteres)" aria-label="Senha forte para acesso externo">
+          <button class="botao primario" id="ligar-tunel">🌐 Ativar acesso externo</button>
+          <button class="botao oculto" id="desligar-tunel">Encerrar acesso externo</button>
+          <button class="botao" id="atualizar-tunel">Atualizar status</button>
+        </div>
+        <div id="tunel-estado" class="sutil" aria-live="polite"></div>
+        <div class="qr-grid" id="tunel-qr"></div>
       </div>
       <div class="cartao"><table class="tabela"><thead><tr><th>Quando</th><th>Ferramenta</th><th>Detalhes</th><th>Risco</th><th>Decisão</th></tr></thead><tbody id="lista-acoes"></tbody></table></div>
     </section>

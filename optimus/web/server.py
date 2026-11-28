@@ -12,9 +12,13 @@ import logging
 import mimetypes
 import queue
 import re
+import subprocess
+import sys
 import threading
 import time
 import uuid
+import urllib.error
+import urllib.request
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -31,8 +35,11 @@ from optimus.engine.rede import PROVEDORES, MotorRede
 from optimus.hardware import resumo
 from optimus.safety import interpretar_confirmacao
 from optimus.voice import tts
+from optimus.network import cloudflare_tunnel
 
 log = logging.getLogger(__name__)
+_reinicio_solicitado = threading.Event()
+API_CONTRATO = 3
 ESTATICOS = Path(__file__).parent / "static"
 _SEGREDOS = ("chave_api", "token", "senha", "elevenlabs_chave", "token_comando",
              "token_agenda")
@@ -93,26 +100,51 @@ class Estado:
         self.downloads: dict[str, dict[str, Any]] = {}
         self._falantes: dict[str, tts.Falante] = {}
         self._ouvinte = None
-        self._motor_cache: tuple[float, bool, list[str]] | None = None
+        self._motor_cache: tuple[float, bool, list[str]] = (0.0, False, [])
+        self._motor_destinos: list[dict[str, Any]] = []
+        self._motor_lock = threading.Lock()
+        self._motor_atualizando = False
         optimus.iniciar_lembretes(lambda l: self.avisos.append(
             {"tipo": l.get("tipo", "lembrete"), "texto": l["texto"], "quando": time.time()}))
         optimus.iniciar_copiados()
 
-    def motor_status(self) -> tuple[bool, list[str]]:
-        """Disponibilidade e lista de modelos do motor, com cache de ~4 s.
+    def _atualizar_motor_status(self) -> None:
+        """Consulta o motor fora da thread HTTP: servidores remotos podem não responder."""
+        try:
+            motor = self.optimus.motor
+            disponivel = motor.disponivel()
+            modelos = motor.modelos() if disponivel else []
+            destinos = motor.estado() if isinstance(motor, MotorRede) else []
+            cache = (time.monotonic(), disponivel, modelos, destinos)
+        except Exception:
+            log.exception("Falha ao consultar disponibilidade do motor de IA")
+            cache = (time.monotonic(), False, [], [])
+        finally:
+            # O cache é atualizado mesmo se o provedor externo falhar.
+            with self._motor_lock:
+                self._motor_cache = cache[:3]
+                self._motor_destinos = cache[3]
+                self._motor_atualizando = False
 
-        A tela chama /api/estado a cada poucos segundos; sem o cache, cada poll bate no Ollama
-        (/api/version + /api/tags) mesmo durante uma geração, o que num PC fraco deixa o status
-        lento e faz a interface mostrar "Sem conexão" à toa. O cache evita esse peso.
+    def motor_status(self) -> tuple[bool, list[str]]:
+        """Retorna o último estado imediatamente e atualiza em segundo plano.
+
+        /api/estado é consultado pela interface durante a abertura. Não podemos deixar
+        uma chamada HTTP a Ollama/LM Studio/rede segurar a resposta do servidor web.
         """
         agora = time.monotonic()
-        if self._motor_cache and agora - self._motor_cache[0] < 4.0:
-            return self._motor_cache[1], self._motor_cache[2]
-        motor = self.optimus.motor
-        disponivel = motor.disponivel()
-        modelos = motor.modelos() if disponivel else []
-        self._motor_cache = (agora, disponivel, modelos)
-        return disponivel, modelos
+        with self._motor_lock:
+            idade = agora - self._motor_cache[0]
+            if idade >= 4.0 and not self._motor_atualizando:
+                self._motor_atualizando = True
+                threading.Thread(target=self._atualizar_motor_status, daemon=True,
+                                 name="status-motor").start()
+            return self._motor_cache[1], list(self._motor_cache[2])
+
+    def motor_destinos(self) -> list[dict[str, Any]]:
+        """Retorna destinos remotos do cache; nunca sonda a rede na thread HTTP."""
+        with self._motor_lock:
+            return list(self._motor_destinos)
 
     def falante(self, voz: str) -> tts.Falante:
         if voz not in self._falantes:
@@ -261,6 +293,19 @@ class Manipulador(BaseHTTPRequestHandler):
         log.debug(formato, *args)
 
     # Respostas
+    def _responder_atualizacao(self, resultado: dict[str, Any]) -> None:
+        """Responde primeiro e reinicia o processo somente após uma atualização real."""
+        houve_troca = bool(resultado.get("mudou") or resultado.get("commit")
+                           or resultado.get("versao"))
+        if resultado.get("ok") and houve_troca:
+            resultado = {**resultado, "reiniciando": True}
+            self._json(resultado)
+            _reinicio_solicitado.set()
+            # Dá tempo para o cliente receber o JSON antes de encerrar o servidor.
+            threading.Timer(0.8, self.server.shutdown).start()
+            return
+        self._json(resultado)
+
     def _json(self, dados: Any, status: int = 200) -> None:
         corpo = json.dumps(dados, ensure_ascii=False, default=str).encode()
         self.send_response(status)
@@ -274,6 +319,10 @@ class Manipulador(BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Content-Type", tipo)
         self.send_header("Content-Length", str(len(dados)))
+        # Evita que o navegador reutilize app.js antigo após atualização do pacote.
+        self.send_header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
+        self.send_header("Pragma", "no-cache")
+        self.send_header("X-Content-Type-Options", "nosniff")
         self.end_headers()
         self.wfile.write(dados)
 
@@ -286,7 +335,7 @@ class Manipulador(BaseHTTPRequestHandler):
         except json.JSONDecodeError:
             return {}
 
-    def _autorizado(self) -> bool:
+    def _credenciais_validas(self) -> bool:
         if not self.senha:
             return True
         enviada = self.headers.get("X-Optimus-Senha", "")
@@ -295,6 +344,25 @@ class Manipulador(BaseHTTPRequestHandler):
         if achado:
             enviada = enviada or achado.group(1)
         return hmac.compare_digest(enviada, self.senha)
+
+    def _exige_senha(self) -> bool:
+        """Protege clientes externos, sem pedir senha no navegador do próprio PC.
+
+        cloudflared encaminha a conexão localmente e preserva CF-Ray e
+        CF-Connecting-IP. O servidor da porta do celular, por sua vez, sempre
+        exige senha, inclusive nos testes e acessos via loopback.
+        """
+        if not self.senha:
+            return False
+        if self.server is _servidor_celular:
+            return True
+        endereco = str(self.client_address[0]) if self.client_address else ""
+        if endereco in ("127.0.0.1", "::1"):
+            return bool(self.headers.get("CF-Ray") and self.headers.get("CF-Connecting-IP"))
+        return True
+
+    def _autorizado(self) -> bool:
+        return not self._exige_senha() or self._credenciais_validas()
 
     # Roteamento
     def do_GET(self):
@@ -314,7 +382,8 @@ class Manipulador(BaseHTTPRequestHandler):
         if metodo == "GET" and not caminho.startswith("/api/"):
             return self._estatico(caminho)
         if caminho == "/api/entrar" and metodo == "POST":
-            ok = not self.senha or hmac.compare_digest(self._corpo().get("senha", ""), self.senha)
+            exige = self._exige_senha()
+            ok = not exige or hmac.compare_digest(self._corpo().get("senha", ""), self.senha)
             return self._json({"ok": ok}, 200 if ok else 401)
         if metodo == "GET" and caminho == "/api/agenda.ics":
             return self._agenda(parse_qs(url.query))
@@ -420,7 +489,7 @@ class Manipulador(BaseHTTPRequestHandler):
         optimus = self.estado.optimus
         chave = (consulta.get("chave") or [""])[0]
         token = optimus.config.get("web", "token_agenda", "") or ""
-        if not (self._autorizado() or (token and hmac.compare_digest(chave, token))):
+        if not (self._credenciais_validas() or (token and hmac.compare_digest(chave, token))):
             return self._json({"erro": "chave da agenda inválida"}, 401)
         ics = celular.agenda_ics(optimus.banco.lembretes(pendentes=True),
                                  nome=optimus.config.get("geral", "nome") or "Optimus")
@@ -438,6 +507,80 @@ class Manipulador(BaseHTTPRequestHandler):
             tipo += "; charset=utf-8"
         self._bytes(alvo.read_bytes(), tipo)
 
+    def _proxy_kiwix(self, caminho: str) -> None:
+        """Expõe o leitor Kiwix pelo mesmo host/porta do Optimus, inclusive no celular.
+
+        O Kiwix continua preso a 127.0.0.1; o proxy exige a autenticação normal
+        da API e não aceita host, porta ou esquema fornecidos pelo navegador.
+        """
+        from optimus import kiwix
+
+        estado_leitor = kiwix.estado()
+        if not estado_leitor.get("executando"):
+            return self._json({"erro": "O leitor Kiwix não está em execução."}, 409)
+        partes = [unquote(p) for p in caminho.strip("/").split("/")[3:]]
+        if any(p in (".", "..") or chr(92) in p or chr(0) in p for p in partes):
+            return self._json({"erro": "Caminho inválido para o leitor."}, 400)
+        sufixo = "/".join(partes)
+        destino = f"http://127.0.0.1:{int(estado_leitor['porta'])}/" + sufixo
+        consulta = urlparse(self.path).query
+        if consulta:
+            destino += "?" + consulta
+        cabecalhos = {"User-Agent": "Open-Optimus-Kiwix-Proxy/1.0"}
+        cabecalhos["Accept-Encoding"] = "identity"
+        for nome in ("Range", "If-Range", "Accept"):
+            valor = self.headers.get(nome)
+            if valor:
+                cabecalhos[nome] = valor
+        requisicao = urllib.request.Request(destino, headers=cabecalhos)
+        try:
+            resposta = urllib.request.urlopen(requisicao, timeout=30)
+        except urllib.error.HTTPError as erro:
+            resposta = erro
+        except (urllib.error.URLError, TimeoutError, OSError) as erro:
+            return self._json({"erro": f"Não foi possível acessar o leitor Kiwix: {erro}"}, 502)
+
+        with resposta:
+            status = getattr(resposta, "status", resposta.getcode())
+            tipo = resposta.headers.get("Content-Type", "application/octet-stream")
+            tipo_texto = tipo.lower()
+            eh_html = "text/html" in tipo_texto
+            eh_css = "text/css" in tipo_texto
+            if eh_html or eh_css:
+                corpo = resposta.read()
+                # O Kiwix gera links absolutos a partir da raiz. Reescrevemos
+                # os caminhos locais para continuarem dentro do proxy autenticado.
+                texto = corpo.decode("utf-8", errors="replace")
+                texto = texto.replace('href="/', 'href="/api/zim/leitor/')
+                texto = texto.replace('src="/', 'src="/api/zim/leitor/')
+                texto = texto.replace('action="/', 'action="/api/zim/leitor/')
+                texto = texto.replace('url(/', 'url(/api/zim/leitor/')
+                texto = texto.replace('@import "/', '@import "/api/zim/leitor/')
+                corpo = texto.encode("utf-8")
+                self.send_response(status)
+                self.send_header("Content-Type", tipo)
+                self.send_header("Content-Length", str(len(corpo)))
+                self.send_header("Cache-Control", "no-store")
+                self.send_header("X-Content-Type-Options", "nosniff")
+                self.end_headers()
+                self.wfile.write(corpo)
+                return
+
+            self.send_response(status)
+            for nome in ("Content-Type", "Content-Length", "Content-Range",
+                         "Accept-Ranges", "Last-Modified", "ETag"):
+                valor = resposta.headers.get(nome)
+                if valor:
+                    self.send_header(nome, valor)
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.end_headers()
+            while True:
+                bloco = resposta.read(64 * 1024)
+                if not bloco:
+                    break
+                self.wfile.write(bloco)
+
     def _api(self, metodo: str, caminho: str, consulta: dict) -> None:
         estado = self.estado
         optimus = estado.optimus
@@ -446,6 +589,213 @@ class Manipulador(BaseHTTPRequestHandler):
         recurso = partes[0] if partes else ""
         ident = partes[1] if len(partes) > 1 else ""
 
+        if recurso == "versao" and metodo == "GET":
+            from optimus import autoatualizar
+            return self._json({"versao": __version__, "api_contrato": API_CONTRATO,
+                               "commit": autoatualizar.commit_instalado(),
+                               "recursos": {"zim": True, "kiwix": True,
+                                            "modulos": True, "casa_gerenciada": True}})
+        if recurso == "zim":
+            from optimus import kiwix, zim
+            if metodo == "GET" and ident == "leitor":
+                return self._proxy_kiwix(caminho)
+            if metodo == "GET" and ident == "catalogo":
+                from optimus import zim_catalog
+                return self._json(zim_catalog.catalogo())
+            if metodo == "GET" and ident == "kiwix":
+                return self._json(kiwix.estado())
+            if metodo == "GET" and ident == "buscar":
+                termo = str((consulta.get("q") or [""])[0]).strip()
+                arquivo = str((consulta.get("arquivo") or [""])[0]).strip()
+                try:
+                    return self._json(kiwix.buscar(termo, arquivo, limite=20))
+                except (ValueError, RuntimeError) as erro:
+                    return self._json({"erro": str(erro)}, 400)
+            if metodo == "GET" and ident == "rag":
+                from optimus import zim_rag
+                modelo = str((consulta.get("modelo") or [""])[0]).strip()
+                return self._json({"resultados": zim_rag.buscar(
+                    str((consulta.get("q") or [""])[0]), limite=10,
+                    modelo_embedding=modelo, url_motor=getattr(optimus.motor, "url", ""))})
+            if metodo == "GET" and ident == "status":
+                from optimus import zim_rag
+                return self._json(zim_rag.status())
+            if metodo == "POST" and ident == "indexar":
+                from optimus import zim_rag
+                corpo = self._corpo()
+                modelo = str(corpo.get("modelo_embedding") or "").strip()
+                try:
+                    catalogo = zim.listar_zim()
+                    if not catalogo.get("arquivos"):
+                        estado_indice = zim_rag.status()
+                        return self._json({
+                            "ok": False,
+                            "sem_arquivos": True,
+                            "mensagem": "Nenhum arquivo ZIM foi encontrado. Adicione um arquivo .zim à pasta biblioteca_zim antes de indexar.",
+                            "estado": estado_indice,
+                        })
+                    url_motor = getattr(optimus.motor, "url", "")
+                    preparo = zim_rag.preparar_embedding(url_motor, modelo)
+                    modelo = preparo.get("modelo") or modelo
+                    resultado = zim_rag.indexar(
+                        limite=int(corpo.get("limite") or 150),
+                        modelo_embedding=modelo, url_motor=url_motor)
+                    resultado["preparacao_embedding"] = preparo
+                    return self._json(resultado)
+                except (ValueError, RuntimeError, OSError) as erro:
+                    return self._json({"erro": str(erro)}, 400)
+            if metodo == "POST" and ident == "nomad-inicial":
+                try:
+                    return self._json(zim.importar_conteudo_inicial_nomad())
+                except (RuntimeError, OSError) as erro:
+                    return self._json({
+                        "ok": False,
+                        "erro": f"Não foi possível obter a mini-Wikipédia inicial do Project NOMAD: {erro}",
+                    }, 502)
+            if metodo == "POST" and ident == "instalar":
+                try:
+                    return self._json(kiwix.instalar())
+                except (RuntimeError, OSError, urllib.error.URLError) as erro:
+                    return self._json({"erro": f"Não foi possível instalar o Kiwix Tools: {erro}"}, 502)
+            if metodo == "GET" and not ident:
+                dados = zim.listar_zim()
+                dados["kiwix"] = kiwix.estado()
+                return self._json(dados)
+            if metodo == "POST" and ident == "iniciar":
+                corpo = self._corpo()
+                try:
+                    return self._json(kiwix.iniciar(str(corpo.get("arquivo") or "")))
+                except (ValueError, FileNotFoundError, RuntimeError) as erro:
+                    return self._json({"erro": str(erro)}, 400)
+            if metodo == "POST" and ident == "parar":
+                return self._json(kiwix.parar())
+        if recurso == "modulos" and ident == "recursos" and metodo == "GET":
+            from optimus import modulos
+            return self._json({"recursos": modulos.recursos()})
+        if recurso == "modulos" and metodo == "GET":
+            from optimus import modulos
+            return self._json({"modulos": modulos.inventario()})
+        if recurso == "laboratorio" and metodo == "POST":
+            from optimus.tools.laboratorio_dados import laboratorio_dados
+            corpo = self._corpo()
+            operacao = str(corpo.get("operacao") or "")
+            entrada = str(corpo.get("texto") or "")
+            resultado = laboratorio_dados(None, operacao, entrada)
+            return self._json(resultado, 400 if "erro" in resultado else 200)
+        if recurso == "pdf":
+            from optimus.tools import pdf as _pdf  # noqa: F401
+            from optimus.tools import pdf_suite as _pdf_suite  # noqa: F401
+            from optimus.tools.base import Contexto, registradas
+
+            pasta_pdf = (cfg.pasta_base() / "documentos_pdf").resolve()
+            pasta_pdf.mkdir(parents=True, exist_ok=True)
+            if metodo == "GET" and not ident:
+                ferramentas_pdf = [
+                    {"nome": f.nome, "descricao": f.descricao,
+                     "parametros": f.parametros, "obrigatorios": f.obrigatorios}
+                    for f in registradas().values() if f.grupo == "pdf"
+                ]
+                try:
+                    import pypdf  # noqa: F401
+                    pdf_instalado = True
+                except ImportError:
+                    pdf_instalado = False
+                return self._json({"ferramentas": ferramentas_pdf,
+                                   "pasta": str(pasta_pdf), "dependencias_instaladas": pdf_instalado,
+                                   "comando_instalacao": 'pip install "optimus-assistente[pdf]"'})
+            if metodo == "POST" and ident == "upload":
+                tamanho = int(self.headers.get("Content-Length") or 0)
+                if tamanho <= 0 or tamanho > 200 * 1024 * 1024:
+                    return self._json({"erro": "Envie um arquivo de até 200 MB."}, 413)
+                nome_original = unquote((consulta.get("nome") or ["documento.pdf"])[0])
+                nome = re.sub(r"[^\w.() -]", "_", Path(nome_original).name).strip(" .") or "documento.pdf"
+                extensao = Path(nome).suffix.lower()
+                permitidas = {".pdf", ".jpg", ".jpeg", ".png", ".tif", ".tiff", ".bmp", ".html", ".htm", ".p12", ".pfx", ".icc", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".odt", ".ods", ".odp", ".rtf", ".txt", ".csv"}
+                if extensao not in permitidas:
+                    return self._json({"erro": "Tipo de arquivo não suportado. Envie PDF, imagem, documento Office/LibreOffice, HTML, certificado P12/PFX ou perfil ICC."}, 415)
+                dados = self.rfile.read(tamanho)
+                assinaturas = {
+                    ".pdf": dados.startswith(b"%PDF-"),
+                    ".jpg": dados.startswith(b"\xff\xd8\xff"),
+                    ".jpeg": dados.startswith(b"\xff\xd8\xff"),
+                    ".png": dados.startswith(b"\x89PNG\r\n\x1a\n"),
+                    ".tif": dados.startswith((b"II*\x00", b"MM\x00*")),
+                    ".tiff": dados.startswith((b"II*\x00", b"MM\x00*")),
+                    ".bmp": dados.startswith(b"BM"),
+                }
+                if extensao in assinaturas and not assinaturas[extensao]:
+                    return self._json({"erro": "O conteúdo do arquivo não corresponde ao formato informado."}, 415)
+                if extensao in {".html", ".htm"} and b"<" not in dados[:4096]:
+                    return self._json({"erro": "O arquivo HTML não parece válido."}, 415)
+                alvo = pasta_pdf / f"{uuid.uuid4().hex[:8]}_{nome}"
+                alvo.write_bytes(dados)
+                return self._json({"arquivo": str(alvo), "nome": nome,
+                                   "tamanho": len(dados)})
+            if metodo == "POST" and ident == "executar":
+                corpo = self._corpo()
+                nome_ferramenta = str(corpo.get("ferramenta") or "")
+                ferramenta_pdf = registradas().get(nome_ferramenta)
+                if not ferramenta_pdf or ferramenta_pdf.grupo != "pdf":
+                    return self._json({"erro": "Ferramenta PDF inválida."}, 400)
+                argumentos = corpo.get("argumentos") or {}
+                if not isinstance(argumentos, dict):
+                    return self._json({"erro": "Parâmetros inválidos."}, 400)
+                # Os arquivos de entrada só podem vir da pasta de documentos enviada pela interface.
+                chaves_arquivo = {chave for chave in ferramenta_pdf.parametros
+                                  if any(palavra in chave.lower()
+                                         for palavra in ("arquivo", "certificado", "perfil_icc"))}
+                for chave in chaves_arquivo:
+                    valor = argumentos.get(chave)
+                    if not valor:
+                        continue
+                    valores = re.split(r"[,;]+", str(valor)) if chave == "arquivos" or chave.endswith("arquivos") else [str(valor)]
+                    for item in valores:
+                        item = item.strip().strip('"')
+                        if not item:
+                            continue
+                        caminho = Path(item).expanduser().resolve()
+                        if not caminho.is_relative_to(pasta_pdf) or not caminho.is_file():
+                            return self._json({"erro": f"Arquivo de entrada não enviado ou fora da pasta segura: {Path(item).name}"}, 400)
+                if "destino" in ferramenta_pdf.parametros:
+                    destino = str(argumentos.get("destino") or "resultado.pdf")
+                    argumentos["destino"] = str(pasta_pdf / Path(destino).name)
+                contexto_pdf = Contexto(config=optimus.config, banco=optimus.banco,
+                                        pasta_trabalho=pasta_pdf)
+                resultado_bruto = ferramenta_pdf.executar(argumentos, contexto_pdf)
+                try:
+                    resultado = json.loads(resultado_bruto)
+                except (TypeError, json.JSONDecodeError):
+                    resultado = {"resultado": str(resultado_bruto)}
+                if isinstance(resultado, dict) and resultado.get("erro"):
+                    return self._json(resultado, 400)
+                saidas = []
+                if isinstance(resultado, dict):
+                    for chave in ("destino", "zip"):
+                        valor = resultado.get(chave)
+                        if valor:
+                            caminho = Path(str(valor)).resolve()
+                            if caminho.is_relative_to(pasta_pdf) and caminho.is_file():
+                                saidas.append({"nome": caminho.name, "tamanho": caminho.stat().st_size})
+                if isinstance(resultado, dict) and resultado.get("arquivos"):
+                    for valor in resultado["arquivos"]:
+                        caminho = Path(str(valor)).resolve()
+                        if caminho.is_relative_to(pasta_pdf) and caminho.is_file():
+                            saidas.append({"nome": caminho.name, "tamanho": caminho.stat().st_size})
+                return self._json({"resultado": resultado, "arquivos": saidas})
+            if metodo == "GET" and ident == "arquivo":
+                nome = Path(unquote((consulta.get("nome") or [""])[0])).name
+                alvo = (pasta_pdf / nome).resolve()
+                if not alvo.is_relative_to(pasta_pdf) or not alvo.is_file():
+                    return self._json({"erro": "Arquivo não encontrado."}, 404)
+                dados = alvo.read_bytes()
+                self.send_response(200)
+                self.send_header("Content-Type", mimetypes.guess_type(alvo.name)[0] or "application/octet-stream")
+                self.send_header("Content-Length", str(len(dados)))
+                self.send_header("Content-Disposition", f'attachment; filename="{alvo.name.encode("ascii", "replace").decode()}"')
+                self.send_header("X-Content-Type-Options", "nosniff")
+                self.end_headers()
+                self.wfile.write(dados)
+                return
         if recurso == "estado":
             memoria = psutil.virtual_memory()
             motor = optimus.motor
@@ -459,7 +809,7 @@ class Manipulador(BaseHTTPRequestHandler):
                 "motor": {"backend": optimus.config.get("motor", "backend"),
                           "disponivel": disponivel, "modelo": optimus.modelo_atual(),
                           "modelos": lista_modelos,
-                          "destinos": motor.estado() if isinstance(motor, MotorRede) else []},
+                          "destinos": estado.motor_destinos()},
                 "uso": {"cpu": psutil.cpu_percent(interval=None), "ram": memoria.percent,
                         "ram_livre_gb": round(memoria.available / 1024**3, 1)},
                 "modo": optimus.config.get("agente", "modo"),
@@ -517,6 +867,226 @@ class Manipulador(BaseHTTPRequestHandler):
                 aprovado = interpretar_confirmacao(aprovado, nivel)
             tarefa.responder(bool(aprovado))
             return self._json({"ok": True, "aprovado": bool(aprovado)})
+        if recurso == "casa" and ident == "gerenciado":
+            from optimus.smart_home import home_assistant as ha
+
+            if metodo == "GET":
+                return self._json(ha.estado())
+            if metodo == "POST":
+                acao = str((self._corpo().get("acao") or "")).strip().lower()
+                permitidas = {"instalar", "iniciar", "parar", "reiniciar", "atualizar",
+                              "backup", "desinstalar", "logs"}
+                if acao not in permitidas:
+                    return self._json({"erro": "Ação de gerenciamento inválida."}, 400)
+                def executar():
+                    try:
+                        ha.executar_acao(acao)
+                    except Exception:
+                        log.exception("Falha no gerenciamento do Home Assistant")
+                threading.Thread(target=executar, daemon=True,
+                                 name="home-assistant-gerenciado").start()
+                return self._json({"ok": True, "mensagem": "Operação iniciada.",
+                                   "estado": "executando"}, 202)
+        if recurso == "casa" and ident == "aparelhos" and metodo == "GET":
+            import httpx
+            from urllib.parse import urlsplit
+
+            url = str(optimus.config.get("casa", "url") or "").strip().rstrip("/")
+            token = str(optimus.config.get("casa", "token") or "").strip()
+            if not url or not token:
+                return self._json({"ok": False, "erro": "Conclua o primeiro acesso ao Home Assistant e salve o token de acesso para listar os aparelhos."}, 409)
+            partes_url = urlsplit(url)
+            if (partes_url.scheme not in ("http", "https") or not partes_url.hostname
+                    or partes_url.username or partes_url.password or partes_url.query
+                    or partes_url.fragment):
+                return self._json({"ok": False, "erro": "Endereço do Home Assistant inválido."}, 400)
+            try:
+                resposta = httpx.get(url + "/api/states",
+                    headers={"Authorization": "Bearer " + token}, timeout=12,
+                    follow_redirects=False)
+                if resposta.status_code == 401:
+                    return self._json({"ok": False, "erro": "Token recusado pelo Home Assistant. Atualize o token salvo."}, 401)
+                resposta.raise_for_status()
+                dados = resposta.json()
+                if not isinstance(dados, list):
+                    return self._json({"ok": False, "erro": "A API do Home Assistant retornou uma lista inválida."}, 502)
+                dominios = {"light", "switch", "fan", "cover", "climate", "lock", "media_player",
+                            "sensor", "binary_sensor", "camera", "person", "device_tracker",
+                            "weather", "alarm_control_panel", "humidifier", "water_heater",
+                            "vacuum", "button", "remote", "scene", "automation"}
+                entidades = []
+                for item in dados[:2000]:
+                    if not isinstance(item, dict):
+                        continue
+                    entity_id = str(item.get("entity_id") or "")
+                    dominio = entity_id.split(".", 1)[0] if "." in entity_id else ""
+                    if dominio not in dominios:
+                        continue
+                    atributos = item.get("attributes") if isinstance(item.get("attributes"), dict) else {}
+                    nome = str(atributos.get("friendly_name") or entity_id)
+                    estado_entidade = str(item.get("state") or "unknown")
+                    dispositivo = str(atributos.get("device_class") or "")
+                    entidade = {
+                        "entity_id": entity_id, "dominio": dominio, "nome": nome,
+                        "estado": estado_entidade,
+                        "unidade": str(atributos.get("unit_of_measurement") or ""),
+                        "dispositivo": dispositivo,
+                        "controlavel": dominio in {"light", "switch", "fan", "cover",
+                            "climate", "lock", "media_player", "humidifier", "water_heater",
+                            "vacuum", "alarm_control_panel"},
+                    }
+                    entidades.append(entidade)
+                    try:
+                        from optimus.smart_home.registry import Dispositivo
+                        capacidades = ["estado"]
+                        if entidade["controlavel"]:
+                            capacidades.append("controle")
+                        if dominio == "camera":
+                            capacidades.append("camera")
+                        optimus.registro_casa.salvar(Dispositivo(
+                            id="ha:" + entity_id, nome=nome, integracao="home_assistant",
+                            modelo=dispositivo, entity_id=entity_id,
+                            disponibilidade="offline" if estado_entidade in ("unavailable", "unknown")
+                                else "online",
+                            confianca_estado="confirmed", capacidades=capacidades,
+                        ))
+                    except (AttributeError, TypeError, ValueError, OSError):
+                        log.debug("Não foi possível sincronizar entidade HA no inventário local",
+                                  exc_info=True)
+                return self._json({"ok": True, "total": len(entidades), "aparelhos": entidades})
+            except httpx.HTTPStatusError as erro:
+                return self._json({"ok": False, "erro": f"Home Assistant respondeu HTTP {erro.response.status_code}."}, 502)
+            except httpx.TimeoutException:
+                return self._json({"ok": False, "erro": "O Home Assistant demorou para responder."}, 504)
+            except httpx.HTTPError as erro:
+                log.warning("Falha ao listar entidades Home Assistant: %s", type(erro).__name__)
+                return self._json({"ok": False, "erro": "Não foi possível consultar os aparelhos no Home Assistant."}, 502)
+        if recurso == "casa" and ident == "registro" and metodo == "GET":
+            registro = getattr(optimus, "registro_casa", None)
+            if registro is None:
+                return self._json({"ok": False, "erro": "Inventário local indisponível."}, 503)
+            integracao = str((consulta.get("integracao") or [""])[0]).strip()
+            return self._json({"ok": True, "dispositivos": registro.listar(integracao)})
+        if recurso == "casa" and ident == "registro" and metodo == "POST":
+            from optimus.smart_home.registry import Dispositivo
+            registro = getattr(optimus, "registro_casa", None)
+            if registro is None:
+                return self._json({"ok": False, "erro": "Inventário local indisponível."}, 503)
+            corpo = self._corpo()
+            try:
+                dispositivo = Dispositivo(
+                    id=str(corpo.get("id") or "").strip(),
+                    nome=str(corpo.get("nome") or "").strip(),
+                    integracao=str(corpo.get("integracao") or "manual").strip(),
+                    fabricante=str(corpo.get("fabricante") or "").strip()[:120],
+                    modelo=str(corpo.get("modelo") or "").strip()[:120],
+                    host=str(corpo.get("host") or "").strip()[:255],
+                    entity_id=str(corpo.get("entity_id") or "").strip(),
+                    comodo=str(corpo.get("comodo") or "").strip()[:120],
+                    capacidades=corpo.get("capacidades") if isinstance(corpo.get("capacidades"), list) else [],
+                    disponibilidade=str(corpo.get("disponibilidade") or "unknown"),
+                    confianca_estado=str(corpo.get("confianca_estado") or "unavailable"),
+                    ultimo_visto=str(corpo.get("ultimo_visto") or ""),
+                )
+                registro.salvar(dispositivo)
+                return self._json({"ok": True, "dispositivo": registro.obter(dispositivo.id)})
+            except (TypeError, ValueError, OSError) as erro:
+                return self._json({"ok": False, "erro": f"Dados do dispositivo inválidos: {erro}"}, 400)
+        if recurso == "casa" and ident == "registro-remover" and metodo == "POST":
+            registro = getattr(optimus, "registro_casa", None)
+            if registro is None:
+                return self._json({"ok": False, "erro": "Inventário local indisponível."}, 503)
+            dispositivo_id = str(self._corpo().get("id") or "").strip()
+            if not dispositivo_id or len(dispositivo_id) > 160:
+                return self._json({"ok": False, "erro": "ID do dispositivo inválido."}, 400)
+            return self._json({"ok": registro.remover(dispositivo_id)})
+        if recurso == "casa" and ident == "controle" and metodo == "POST":
+            import httpx
+            from urllib.parse import urlsplit
+
+            corpo = self._corpo()
+            entity_id = str(corpo.get("entity_id") or "").strip()
+            servico = str(corpo.get("servico") or "").strip().lower()
+            dominios_servicos = {
+                "light": {"turn_on", "turn_off", "toggle"},
+                "switch": {"turn_on", "turn_off", "toggle"},
+                "fan": {"turn_on", "turn_off", "toggle"},
+                "cover": {"open_cover", "close_cover", "stop_cover"},
+                "climate": {"turn_on", "turn_off", "toggle"},
+                "lock": {"lock", "unlock"},
+                "media_player": {"turn_on", "turn_off", "toggle"},
+                "humidifier": {"turn_on", "turn_off", "toggle"},
+                "water_heater": {"turn_on", "turn_off"},
+                "vacuum": {"start", "stop", "return_to_base"},
+            }
+            if "." not in entity_id:
+                return self._json({"ok": False, "erro": "Identificador de aparelho inválido."}, 400)
+            dominio = entity_id.split(".", 1)[0]
+            if dominio not in dominios_servicos or servico not in dominios_servicos[dominio]:
+                return self._json({"ok": False, "erro": "Ação não permitida para este tipo de aparelho."}, 400)
+            url = str(optimus.config.get("casa", "url") or "").strip().rstrip("/")
+            token = str(optimus.config.get("casa", "token") or "").strip()
+            if not url or not token:
+                return self._json({"ok": False, "erro": "Conecte o Home Assistant antes de controlar aparelhos."}, 409)
+            partes_url = urlsplit(url)
+            if (partes_url.scheme not in ("http", "https") or not partes_url.hostname
+                    or partes_url.username or partes_url.password or partes_url.query
+                    or partes_url.fragment):
+                return self._json({"ok": False, "erro": "Endereço do Home Assistant inválido."}, 400)
+            try:
+                resposta = httpx.post(url + f"/api/services/{dominio}/{servico}",
+                    headers={"Authorization": "Bearer " + token, "Content-Type": "application/json"},
+                    json={"entity_id": entity_id}, timeout=12, follow_redirects=False)
+                if resposta.status_code == 401:
+                    return self._json({"ok": False, "erro": "Token recusado pelo Home Assistant."}, 401)
+                resposta.raise_for_status()
+                return self._json({"ok": True, "mensagem": f"Ação {servico} enviada para {entity_id}."})
+            except httpx.HTTPStatusError as erro:
+                return self._json({"ok": False, "erro": f"Home Assistant respondeu HTTP {erro.response.status_code}."}, 502)
+            except httpx.TimeoutException:
+                return self._json({"ok": False, "erro": "O Home Assistant demorou para executar a ação."}, 504)
+            except httpx.HTTPError as erro:
+                log.warning("Falha no controle Home Assistant: %s", type(erro).__name__)
+                return self._json({"ok": False, "erro": "Não foi possível enviar a ação ao aparelho."}, 502)
+        if recurso == "casa" and ident == "testar" and metodo == "POST":
+            from urllib.parse import urlsplit
+            import httpx
+
+            corpo = self._corpo()
+            url = str(corpo.get("url", "")).strip().rstrip("/")
+            token = str(corpo.get("token", "")).strip()
+            if token == "••••••" or not token:
+                token = str(optimus.config.get("casa", "token") or "").strip()
+            try:
+                partes_url = urlsplit(url)
+                if (partes_url.scheme not in ("http", "https") or not partes_url.hostname
+                        or partes_url.username or partes_url.password or partes_url.query
+                        or partes_url.fragment):
+                    return self._json({"ok": False, "erro": "Endereço inválido. Use http://IP:8123 ou https://seu-dominio."}, 400)
+                if not token:
+                    return self._json({"ok": False, "erro": "Informe o token de acesso de longa duração do Home Assistant."}, 400)
+                resposta = httpx.get(
+                    f"{url}/api/",
+                    headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+                    timeout=8,
+                    follow_redirects=False,
+                )
+                if resposta.status_code == 401:
+                    return self._json({"ok": False, "erro": "Token recusado (HTTP 401). Gere um novo token de longa duração no perfil do Home Assistant."}, 401)
+                if resposta.status_code == 404:
+                    return self._json({"ok": False, "erro": "Endereço não parece ser a API do Home Assistant. Confira IP, porta 8123 e caminho."}, 502)
+                resposta.raise_for_status()
+                dados = resposta.json()
+                if not isinstance(dados, dict) or "message" not in dados:
+                    return self._json({"ok": False, "erro": "A resposta não parece ser do Home Assistant."}, 502)
+                return self._json({"ok": True, "mensagem": "Conexão autenticada com o Home Assistant.", "api": dados.get("message")})
+            except httpx.ConnectError:
+                return self._json({"ok": False, "erro": "Não foi possível alcançar esse endereço. Verifique se o Home Assistant está instalado, ligado e na mesma rede; confira o IP e a porta."}, 502)
+            except httpx.TimeoutException:
+                return self._json({"ok": False, "erro": "O Home Assistant demorou para responder. Confira a rede e tente novamente."}, 504)
+            except (httpx.HTTPError, ValueError) as erro:
+                log.warning("Teste de conexão Home Assistant falhou: %s", type(erro).__name__)
+                return self._json({"ok": False, "erro": "Falha ao validar a API do Home Assistant. Confira endereço, token e conexão."}, 502)
         if recurso == "config":
             if metodo == "GET":
                 return self._json({"config": _mascarar_config(optimus.config.dados),
@@ -562,6 +1132,35 @@ class Manipulador(BaseHTTPRequestHandler):
                                                              p.get("categoria", "Geral"))})
             banco.apagar_prompt(int(ident))
             return self._json({"ok": True})
+        if recurso == "biblioteca":
+            from optimus import biblioteca as biblioteca_docs
+
+            if metodo == "GET":
+                termo = str((consulta.get("q") or [""])[0]).strip()
+                if termo:
+                    resultados = biblioteca_docs.buscar(banco, termo, limite=20)
+                    return self._json({"consulta": termo, "resultados": resultados,
+                                       "total": len(resultados)})
+                docs = biblioteca_docs.fontes(banco)
+                return self._json({"documentos": docs, "total": len(docs)})
+            corpo = self._corpo()
+            pasta = corpo.get("pasta", "")
+            if not pasta:
+                return self._json({"erro": "Informe o caminho da pasta."}, 400)
+            alvo = Path(pasta).expanduser()
+            if not alvo.is_absolute():
+                alvo = Path.home() / alvo
+            if metodo == "POST":
+                resultado_indexacao = biblioteca_docs.indexar_pasta(
+                    banco, alvo, recursivo=bool(corpo.get("recursivo", True)))
+                resultado_indexacao["mensagem"] = (
+                    f"Indexação: {resultado_indexacao['indexados']} arquivo(s) novo(s)/alterado(s), "
+                    f"{resultado_indexacao['trechos']} trecho(s), {resultado_indexacao['removidos']} removido(s), "
+                    f"{len(resultado_indexacao['erros'])} erro(s).")
+                return self._json(resultado_indexacao)
+            removidos = biblioteca_docs.esquecer_pasta(banco, alvo)
+            return self._json({"removidos": removidos,
+                               "mensagem": f"{removidos} documento(s) removido(s) do conhecimento."})
         if recurso == "memoria":
             if metodo == "GET":
                 return self._json({"fatos": banco.fatos()})
@@ -582,6 +1181,33 @@ class Manipulador(BaseHTTPRequestHandler):
             return self._json({"ok": True})
         if recurso == "acoes":
             return self._json({"acoes": optimus.auditoria.ultimas(100)})
+        if recurso == "tunel":
+            from optimus.web import celular
+
+            config = optimus.config
+            if metodo == "POST" and ident == "desligar":
+                parar_tunel()
+            elif metodo == "POST":
+                senha = str(self._corpo().get("senha", "") or config.get("web", "senha", "")).strip()
+                if len(senha) < 12:
+                    return self._json({"erro": "Para acesso externo, use uma senha com pelo menos 12 caracteres."}, 400)
+                config.definir("web", "senha", senha)
+                config.salvar()
+                Manipulador.senha = senha
+                if _servidor_celular is not None:
+                    _servidor_celular.RequestHandlerClass.senha = senha
+                resultado = iniciar_tunel(self.server.server_address[1], senha)
+                if resultado.get("erro"):
+                    return self._json(resultado, 503)
+            url_externa = estado_tunel().get("url", "")
+            agenda_externa = (f"{url_externa}/api/agenda.ics?chave={celular.token_agenda(config)}"
+                              if url_externa else "")
+            return self._json({
+                **estado_tunel(),
+                "qr": celular.qr_svg(url_externa) if url_externa else "",
+                "agenda": agenda_externa,
+                "agenda_qr": celular.qr_svg(agenda_externa) if agenda_externa else "",
+            })
         if recurso == "celular":
             from optimus.web import celular
 
@@ -611,6 +1237,9 @@ class Manipulador(BaseHTTPRequestHandler):
                                                "web.porta_celular."}, 500)
                 config.definir("web", "celular", True)
                 config.salvar()
+                # A senha do acesso móvel e a do túnel compartilham a mesma credencial.
+                # Atualiza o handler principal imediatamente após a rotação.
+                Manipulador.senha = str(config.get("web", "senha", "") or "")
             if consulta.get("nova_chave"):
                 config.definir("web", "token_agenda", "")
             if rede:
@@ -630,13 +1259,15 @@ class Manipulador(BaseHTTPRequestHandler):
                 "dica": "" if ligado else "O acesso pelo celular está desligado. Crie uma senha "
                                           "e clique em \"Ligar acesso pelo celular\"."})
         if recurso == "atualizacao":
-            # Git (clone) ou release do GitHub (instalação sem Git), com SHA-256 e voltar.
+            # Git (clone) ou pacote do GitHub (instalação sem Git).
             from optimus import autoatualizar
 
             if metodo == "POST" and ident == "voltar":
-                return self._json(autoatualizar.voltar(optimus.config))
+                resultado = autoatualizar.voltar(optimus.config)
+                return self._responder_atualizacao(resultado)
             if metodo == "POST":
-                return self._json(autoatualizar.baixar(optimus.config))
+                resultado = autoatualizar.baixar(optimus.config)
+                return self._responder_atualizacao(resultado)
             return self._json(autoatualizar.verificar(optimus.config))
         if recurso == "vozes":
             chave = optimus.config.get("voz", "elevenlabs_chave", "")
@@ -675,6 +1306,22 @@ class Manipulador(BaseHTTPRequestHandler):
                 log.warning("Reconhecimento falhou: %s", erro)
                 return self._json({"erro": f"{type(erro).__name__}: {erro}"}, 503)
             return self._json({"texto": texto})
+        if recurso == "cameras" and ident == "descobrir" and metodo == "POST":
+            from optimus.tools.casa import descobrir_cameras_onvif
+
+            try:
+                itens = descobrir_cameras_onvif()
+            except OSError as erro:
+                log.warning("Descoberta ONVIF falhou: %s", type(erro).__name__)
+                return self._json({"erro": "Não foi possível executar a descoberta ONVIF nesta interface de rede."}, 502)
+            return self._json({
+                "total": len(itens),
+                "itens": itens,
+                "mensagem": ("Câmeras ONVIF encontradas. Confira os endpoints e informe o link "
+                             "RTSP ou snapshot no cadastro da câmera."
+                             if itens else "Nenhuma câmera ONVIF respondeu. Confirme se ela está "
+                             "na mesma rede e se WS-Discovery está habilitado."),
+            })
         if recurso == "cameras" and metodo == "GET":
             from optimus.tools.casa import cameras_configuradas
 
@@ -799,8 +1446,21 @@ def aquecer_modelos(optimus: Optimus) -> list[str]:
 # ---------------------------------------------------------------------- acesso pelo celular
 # Quando a interface roda só neste PC (127.0.0.1), o celular entra por uma segunda porta,
 # aberta na rede de casa e sempre protegida pela senha de [web] senha.
+
 _servidor_celular: ThreadingHTTPServer | None = None
 _trava_celular = threading.Lock()
+def estado_tunel() -> dict[str, str | bool]:
+    """Estado reportado pelo gerenciador único do Cloudflare Tunnel."""
+    return cloudflare_tunnel.estado()
+
+
+def iniciar_tunel(porta: int, senha: str) -> dict[str, str | bool]:
+    """Instala (com verificação SHA-256) e inicia o Cloudflare Quick Tunnel."""
+    return cloudflare_tunnel.iniciar(porta, senha)
+
+
+def parar_tunel() -> None:
+    cloudflare_tunnel.parar()
 
 
 def porta_celular(config, porta_principal: int) -> int:
@@ -905,19 +1565,41 @@ def desligar_celular() -> None:
             _servidor_celular = None
 
 
+def _senha_para_acesso(senha: str, host: str, tunel: bool) -> str:
+    """Exige senha apenas quando a interface é exposta à rede ou por túnel."""
+    if host in ("127.0.0.1", "localhost", "::1") and not tunel:
+        return ""
+    return senha
+
+
 def iniciar(host: str = "127.0.0.1", porta: int = 8765, abrir_navegador: bool = True,
-            optimus: Optimus | None = None) -> None:
+            optimus: Optimus | None = None, tunel: bool = False) -> None:
+    global _porta_principal
+    _reinicio_solicitado.clear()
     optimus = optimus or Optimus()
     senha = optimus.config.get("web", "senha") or ""
+    if tunel and len(senha) < 12:
+        raise SystemExit("Para usar --tunel, defina uma senha forte com pelo menos 12 caracteres: "
+                         "optimus config web.senha SUA_SENHA_FORTE")
     if host not in ("127.0.0.1", "localhost") and not senha:
         raise SystemExit("Para abrir a interface na rede (celular), defina uma senha: "
                          "optimus config web.senha SUA_SENHA")
     Manipulador.estado = Estado(optimus)
     threading.Thread(target=aquecer_modelos, args=(optimus,), daemon=True).start()
     # A senha protege o acesso de outros aparelhos; só neste PC (127.0.0.1) não é pedida.
-    Manipulador.senha = senha if host not in ("127.0.0.1", "localhost") else ""
+    # A senha da rede/túnel não deve bloquear o próprio usuário no acesso local.
+    # Ela só é exigida quando a interface é exposta na rede ou por um túnel.
+    Manipulador.senha = _senha_para_acesso(senha, host, tunel)
     servidor = ThreadingHTTPServer((host, porta), Manipulador)
+    _porta_principal = servidor.server_address[1]
     servidor.daemon_threads = True
+    if tunel:
+        resultado = iniciar_tunel(servidor.server_address[1], senha)
+        if resultado.get("erro"):
+            parar_tunel()
+            servidor.server_close()
+            raise SystemExit(str(resultado["erro"]))
+        print(f"Acesso externo: {resultado.get('url') or 'túnel iniciando; consulte o painel'}")
     try:  # pastas observadas do estúdio passam a rodar enquanto a interface estiver aberta
         from optimus.estudio import automacao
 
@@ -951,12 +1633,39 @@ def iniciar(host: str = "127.0.0.1", porta: int = 8765, abrir_navegador: bool = 
         import webbrowser
 
         threading.Timer(1.0, lambda: webbrowser.open(endereco)).start()
+    reiniciar = False
     try:
         servidor.serve_forever()
     except KeyboardInterrupt:
         print("\nAté logo!")
     finally:
+        reiniciar = _reinicio_solicitado.is_set()
+        parar_tunel()
         servidor.server_close()
+        _porta_principal = None
+    if reiniciar:
+        # O código Python carregado em memória não muda quando o pip/Git atualiza
+        # os arquivos no disco. Sobe uma instância limpa depois de liberar a porta.
+        comando = [sys.executable, "-m", "optimus", "gui", "--porta",
+                   str(servidor.server_address[1]), "--sem-navegador"]
+        if type(optimus.motor).__name__ == "MotorDemo":
+            comando.insert(3, "--demo")
+        if tunel:
+            comando.append("--tunel")
+        elif host in ("0.0.0.0", ""):
+            comando.append("--rede")
+        opcoes = {"stdin": subprocess.DEVNULL, "stdout": subprocess.DEVNULL,
+                  "stderr": subprocess.DEVNULL, "close_fds": True}
+        if sys.platform == "win32":
+            opcoes["creationflags"] = (getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+                                       | getattr(subprocess, "DETACHED_PROCESS", 0))
+        else:
+            opcoes["start_new_session"] = True
+        try:
+            subprocess.Popen(comando, **opcoes)
+            log.info("Optimus reiniciado após atualização: %s", " ".join(comando))
+        except OSError:
+            log.exception("Atualização aplicada, mas não foi possível iniciar o novo processo")
 
 
-__all__ = ["iniciar", "cfg"]
+__all__ = ["iniciar", "cfg", "iniciar_tunel", "parar_tunel", "estado_tunel"]

@@ -67,13 +67,13 @@ def test_sem_registro_oferece_baixar(ambiente):
 def test_pip_falhou_nao_registra(ambiente, monkeypatch):
     config, _ = ambiente
     autoatualizar.registrar_commit(SHA_VELHO)
-    monkeypatch.setattr(autoatualizar, "_pip", lambda url: (1, "erro de rede"))
+    monkeypatch.setattr(autoatualizar, "_pip", lambda url: (1, "erro de pip"))
     r = autoatualizar.baixar(config)
-    assert not r["ok"] and "erro de rede" in r["erro"]
+    assert not r["ok"]
     assert autoatualizar.commit_instalado() == SHA_VELHO
 
 
-def test_sem_internet_da_erro_claro(ambiente, monkeypatch):
+def test_sem_rede_retorna_erro_legivel(ambiente, monkeypatch):
     config, _ = ambiente
 
     def falha(repo, ramo):
@@ -107,3 +107,71 @@ def test_voltar_desfaz_a_mais_recente_mesmo_com_backup_antigo_de_release(ambient
     assert autoatualizar.baixar(config)["ok"]
     v = autoatualizar.voltar(config)
     assert v.get("via") != "release" and chamadas[-1].endswith(SHA_VELHO)
+
+
+def test_falha_na_atualizacao_restaura_commit_anterior(ambiente, monkeypatch):
+    config, _ = ambiente
+    autoatualizar.registrar_commit(SHA_VELHO)
+    chamadas = []
+
+    def pip_com_falha_na_nova_versao(url):
+        chamadas.append(url)
+        if url.endswith(SHA_NOVO):
+            return 1, "falha ao resolver dependências"
+        return 0, "versão anterior restaurada"
+
+    monkeypatch.setattr(autoatualizar, "_pip", pip_com_falha_na_nova_versao)
+    resultado = autoatualizar.baixar(config)
+
+    assert resultado["ok"] is False
+    assert resultado["restaurado"] is True
+    assert "restaurada" in resultado["erro"]
+    assert chamadas[0].endswith(SHA_NOVO)
+    assert chamadas[1].endswith(SHA_VELHO)
+    assert autoatualizar.commit_instalado() == SHA_VELHO
+
+
+def test_api_rest_limitada_usa_feed_atom(monkeypatch):
+    import httpx
+
+    respostas = [
+        httpx.Response(403, request=httpx.Request(
+            "GET", "https://api.github.com/repos/exemplo/projeto/commits/main")),
+        httpx.Response(200, text="""<?xml version=\"1.0\"?>
+        <feed xmlns=\"http://www.w3.org/2005/Atom\">
+          <entry>
+            <id>tag:github.com,2008:Grit::Commit/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb</id>
+            <title>Correção do atualizador</title>
+            <updated>2026-11-24T18:00:00Z</updated>
+          </entry>
+        </feed>""", request=httpx.Request(
+            "GET", "https://github.com/exemplo/projeto/commits/main.atom"))
+    ]
+
+    def get(*args, **kwargs):
+        return respostas.pop(0)
+
+    monkeypatch.setattr(httpx, "get", get)
+    remoto = autoatualizar._commit_remoto_padrao("exemplo/projeto", "main")
+    assert remoto["sha"] == SHA_NOVO
+    assert remoto["data"] == "2026-11-24"
+    assert remoto["titulo"] == "Correção do atualizador"
+
+
+def test_feed_atom_sem_commit_valido_falha_com_seguranca(monkeypatch):
+    import httpx
+
+    respostas = [
+        httpx.Response(429, request=httpx.Request(
+            "GET", "https://api.github.com/repos/exemplo/projeto/commits/main")),
+        httpx.Response(200, text="<feed xmlns='http://www.w3.org/2005/Atom'/>",
+                       request=httpx.Request(
+                           "GET", "https://github.com/exemplo/projeto/commits/main.atom"))
+    ]
+
+    def get(*args, **kwargs):
+        return respostas.pop(0)
+
+    monkeypatch.setattr(httpx, "get", get)
+    with pytest.raises(RuntimeError, match="API e feed Atom falharam"):
+        autoatualizar._commit_remoto_padrao("exemplo/projeto", "main")

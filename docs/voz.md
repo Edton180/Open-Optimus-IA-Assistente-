@@ -37,11 +37,15 @@ e **"confirmo"** nas críticas. Qualquer "não", "espera" ou "cancela" nega, mes
 | **Cyber** | masculina robótica | offline, com efeito de rádio | idem + numpy |
 | **Stealth** | feminina, baixa e abafada | offline, com efeito | idem + numpy |
 | **Elite** | masculina, cinematográfica | ElevenLabs (online) | chave da ElevenLabs em `voz.elevenlabs_chave` |
+| **Edton Braz** | masculina | brasileira, jovem, simpática e animada (ElevenLabs) | chave da ElevenLabs em `voz.elevenlabs_chave` |
 | Aurora, Lyra, Titan | fem., fem., masc. | neural, online (Edge) | internet |
 | Sistema (feminina/masculina) | ambos | voz do Windows (Maria, Daniel), espeak-ng no Linux, voz do Android | nada |
 
-Troque falando: *"Optimus, mude para a voz Nexus"*. Se a voz escolhida não estiver disponível, ele usa a
-reserva mais parecida e avisa.
+A opção **Edton Braz** atualmente aponta para uma voz pública da biblioteca ElevenLabs identificada no código como “Matheus - Friendly and Energetic”. Ela **não é uma clonagem validada da voz pessoal do Edton** e não foi comparada automaticamente com uma amostra de referência. Sem chave ElevenLabs, o sistema usa uma voz masculina de reserva (Titan/Prime), que não é a mesma voz.
+
+Para ajustar a voz à amostra pessoal, é necessário importar novamente o áudio de referência no Estúdio e fazer uma avaliação auditiva consentida. A auditoria do histórico disponível não localizou o arquivo de áudio original; portanto, nenhuma semelhança com ele pode ser afirmada neste momento.
+
+Troque falando: *"Optimus, mude para a voz Edton Braz"* ou *"mude para a voz Matheus"*. Se a voz escolhida não estiver disponível, ele usa a reserva mais parecida e avisa.
 
 Escolha em **Configurações > Voz** (botão ▶ Ouvir para testar) ou:
 
@@ -49,6 +53,7 @@ Escolha em **Configurações > Voz** (botão ▶ Ouvir para testar) ou:
 optimus vozes                      # lista e mostra quais estão prontas
 optimus config voz.voz masculina   # melhor voz masculina disponível
 optimus config voz.voz feminina
+optimus config voz.voz edton-braz
 optimus config voz.voz edge:pt-BR-AntonioNeural
 optimus config voz.velocidade 1.15
 optimus vozes --testar
@@ -77,3 +82,22 @@ reconhecimento aceita variações comuns de pronúncia.
 - Windows: Configurações > Privacidade > Microfone > permitir aplicativos da área de trabalho.
 - Navegador: na primeira vez, permita o microfone no ícone de cadeado da barra de endereço. Fora do
   próprio PC, o navegador só libera o microfone em `localhost` ou HTTPS.
+
+
+## Perfil pessoal Edton Braz
+
+A entrada **Edton Braz** que já existia no catálogo era uma voz pública da ElevenLabs
+(Matheus), não uma clonagem da voz pessoal do proprietário. Para criar o perfil pessoal,
+abra **Estúdio > Vozes > Clonar uma voz**, mantenha o nome sugerido **Edton Braz**, escolha
+uma gravação própria/autorizada e confirme a declaração de consentimento.
+
+O pipeline aceita áudio ou vídeo, prepara a amostra em WAV mono a 24 kHz e exige de 5 a
+90 segundos de fala. Prefira 10–30 segundos limpos, sem música, com voz natural. Ao salvar
+o perfil com esse nome, ele substitui o item público de mesmo identificador. A conversa e
+a fala do Optimus passam a usar a amostra pessoal via OmniVoice local quando o perfil
+estiver disponível. Instale o extra opcional `omnivoice` para síntese; o modelo será
+carregado sob demanda. Sem uma amostra pessoal salva, o comportamento anterior permanece.
+
+Os vídeos de referência do proprietário não são baixados automaticamente pelo Optimus.
+É necessário importar os arquivos MP4 ou áudio extraído dos vídeos. Não se declara
+percentual de similaridade sem uma avaliação objetiva e auditiva.

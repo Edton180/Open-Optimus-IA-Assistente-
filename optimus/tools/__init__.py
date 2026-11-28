@@ -13,7 +13,7 @@ from pathlib import Path
 from optimus.config import pasta_base
 from optimus.tools import (  # noqa: F401
     agentes, arquivos, assistente, atualizacao, biblioteca, casa, codigo, controle, copiados,
-    desktop, estudio, internet, lan, memoria, modelos, produtividade, rotinas, sistema,
+    desktop, deepsearch, estudio, internet, lan, memoria, modelos, pdf, pdf_suite, produtividade, rede_wifi, rotinas, sistema, laboratorio_dados,
     utilitarios,
 )
 from optimus.tools.base import Contexto, Ferramenta, ferramenta, registradas
@@ -58,7 +58,7 @@ def ferramentas_ativas(config) -> dict[str, Ferramenta]:
         from optimus.mcp_cliente import ferramentas_mcp
 
         for nome, item in ferramentas_mcp(config).items():
-            ativas.setdefault(nome, item)  # uma ferramenta nativa nunca é substituída
+            ativas.setdefault(nome, item)
     return ativas
 
 

@@ -18,6 +18,7 @@ import re
 import shutil
 import subprocess
 import time
+import uuid
 from pathlib import Path
 
 import httpx
@@ -68,6 +69,67 @@ def casa_dispositivos(ctx, filtro: str = ""):
             continue
         itens.append({"nome": nome, "id": e["entity_id"], "estado": e["state"]})
     return {"total": len(itens), "itens": itens[:150]}
+
+
+@ferramenta(
+    "casa_diagnostico",
+    "Verifica a conexão real com o Home Assistant, lista domínios e câmeras disponíveis e informa "
+    "o que está configurado localmente. Não executa comandos nem altera aparelhos.",
+    grupo="casa", obrigatorios=[],
+)
+def casa_diagnostico(ctx):
+    """Diagnóstico somente de leitura; nunca informa que um aparelho foi controlado."""
+    cameras_locais = len([c for c in (ctx.config.dados.get("cameras") or [])
+                          if isinstance(c, dict) and c.get("url")]) if ctx and ctx.config else 0
+    resultado = {
+        "home_assistant_configurado": False,
+        "home_assistant_conectado": False,
+        "entidades": 0,
+        "dominios": {},
+        "cameras_home_assistant": [],
+        "cameras_locais_configuradas": cameras_locais,
+        "webcams": [],
+        "observacoes": [
+            "A descoberta de rede atual lê vizinhos que o sistema já conhece; não garante encontrar "
+            "todos os dispositivos Wi-Fi.",
+            "Câmeras RTSP/HTTP cadastradas fornecem quadros JPEG, não um fluxo de vídeo contínuo.",
+            "Acesso fora de casa exige VPN ou um acesso remoto HTTPS autenticado; não exponha a API "
+            "do Home Assistant diretamente à internet."
+        ],
+    }
+    if ctx and ctx.config:
+        try:
+            resultado["webcams"] = webcam.listar() if ctx.config.get("casa", "webcams", True) else []
+        except Exception as erro:  # noqa: BLE001 - diagnóstico não deve derrubar o agente
+            resultado["erro_webcams"] = f"{type(erro).__name__}: {erro}"
+
+        # Ausência de URL/token é estado "não configurado", não falha de conexão.
+        url_configurada = (ctx.config.get("casa", "url") or "").strip()
+        token_configurado = (ctx.config.get("casa", "token") or "").strip()
+        if url_configurada and token_configurado:
+            resultado["home_assistant_configurado"] = True
+            try:
+                url, cabecalho = _ha(ctx)
+                resposta = httpx.get(f"{url}/api/states", headers=cabecalho, timeout=8)
+                resposta.raise_for_status()
+                estados = resposta.json()
+                if not isinstance(estados, list):
+                    raise RuntimeError("A API de estados retornou um formato inesperado.")
+                dominios = {}
+                cameras = []
+                for estado in estados:
+                    ident = str(estado.get("entity_id", ""))
+                    dominio = ident.split(".", 1)[0] if "." in ident else "desconhecido"
+                    dominios[dominio] = dominios.get(dominio, 0) + 1
+                    if dominio == "camera":
+                        cameras.append({"id": ident, "nome": (estado.get("attributes") or {}).get(
+                            "friendly_name", ident), "estado": estado.get("state", "unknown")})
+                resultado.update(home_assistant_conectado=True, entidades=len(estados),
+                                 dominios=dict(sorted(dominios.items())),
+                                 cameras_home_assistant=cameras)
+            except Exception as erro:  # noqa: BLE001 - expõe a causa real sem vazar token
+                resultado["erro_home_assistant"] = f"{type(erro).__name__}: {erro}"
+    return resultado
 
 
 def _risco_casa(args, ctx) -> Avaliacao:
@@ -532,3 +594,102 @@ def bluetooth_conectar(ctx, endereco: str):
                     for p in passos)
     return {"mensagem": ("Conectado a " if conectado else "Tentei conectar a ") + endereco,
             "passos": passos}
+
+# Descoberta ONVIF/WS-Discovery: somente descoberta na LAN, sem tentar autenticar nem controlar.
+import socket
+import xml.etree.ElementTree as ET
+from urllib.parse import urlsplit
+
+
+def _extrair_xaddrs_onvif(payload: bytes | str) -> list[str]:
+    """Extrai endpoints ONVIF HTTP(S) de uma resposta WS-Discovery não confiável."""
+    try:
+        bruto = payload.encode("utf-8") if isinstance(payload, str) else payload
+        if len(bruto) > 65536 or b"<!DOCTYPE" in bruto.upper() or b"<!ENTITY" in bruto.upper():
+            return []
+        root = ET.fromstring(bruto)
+    except (ET.ParseError, TypeError, ValueError, AttributeError):
+        return []
+    encontrados = []
+    for elemento in root.iter():
+        if elemento.tag.rsplit("}", 1)[-1] != "XAddrs" or not elemento.text:
+            continue
+        for candidato in elemento.text.split():
+            try:
+                partes = urlsplit(candidato)
+                if (partes.scheme in ("http", "https") and partes.hostname
+                        and not partes.username and not partes.password):
+                    encontrados.append(candidato)
+            except ValueError:
+                continue
+    return list(dict.fromkeys(encontrados))
+
+
+def _mensagem_probe_onvif() -> bytes:
+    """Monta um Probe WS-Discovery com MessageID UUID válido e único por requisição."""
+    return (
+        b'<?xml version="1.0" encoding="UTF-8"?>'
+        b'<e:Envelope xmlns:e="http://www.w3.org/2003/05/soap-envelope" '
+        b'xmlns:w="http://schemas.xmlsoap.org/ws/2004/08/addressing" '
+        b'xmlns:d="http://schemas.xmlsoap.org/ws/2005/04/discovery" '
+        b'xmlns:dn="http://www.onvif.org/ver10/network/wsdl">'
+        + f'<e:Header><w:MessageID>urn:uuid:{uuid.uuid4()}</w:MessageID>'.encode("ascii")
+        + b'<w:To>urn:schemas-xmlsoap-org:ws:2005:04:discovery</w:To>'
+        + b'<w:Action>http://schemas.xmlsoap.org/ws/2005/04/discovery/Probe</w:Action>'
+        + b'</e:Header><e:Body><d:Probe><d:Types>dn:NetworkVideoTransmitter</d:Types>'
+        + b'</d:Probe></e:Body></e:Envelope>'
+    )
+
+
+def descobrir_cameras_onvif(timeout: float = 3.0, max_respostas: int = 32) -> list[dict]:
+    """Procura câmeras ONVIF na rede local via WS-Discovery (UDP multicast IPv4).
+
+    A operação é somente leitura: não autentica, não altera câmera e não salva credenciais.
+    O usuário deve confirmar/cadastrar manualmente os endpoints encontrados.
+    """
+    mensagem = _mensagem_probe_onvif()
+    resultados: dict[str, dict] = {}
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+    try:
+        sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 2)
+        sock.settimeout(max(0.2, min(float(timeout), 10.0)))
+        sock.sendto(mensagem, ("239.255.255.250", 3702))
+        limite = time.monotonic() + max(0.2, min(float(timeout), 10.0))
+        while len(resultados) < max(1, min(int(max_respostas), 128)):
+            restante = limite - time.monotonic()
+            if restante <= 0:
+                break
+            sock.settimeout(restante)
+            try:
+                payload, origem = sock.recvfrom(65535)
+            except socket.timeout:
+                break
+            for endpoint in _extrair_xaddrs_onvif(payload):
+                chave = endpoint.lower()
+                resultados.setdefault(chave, {
+                    "ip": origem[0], "endpoints": [endpoint],
+                    "protocolo": "ONVIF", "estado": "descoberto",
+                    "autenticacao": "nao_verificada",
+                    "observacao": "Endpoint anunciado; cadastre e valide credenciais antes de usar."
+                })
+    finally:
+        sock.close()
+    return list(resultados.values())
+
+
+@ferramenta(
+    "casa_descobrir_onvif",
+    "Procura câmeras ONVIF na rede local por WS-Discovery. Apenas identifica endpoints; "
+    "não autentica, não grava vídeo e não altera dispositivos.",
+    grupo="casa", obrigatorios=[],
+)
+def casa_descobrir_onvif(ctx):
+    try:
+        itens = descobrir_cameras_onvif()
+    except OSError as erro:
+        return {"erro": f"Falha na descoberta ONVIF: {type(erro).__name__}: {erro}",
+                "itens": [], "total": 0}
+    return {"total": len(itens), "itens": itens,
+            "mensagem": ("Câmeras encontradas. Revise o IP e cadastre manualmente."
+                         if itens else "Nenhuma câmera ONVIF respondeu nesta rede. "
+                         "Verifique se estão na mesma LAN e se WS-Discovery está habilitado.")}

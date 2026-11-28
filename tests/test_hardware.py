@@ -36,3 +36,19 @@ def test_ram_quase_cheia_reduz_o_modelo():
     apertado = escolher_perfil(pc(16, livre=2))
     assert apertado.memoria_util_gb < folgado.memoria_util_gb
     assert apertado.nome in ("mínimo", "leve")
+
+def test_consulta_de_hardware_tem_timeout_curto(monkeypatch):
+    from types import SimpleNamespace
+    from optimus import hardware
+
+    chamadas = {}
+
+    def executar(comando, **kwargs):
+        chamadas.update(kwargs)
+        return SimpleNamespace(returncode=0, stdout="GPU teste\n")
+
+    monkeypatch.setattr(hardware.shutil, "which", lambda nome: "/usr/bin/" + nome)
+    monkeypatch.setattr(hardware.subprocess, "run", executar)
+    assert hardware._rodar(["nvidia-smi"]) == "GPU teste"
+    assert chamadas["timeout"] <= 2.0
+

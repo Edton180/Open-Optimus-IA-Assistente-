@@ -1,23 +1,49 @@
 # Casa inteligente
 
-## Home Assistant (recomendado)
+## Home Assistant integrado e gerenciado pelo Optimus
 
-O [Home Assistant](https://www.home-assistant.io) é um sistema livre que fala com milhares de aparelhos:
-lâmpadas e tomadas Wi-Fi (Tuya/Smart Life, Sonoff, Shelly, TP-Link), Bluetooth, Zigbee, Matter,
-Chromecast, TVs (Samsung, LG), ar-condicionado, aspiradores, fechaduras, sensores e câmeras. Para
-aparelhos com **controle remoto infravermelho** (TV antiga, ar-condicionado, ventilador), use um emissor
-IR como o Broadlink RM integrado ao Home Assistant.
+A tela **Casa inteligente** possui o painel **Home Assistant gerenciado pelo Optimus**. Use
+**Instalar / configurar automaticamente** para detectar o sistema operacional, instalar/preparar o runtime
+compatível, aguardar sua inicialização, provisionar o Home Assistant Container e validar a interface
+por health-check HTTP. O painel também lista entidades reais e permite executar ações seguras nos
+domínios compatíveis, sem depender de comandos Docker manuais.
 
-1. Instale o Home Assistant num PC, Raspberry Pi ou máquina virtual e adicione seus aparelhos nele.
-2. No Home Assistant: seu perfil > **Segurança** > **Tokens de acesso de longa duração** > Criar token.
-3. No Optimus: **Casa inteligente**, informe o endereço (`http://IP:8123`) e o token, e clique em
-   **Salvar e conectar**.
+- **Linux Debian/Ubuntu:** se o Docker Engine não existir, o Optimus solicita autorização administrativa
+  pelo diálogo do sistema (pkexec), instala o pacote Docker e inicia o serviço.
+- **Windows 10/11:** o Optimus instala Docker Desktop via winget, inicia o aplicativo e aguarda o
+  motor Docker. O Windows pode exigir reinicialização, WSL2 e virtualização habilitada. Se a instalação
+  retornar que é necessário reiniciar, o Optimus informa isso e preserva os dados para continuar depois.
+- **macOS:** o provisionamento requer Docker Desktop. O Optimus tenta instalá-lo pelo Homebrew quando
+  este já está presente; se o Homebrew não estiver instalado, a tela informa a dependência e não declara
+  instalação concluída. A automação de bootstrap do Homebrew/Docker Desktop ainda está pendente.
+- **Outros sistemas:** a interface informa que o provisionamento não foi validado e não simula instalação.
 
-Depois é só falar: *"apaga a luz da sala"*, *"liga o ar em 22 graus"*, *"fecha a cortina"*, *"pausa a
-TV"*, *"manda o comando ligar para o controle da TV"*, *"tira uma foto da câmera do portão"*.
+O Home Assistant fica em `http://127.0.0.1:8123` e seus dados ficam em
+`<pasta de configuração do Optimus>/home_assistant`. O container reinicia automaticamente com o
+Docker. O Optimus permite iniciar, parar, reiniciar, atualizar, criar backup e remover o container.
+A remoção preserva os dados; a exclusão definitiva dos dados não é feita automaticamente.
 
-Fechaduras, alarmes, portões de garagem e sirenes são tratados como **ações críticas** e sempre pedem
-confirmação.
+**Importante sobre a edição instalada:** este provisionamento usa Home Assistant Container. Ele oferece
+as integrações e entidades da plataforma Home Assistant, mas não inclui Supervisor, add-ons ou a loja
+de add-ons do Home Assistant OS. Para rádio Zigbee/Matter/Bluetooth conectado por USB, o dispositivo
+precisa estar acessível ao container e a compatibilidade depende do host. A primeira abertura ainda
+exige criar a conta local e concluir o onboarding do Home Assistant; credenciais de serviços e
+pareamento físico não podem ser inventados pelo Optimus.
+
+Depois que o serviço estiver ativo, conclua o onboarding inicial (criação da conta local) na interface
+oficial. O Optimus preenche automaticamente o endereço local quando o serviço é gerenciado por ele.
+Para consultar aparelhos, salve um token pessoal de longa duração uma única vez. O token é um segredo:
+não o compartilhe; a interface o mascara e o backend reutiliza o valor já salvo ao testar a conexão.
+As entidades de Home Assistant são sincronizadas ao inventário local sem copiar tokens ou senhas.
+
+Documentação oficial: [instalação do Home Assistant](https://www.home-assistant.io/installation/) e
+[autenticação e tokens](https://www.home-assistant.io/docs/authentication/#your-account-profile).
+
+## O que funciona sem Home Assistant (limites atuais)
+
+Sem Home Assistant, o controle direto nativo é limitado a aparelhos TP-Link Kasa compatíveis com o protocolo local antigo, Bluetooth suportado pelo sistema e câmeras/webcams cadastradas. Tuya/Smart Life, Tapo com KLAP, Intelbras, WAP, TVs e ar-condicionado de outras marcas **não são controlados diretamente pelo Optimus**: precisam de uma integração compatível no Home Assistant ou de um adaptador específico ainda não implementado.
+
+O botão de procurar aparelhos Wi-Fi consulta a tabela de vizinhos que o sistema operacional já conhece (ARP/neighbor cache). Ele **não faz uma varredura ativa completa da sub-rede** e pode deixar de mostrar dispositivos que ainda não trocaram tráfego com o PC.
 
 ## Sem Home Assistant
 
@@ -75,6 +101,14 @@ nome = "Câmera da garagem"
 url = "usb:1"
 ```
 
+## Acesso fora de casa
+
+O acesso pelo celular descrito no guia atual é para a rede local. Para controlar a casa fora do Wi-Fi, use uma VPN autenticada (por exemplo, WireGuard/Tailscale) ou uma solução remota HTTPS do Home Assistant. O Optimus ainda não fornece seu próprio relay remoto, pareamento de dispositivos ou túnel de ponta a ponta. **Não encaminhe a porta 8123 nem exponha RTSP diretamente à internet.**
+
+## Descoberta e compatibilidade de câmeras
+
+Atualmente é possível cadastrar manualmente uma URL HTTP de snapshot ou RTSP, usar câmeras expostas como entidades `camera.*` pelo Home Assistant e webcams USB. Ainda não há descoberta ONVIF/WS-Discovery automática, perfis prontos por fabricante (Intelbras/WAP/Tapo/genéricas) nem grade de streaming contínuo. Cada câmera exige endereço/stream e credenciais válidas; modelos e firmwares variam.
+
 ## Gestos pela câmera
 
 Na interface, aperte **✋ Gestos** no topo. Use a webcam do notebook ou uma por cabo (clique na
@@ -94,3 +128,64 @@ imagem pequena no canto para trocar de câmera).
   navegador baixa a biblioteca e o modelo (cerca de 18 MB), então precisa de internet nesse momento.
 - A imagem pequena no canto fica visível enquanto os gestos estão ligados, para você sempre saber que a
   câmera está em uso. Aperte o botão de novo para desligar e soltar a câmera.
+
+
+## Descoberta automática de câmeras ONVIF
+
+Na ferramenta **Casa**, use `casa_descobrir_onvif` para enviar um Probe WS-Discovery à rede local
+(UDP multicast IPv4, grupo `239.255.255.250:3702`). A busca é limitada a 10 segundos e até 128
+respostas. Ela identifica os endereços HTTP(S) anunciados pela câmera, mas **não autentica, não
+altera configurações e não inicia gravação**. O resultado é uma sugestão de cadastro: confirme que
+o IP pertence a um equipamento seu e configure as credenciais no fluxo seguro da interface.
+
+A descoberta depende de multicast permitido pela rede; VLANs, isolamento de clientes Wi-Fi,
+firewalls e alguns roteadores podem bloquear WS-Discovery. A ausência de resultados não prova que
+não existam câmeras na rede. O suporte a streaming contínuo, gravação, timeline e gestão de
+credenciais ONVIF ainda é uma etapa separada.
+
+
+## Registro unificado (fundação interna)
+
+O pacote `optimus.smart_home.registry` fornece um inventário local versionado de dispositivos,
+com integração, fabricante/modelo, cômodo, capacidades, disponibilidade e nível de confiança do
+estado (`confirmed`, `estimated` ou `unavailable`). O arquivo é gravado atomicamente e não possui
+campos para tokens ou senhas. Esta fundação ainda não substitui o cadastro pela interface nem
+migra automaticamente as câmeras e entidades já existentes; isso será integrado nas próximas
+etapas sem apagar a configuração atual.
+
+
+## Painel de aparelhos e comandos
+
+Com o Home Assistant autenticado, **Atualizar aparelhos** consulta `/api/states` e lista entidades
+controláveis de luzes, tomadas, ventiladores, persianas/cortinas, climatização, fechaduras e
+reprodutores de mídia. Os comandos enviados pelo Optimus são limitados a serviços conhecidos
+(`turn_on`, `turn_off`, `toggle`, abrir/fechar, travar/destravar), sem aceitar nomes de serviço
+arbitrários enviados pela interface. A senha/token não é incluída nas respostas nem nos logs.
+
+Se a interface informar **API desta instalação desatualizada**, atualize o Optimus pelo atualizador
+integrado e reinicie o processo do servidor. O código atual registra explicitamente a rota
+`GET/POST /api/casa/gerenciado`; um processo antigo que ainda esteja rodando não recebe rotas novas
+apenas porque os arquivos do repositório foram atualizados.
+
+
+## Bluetooth no Home Assistant Container (Linux)
+
+A criação e a atualização do container pelo Optimus aplicam no Linux as capacidades
+Docker `NET_ADMIN` e `NET_RAW`, necessárias ao gerenciamento do adaptador Bluetooth,
+e montam `/run/dbus` como somente leitura quando o socket D-Bus do host existe.
+Isso evita conceder `--privileged` ao container inteiro. A atualização do Home Assistant
+recria o container com essas opções e mantém a pasta `home_assistant` (configuração,
+conta, integrações e dispositivos pareados).
+
+Se os logs ainda mostrarem `Missing NET_ADMIN/NET_RAW`, use **Atualizar Home Assistant**
+no painel gerenciado para recriar o container com as permissões corrigidas. Depois
+confirme no Linux que o serviço Bluetooth/BlueZ está ativo e que existe
+`/run/dbus/system_bus_socket`. Sem BlueZ, socket D-Bus ou adaptador compatível,
+o Home Assistant continua funcionando para integrações de rede, mas não poderá
+administrar o rádio Bluetooth.
+
+No Windows com Docker Desktop, o Bluetooth do host não é repassado automaticamente
+ao container Linux. O controle Bluetooth deve ser feito pelo próprio Optimus/Windows
+ou por um Home Assistant instalado em hardware/host Linux compatível. Zigbee e
+Z-Wave por USB também exigem passagem explícita do dispositivo serial ao container;
+não são habilitados apenas por instalar o Home Assistant.

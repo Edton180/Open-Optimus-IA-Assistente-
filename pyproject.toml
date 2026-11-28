@@ -25,7 +25,15 @@ voz = ["faster-whisper>=1.0", "sounddevice>=0.4", "numpy>=1.24", "kokoro-onnx>=0
        "edge-tts>=6.1", "miniaudio>=1.59", "pyttsx3>=2.90"]
 # Casa inteligente: Bluetooth direto e leitura de PDF na base de conhecimento
 casa = ["bleak>=0.22"]
-documentos = ["pypdf>=4.0"]
+documentos = ["pypdf>=4.0", "reportlab>=4.0", "python-docx>=1.1"]
+# Leitura e indexação incremental de arquivos ZIM (wheels oficiais Windows/Linux/macOS)
+conhecimento = ["libzim>=3.8.0; python_version >= '3.11'", "libzim>=3.13.1,<4; python_version < '3.11'"]
+# Suite PDF local: conversão de imagens e renderização de páginas (Tesseract é instalado no SO)
+pdf = [
+    "pypdf>=4.0", "reportlab>=4.0", "python-docx>=1.1", "Pillow>=10.0",
+    "pypdfium2>=4.28", "pytesseract>=0.3.10", "pdfplumber>=0.11",
+    "openpyxl>=3.1", "python-pptx>=1.0", "pyHanko>=0.25",
+]
 # Controle de mouse, teclado e capturas de tela
 desktop = ["pyautogui>=0.9", "mss>=9.0", "pyperclip>=1.8"]
 # Cofre do sistema para as chaves de API (Windows, macOS e Linux)
@@ -43,8 +51,8 @@ clonagem = ["chatterbox-tts>=0.1"]
 omnivoice = ["omnivoice>=0.2"]
 # QR code para abrir o Optimus no celular e endereço https (o microfone só abre em https)
 celular = ["segno>=1.6", "cryptography>=41"]
-completo = ["optimus-assistente[voz,desktop,casa,documentos,seguranca,celular,estudio]"]
-dev = ["pytest>=8", "ruff>=0.4", "numpy>=1.24", "imageio-ffmpeg>=0.4"]
+completo = ["optimus-assistente[voz,desktop,casa,pdf,seguranca,celular,estudio,conhecimento]"]
+dev = ["pytest>=8", "ruff>=0.4", "libzim>=3.8.0; python_version >= '3.11'", "libzim>=3.13.1,<4; python_version < '3.11'", "numpy>=1.24", "imageio-ffmpeg>=0.4", "pypdf>=4.0", "reportlab>=4.0", "python-docx>=1.1", "Pillow>=10.0", "pypdfium2>=4.28", "pytesseract>=0.3.10", "pdfplumber>=0.11", "openpyxl>=3.1", "python-pptx>=1.0", "pyHanko>=0.25"]
 
 [project.scripts]
 optimus = "optimus.cli:main"

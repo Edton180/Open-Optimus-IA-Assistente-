@@ -4,20 +4,23 @@ Cobrem recomendação por hardware, marcação do que está instalado, download 
 simulado) e a troca do modelo em uso. Não precisam de um Ollama real.
 """
 
-import pytest
-
 from optimus.config import Config
 from optimus.tools import modelos as tmod
 from optimus.tools.base import Contexto
 
 
 class MotorFake:
-    """Ollama simulado: diz quais modelos estão 'instalados' e registra os baixados."""
+    """Ollama simulado: reproduz a interface usada pelas ferramentas de modelos."""
 
-    def __init__(self, instalados=(), falha=False):
+    def __init__(self, instalados=(), falha=False, disponivel=True):
         self._instalados = list(instalados)
         self.baixados = []
         self.falha = falha
+        self._disponivel = disponivel
+        self.url = "http://ollama-teste:11434"
+
+    def disponivel(self):
+        return self._disponivel
 
     def modelos(self):
         return sorted(self._instalados)
@@ -66,7 +69,7 @@ def test_recomendados_sem_ollama_nao_quebra(tmp_path):
     assert dados["recomendado_instalado"] is False  # não deu para listar: tratado como ausente
 
 
-# --------------------------------------------------------------- download
+# ---------------------------------------------------------------- download
 def test_modelo_baixar_usa_recomendado_quando_vazio(tmp_path, monkeypatch):
     fake = MotorFake()
     monkeypatch.setattr(tmod, "_motor_ollama", lambda ctx: fake)
@@ -89,6 +92,15 @@ def test_modelo_baixar_falha_retorna_erro(tmp_path, monkeypatch):
     monkeypatch.setattr(tmod, "_motor_ollama", lambda ctx: MotorFake(falha=True))
     resultado = tmod.modelo_baixar(_ctx(tmp_path), "qwen3.5:2b")
     assert "erro" in resultado
+
+
+def test_modelo_baixar_ollama_indisponivel_retorna_erro(tmp_path, monkeypatch):
+    fake = MotorFake(disponivel=False)
+    monkeypatch.setattr(tmod, "_motor_ollama", lambda ctx: fake)
+    resultado = tmod.modelo_baixar(_ctx(tmp_path), "qwen3.5:2b")
+    assert "erro" in resultado
+    assert fake.url in resultado["erro"]
+    assert fake.baixados == []
 
 
 # --------------------------------------------------------------- trocar modelo

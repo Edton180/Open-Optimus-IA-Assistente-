@@ -152,6 +152,27 @@ def test_pausa_vira_silencio_no_audio(monkeypatch):
     assert np.max(np.abs(meio)) < 0.01
 
 
+def test_perfil_edton_braz_tem_parametros_de_narracao_ptbr(monkeypatch, tmp_path):
+    monkeypatch.setattr(vozes, "pasta_base", lambda: tmp_path)
+    perfil = vozes.obter("Edton Braz")
+    assert perfil.id == "edton-braz"
+    assert perfil.idioma == "pt-BR" and perfil.genero == "masculina"
+    assert perfil.base == "prime"
+    assert 1.0 < perfil.velocidade <= 1.15
+    assert perfil.descricao and "micro-pausas" in perfil.descricao
+
+    # Com pesos preparados, o perfil passa a usar o voice design do OmniVoice.
+    marcador = tmp_path / "estudio" / "modelos" / ".prontos" / "omnivoice.ok"
+    marcador.parent.mkdir(parents=True)
+    marcador.write_text("ok", encoding="utf-8")
+    monkeypatch.setattr(omnivoice, "instalado", lambda: True)
+    dinamica = vozes.obter("Edton Braz")
+    assert dinamica.motor == "omnivoice"
+    assert "male" in dinamica.instrucao and "young adult" in dinamica.instrucao
+    assert "brazilian accent" in dinamica.instrucao
+    assert "conversational" in dinamica.instrucao and "expressive" in dinamica.instrucao
+
+
 # ------------------------------------------------------------------ Piper
 def test_piper_baixa_e_gera_em_portugues(monkeypatch):
     baixados = []
@@ -221,7 +242,13 @@ def test_gerenciador_de_modelos_lista_e_remove(monkeypatch):
     assert modelos.obter("piper-pt_BR-faber-medium").instalado()
     modelos.remover("piper-pt_BR-faber-medium")
     assert not piper.pasta_voz(v).exists()
+    import sys
+    from types import SimpleNamespace
+
     pip = []
+    downloads = []
+    monkeypatch.setitem(sys.modules, "huggingface_hub",
+                        SimpleNamespace(snapshot_download=lambda **kw: downloads.append(kw)))
     monkeypatch.setattr(modelos, "_pip", lambda *a: pip.append(a) or "")
     # pip "terminou" mas o pacote não apareceu: não pode dizer que instalou
     monkeypatch.setattr("optimus.pacotes.modulo_instalado", lambda m: False)
@@ -232,6 +259,7 @@ def test_gerenciador_de_modelos_lista_e_remove(monkeypatch):
     modelos.remover("sherpa-onnx")
     assert pip == [("install", "omnivoice"), ("install", "omnivoice"),
                    ("uninstall", "-y", "sherpa-onnx")]
+    assert downloads == [{"repo_id": "k2-fsa/OmniVoice"}] * 2
     with pytest.raises(ErroEstudio):
         modelos.obter("nao-existe")
 

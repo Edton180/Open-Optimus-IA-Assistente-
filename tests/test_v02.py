@@ -54,7 +54,7 @@ def test_pesquisa_usa_o_proximo_buscador(monkeypatch):
         raise OSError("sem rede")
 
     monkeypatch.setattr(internet, "BUSCADORES", [
-        ("A", falha), ("B", lambda c, n: []), ("C", lambda c, n: [{"nome": "ok", "link": "l"}])])
+        ("A", falha), ("B", lambda c, n: []), ("C", lambda c, n: [{"nome": "ok", "link": "https://example.com/teste", "trecho": "teste"}])])
     from optimus.tools.base import Contexto
 
     resultado = internet.pesquisar_web(Contexto(config=Config()), "teste")

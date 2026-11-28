@@ -77,8 +77,9 @@ Os arquivos vão para a pasta de saídas do estúdio (`estudio.pasta_saidas` no 
 
 ## Vozes
 
-- **Prontas:** Prime, Valkyrie, Nexus, Cyber, Stealth, Aurora, Lyra, Titan, Elite e a nova
-  **Mordomo** (original do Optimus, calma e formal). Todas em português do Brasil.
+- **Prontas:** Prime, Valkyrie, Nexus, Cyber, Stealth, Aurora, Lyra, Titan, Elite, **Edton Braz**
+  (brasileira, jovem, simpática e animada — ElevenLabs) e a nova **Mordomo** (original do Optimus,
+  calma e formal). Todas em português do Brasil.
 - **Criadas por descrição:** o Optimus entende gênero, idade, tom (grave/aguda), ritmo
   (calma/animada), expressão (neutra/dramática) e efeitos (sussurro, robótica). Dá para partir
   de qualquer voz, inclusive de uma clonada, e ajustar depois (tom, velocidade, expressividade).

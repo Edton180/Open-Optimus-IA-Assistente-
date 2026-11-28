@@ -18,38 +18,93 @@ let senha = "";
 try { senha = sessionStorage.getItem("optimus_senha") || ""; } catch (e) {}
 
 async function api(caminho, opcoes = {}) {
-  const cab = Object.assign({}, opcoes.headers || {});
+  const { tempo = 12000, json, ...fetchOpcoes } = opcoes;
+  const cab = Object.assign({}, fetchOpcoes.headers || {});
   if (senha) cab["X-Optimus-Senha"] = senha;
-  if (opcoes.json !== undefined) { cab["Content-Type"] = "application/json"; opcoes.body = JSON.stringify(opcoes.json); }
-  // `tempo` (ms): desiste do pedido em vez de esperar para sempre um servidor travado.
-  let controle = null, relogio = null;
-  if (opcoes.tempo) { controle = new AbortController(); relogio = setTimeout(() => controle.abort(), opcoes.tempo); }
-  let r;
-  try { r = await fetch(caminho, Object.assign({}, opcoes, { headers: cab }, controle ? { signal: controle.signal } : {})); }
-  finally { if (relogio) clearTimeout(relogio); }
-  if (r.status === 401) { pedirSenha(); throw new Error("senha"); }
-  const tipo = r.headers.get("Content-Type") || "";
-  if (tipo.includes("json")) {
-    const dados = await r.json();
-    if (!r.ok) throw new Error(dados.erro || r.statusText);
-    return dados;
+  if (json !== undefined) { cab["Content-Type"] = "application/json"; fetchOpcoes.body = JSON.stringify(json); }
+  // O prazo cobre conexão E leitura do corpo. Sem prazo, uma resposta parcial podia
+  // deixar o status inicial preso em "carregando…" indefinidamente.
+  const controle = new AbortController();
+  const relogio = tempo > 0 ? setTimeout(() => controle.abort(), tempo) : null;
+  try {
+    const r = await fetch(caminho, { cache: "no-store", ...fetchOpcoes, headers: cab, signal: controle.signal });
+    if (r.status === 401) { pedirSenha(); throw new Error("senha"); }
+    const tipo = r.headers.get("Content-Type") || "";
+    if (tipo.includes("json")) {
+      const dados = await r.json();
+      if (!r.ok) throw new Error(dados.erro || r.statusText);
+      return dados;
+    }
+    if (!r.ok) throw new Error(r.statusText || ("HTTP " + r.status));
+    return r;
+  } catch (erro) {
+    if (erro && erro.name === "AbortError") throw new Error("Tempo esgotado ao acessar " + caminho + ". Verifique se o servidor do Optimus está respondendo.");
+    throw erro;
+  } finally {
+    if (relogio) clearTimeout(relogio);
   }
-  if (!r.ok) throw new Error(r.statusText);
-  return r;
+}
+
+const API_CONTRATO_MINIMO = 3;
+async function verificarCompatibilidadeApi() {
+  try {
+    const versao = await api("/api/versao");
+    if (Number(versao.api_contrato) < API_CONTRATO_MINIMO) {
+      throw new Error("O servidor do Optimus está em uma versão antiga.");
+    }
+    return versao;
+  } catch (erro) {
+    const mensagem = String(erro?.message || erro);
+    if (/rota não encontrada|not found|404/i.test(mensagem)) {
+      throw new Error("O processo Python do Optimus ainda está carregado com o servidor antigo. Feche completamente o Optimus (encerre o processo/terminal, não apenas a aba do navegador) e abra novamente.");
+    }
+    throw erro;
+  }
+}
+function mensagemErroApi(erro) {
+  const mensagem = String(erro?.message || erro || "erro desconhecido");
+  if (/rota não encontrada|not found|404/i.test(mensagem)) {
+    return "O processo Python do Optimus ainda está carregado com o servidor antigo. Feche completamente o Optimus (encerre o processo/terminal, não apenas a aba do navegador) e abra novamente.";
+  }
+  return mensagem;
 }
 
 function pedirSenha() {
   $("#modal-senha").classList.remove("oculto");
+  const campo = $("#form-senha")?.elements.namedItem("senha");
+  if (campo) { campo.focus(); campo.setAttribute("autocomplete", "current-password"); }
 }
 $("#form-senha").addEventListener("submit", async (e) => {
   e.preventDefault();
-  senha = e.target.senha.value;
-  const r = await fetch("/api/entrar", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ senha }) });
-  if (r.ok) {
+  const formulario = e.currentTarget;
+  const campo = formulario.elements.namedItem("senha");
+  const botao = formulario.querySelector("button[type=submit], button");
+  const valor = String(campo?.value || "");
+  if (!valor) { if (campo) campo.placeholder = "Digite a senha configurada no PC"; return; }
+  if (botao) { botao.disabled = true; botao.textContent = "Verificando…"; }
+  try {
+    const resposta = await fetch("/api/entrar", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ senha: valor }),
+      cache: "no-store",
+    });
+    if (!resposta.ok) {
+      senha = "";
+      try { sessionStorage.removeItem("optimus_senha"); } catch (err) {}
+      if (campo) { campo.value = ""; campo.placeholder = resposta.status === 401 ? "Senha incorreta — tente novamente" : "Não foi possível validar a senha"; campo.focus(); }
+      return;
+    }
+    senha = valor;
     try { sessionStorage.setItem("optimus_senha", senha); } catch (err) {}
     $("#modal-senha").classList.add("oculto");
-    iniciar();
-  } else { e.target.senha.value = ""; e.target.senha.placeholder = "Senha errada"; }
+    await iniciar();
+  } catch (erro) {
+    console.error("Falha ao validar a senha do Optimus:", erro);
+    if (campo) { campo.placeholder = "Servidor indisponível — tente novamente"; campo.focus(); }
+  } finally {
+    if (botao) { botao.disabled = false; botao.textContent = "Entrar"; }
+  }
 });
 
 // ---------- Utilidades ----------
@@ -58,27 +113,39 @@ function esc(t) {
 }
 function markdown(texto) {
   const blocos = [];
-  let t = String(texto || "").replace(/```(\w*)\n?([\s\S]*?)```/g, (_, l, c) => { blocos.push(c); return `\u0000${blocos.length - 1}\u0000`; });
+  let t = String(texto || "").replace(/\x60{3}([\w-]*)\r?\n?([\s\S]*?)\x60{3}/g, (_, linguagem, conteudo) => {
+    const marcador = "@@OPTIMUS_CODE_" + blocos.length + "@@";
+    blocos.push(conteudo);
+    return "\n" + marcador + "\n";
+  });
   t = esc(t)
-    .replace(/`([^`]+)`/g, "<code>$1</code>")
+    .replace(/\x60([^\x60]+)\x60/g, "<code>$1</code>")
     .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
     .replace(/(^|[^*])\*([^*\n]+)\*/g, "$1<em>$2</em>")
-    .replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
-    .replace(/(^|[\s(])(https?:\/\/[^\s<)]+)/g, '$1<a href="$2" target="_blank" rel="noopener">$2</a>')
+    .replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>')
+    .replace(/(^|[\s(])(https?:\/\/[^\s<)]+)/g, '$1<a href="$2" target="_blank" rel="noopener noreferrer">$2</a>')
     .replace(/^#{1,4} (.+)$/gm, "<strong>$1</strong>");
-  const linhas = t.split("\n"); let html = ""; let lista = null;
+  const linhas = t.split(/\r?\n/);
+  let html = "";
+  let lista = null;
   for (const linha of linhas) {
     const item = linha.match(/^\s*(?:[-*•]|(\d+)[.)])\s+(.*)/);
     if (item) {
       const tipo = item[1] ? "ol" : "ul";
-      if (lista !== tipo) { if (lista) html += `</${lista}>`; html += `<${tipo}>`; lista = tipo; }
-      html += `<li>${item[2]}</li>`; continue;
+      if (lista !== tipo) {
+        if (lista) html += "</" + lista + ">";
+        html += "<" + tipo + ">";
+        lista = tipo;
+      }
+      html += "<li>" + item[2] + "</li>";
+      continue;
     }
-    if (lista) { html += `</${lista}>`; lista = null; }
-    html += linha.trim() ? `<p>${linha}</p>` : "";
+    if (lista) { html += "</" + lista + ">"; lista = null; }
+    if (linha.trim()) html += "<p>" + linha + "</p>";
   }
-  if (lista) html += `</${lista}>`;
-  return html.replace(/\u0000(\d+)\u0000/g, (_, i) => `<pre><code>${esc(blocos[i])}</code></pre>`);
+  if (lista) html += "</" + lista + ">";
+  return html.replace(/@@OPTIMUS_CODE_(\d+)@@/g, (_, indice) =>
+    "<pre><code>" + esc(blocos[Number(indice)] || "") + "</code></pre>");
 }
 function quando(ts) {
   const d = new Date(ts * 1000);
@@ -108,9 +175,541 @@ function irPara(tela) {
   $$(".tela").forEach((t) => t.classList.toggle("ativa", t.id === "tela-" + tela));
   document.body.classList.toggle("fora-do-chat", tela !== "chat");
   app.classList.remove("lateral-aberta");
-  const carregar = { personas: carregarPersonas, prompts: carregarPrompts, memoria: carregarMemoria, acoes: carregarAcoes, config: carregarConfig, casa: carregarCasa, estudio: () => window.carregarEstudio && window.carregarEstudio() }[tela];
+  const carregar = { zim: carregarZim, personas: carregarPersonas, prompts: carregarPrompts, memoria: carregarMemoria, biblioteca: carregarBiblioteca, acoes: carregarAcoes, config: carregarConfig, casa: carregarCasa, estudio: () => window.carregarEstudio && window.carregarEstudio(), pdf: carregarPDF, modulos: carregarModulos, laboratorio: () => {} }[tela];
   if (carregar) carregar();
 }
+
+// ---------- Biblioteca local ZIM ----------
+function mensagemErroZim(erro) {
+  const mensagem = String(erro?.message || erro || "erro desconhecido");
+  if (/rota não encontrada|not found|404/i.test(mensagem)) {
+    return "O processo Python do Optimus ainda está carregado com o servidor antigo. Feche completamente o Optimus (encerre o processo/terminal, não apenas a aba do navegador) e abra novamente.";
+  }
+  return mensagem;
+}
+let tentativaAutomaticaConteudoNomad = false;
+async function carregarZim() {
+  const status = $("#zim-status");
+  const lista = $("#zim-lista");
+  const resumo = $("#zim-resumo");
+  if (!status || !lista || !resumo) return;
+  status.textContent = "Consultando arquivos ZIM locais…";
+  try {
+    await verificarCompatibilidadeApi();
+    let dados = await api("/api/zim");
+    let avisoConteudoNomad = "";
+    let arquivos = Array.isArray(dados.arquivos) ? dados.arquivos : [];
+    // O NOMAD provisiona uma mini-Wikipédia quando prepara o Kiwix. Reproduzimos
+    // esse primeiro uso uma única vez, somente quando a biblioteca está vazia.
+    if (!arquivos.length && !tentativaAutomaticaConteudoNomad) {
+      tentativaAutomaticaConteudoNomad = true;
+      status.textContent = "Biblioteca vazia. Obtendo o conteúdo inicial do Project NOMAD (4,5 MB)…";
+      try {
+        const inicial = await api("/api/zim/nomad-inicial", {
+          method: "POST", json: {}, tempo: 240000
+        });
+        dados = await api("/api/zim");
+        arquivos = Array.isArray(dados.arquivos) ? dados.arquivos : [];
+        avisoConteudoNomad = inicial.mensagem || "Conteúdo inicial do NOMAD verificado.";
+      } catch (erroInicial) {
+        avisoConteudoNomad = "Não foi possível obter o conteúdo inicial do NOMAD: " +
+          mensagemErroZim(erroInicial) + ". Você pode tentar novamente pelo botão abaixo.";
+      }
+    }
+    try {
+      const catalogo = await api("/api/zim/catalogo");
+      const alvo = $("#zim-catalogo");
+      const selo = $("#zim-catalogo-resumo");
+      if (alvo) {
+        const categorias = Array.isArray(catalogo.categories) ? catalogo.categories : [];
+        alvo.innerHTML = categorias.map((categoria) =>
+          '<article class="cartao"><h3>' + esc(categoria.name) + '</h3><p class="sutil">' +
+          esc(categoria.description || "") + '</p>' +
+          (categoria.tiers || []).map((tier) =>
+            '<div style="margin-top:.7rem"><b>' + esc(tier.name) +
+            (tier.recommended ? ' · Recomendado' : '') + '</b><p class="sutil">' +
+            esc(tier.description || "") + '</p><ul class="lista pequena">' +
+            (tier.resources || []).map((recurso) =>
+              '<li><span><b>' + esc(recurso.title) + '</b><small class="sutil"> ' +
+              esc(recurso.description || "") + ' · ' + esc(String(recurso.size_mb ?? "?")) +
+              ' MB</small></span><span class="selo">' +
+              (recurso.instalado ? 'Instalado' : 'No catálogo') + '</span></li>'
+            ).join("") + '</ul></div>'
+          ).join("") + '</article>'
+        ).join("");
+      }
+      if (selo) selo.textContent = (catalogo.total_instalados || 0) + " de " +
+        (catalogo.total_recursos || 0) + " recursos instalados";
+    } catch (erroCatalogo) {
+      const alvo = $("#zim-catalogo");
+      if (alvo) alvo.innerHTML = '<p class="sutil">Não foi possível carregar o catálogo: ' +
+        esc(mensagemErroZim(erroCatalogo)) + '</p>';
+    }
+    resumo.innerHTML = [
+      ["Arquivos", String(dados.total ?? arquivos.length)],
+      ["Espaço ocupado", formatarBytes(dados.tamanho_total_bytes ?? 0)]
+    ].map(([nome, valor]) => '<article class="cartao"><small class="sutil">' + esc(nome) +
+      '</small><h3>' + esc(valor) + '</h3></article>').join("");
+    lista.innerHTML = arquivos.length ? arquivos.map((arquivo) =>
+      '<li><div><b>' + esc(arquivo.nome) + '</b><small class="sutil"> ' +
+      esc(formatarBytes(arquivo.tamanho_bytes)) + ' · modificado em ' +
+      esc(quando(arquivo.modificado_em)) + '</small></div></li>'
+    ).join("") : '<li class="sutil">Nenhum arquivo ZIM encontrado. Adicione arquivos à pasta biblioteca_zim.</li>';
+    status.textContent = dados.pasta_configurada === false
+      ? "Não foi possível acessar a pasta da biblioteca: " + (dados.erro || "erro desconhecido")
+      : (avisoConteudoNomad ? avisoConteudoNomad + " · " : "") +
+        "Catálogo atualizado · " + new Date().toLocaleTimeString("pt-BR");
+    const seletor = $("#zim-arquivo");
+    if (seletor) {
+      const selecionado = seletor.value;
+      seletor.innerHTML = '<option value="">Selecione um arquivo ZIM</option>' +
+        arquivos.map((a) => '<option value="' + esc(a.nome) + '">' + esc(a.nome) + ' (' +
+          esc(formatarBytes(a.tamanho_bytes)) + ')</option>').join("");
+      if (arquivos.some((a) => a.nome === selecionado)) seletor.value = selecionado;
+      $("#zim-abrir").disabled = !seletor.value || !dados.kiwix?.instalado || !!dados.kiwix?.executando;
+    }
+    atualizarEstadoKiwix(dados.kiwix || {});
+  } catch (erro) {
+    status.textContent = "Falha ao consultar a biblioteca: " + mensagemErroZim(erro);
+    lista.innerHTML = "";
+    resumo.innerHTML = "";
+  }
+}
+function atualizarEstadoKiwix(dados) {
+  const badge = $("#zim-kiwix-status");
+  const status = $("#zim-leitor-status");
+  const link = $("#zim-leitor-link");
+  if (!badge || !status || !link) return;
+  badge.textContent = dados.executando ? "Leitor em execução" :
+    dados.instalado ? (dados.gerenciado ? "Kiwix gerenciado" : "Kiwix do sistema") : "Kiwix não instalado";
+  status.textContent = dados.executando
+    ? "Leitura ativa: " + (dados.arquivo || "arquivo ZIM") + ". Acesse pelo link abaixo; ele funciona no computador e no celular pela conexão do Optimus."
+    : dados.instalado ? "Pronto para iniciar sob demanda · " + (dados.versao || "versão do sistema")
+      : (dados.erro || "Instale o Kiwix Tools automaticamente para habilitar a leitura.");
+  // Não usar 127.0.0.1: no celular, esse endereço aponta para o próprio aparelho.
+  // O proxy mantém a leitura no mesmo host/porta do Optimus e preserva a autenticação.
+  link.innerHTML = dados.executando
+    ? '<a href="/api/zim/leitor/" target="_blank" rel="noopener noreferrer">Abrir leitura ZIM em nova guia ↗</a>'
+    : "";
+  $("#zim-fechar").disabled = !dados.executando;
+  $("#zim-abrir").disabled = !dados.instalado || !!dados.executando || !$("#zim-arquivo")?.value;
+  const instalar = $("#zim-instalar-kiwix");
+  if (instalar) {
+    instalar.disabled = !dados.suportado || !!dados.gerenciado;
+    instalar.textContent = dados.gerenciado ? "✓ Kiwix instalado pelo Optimus" : "⬇ Instalar Kiwix automaticamente";
+  }
+  if (dados.executando && $("#zim-arquivo")) $("#zim-arquivo").value = dados.arquivo || "";
+}
+$("#zim-atualizar")?.addEventListener("click", carregarZim);
+$("#zim-nomad-inicial")?.addEventListener("click", async () => {
+  const botao = $("#zim-nomad-inicial");
+  const status = $("#zim-status");
+  botao.disabled = true;
+  status.textContent = "Baixando a mini-Wikipédia inicial do Project NOMAD (aprox. 4,4 MB) e verificando sua integridade…";
+  try {
+    const dados = await api("/api/zim/nomad-inicial", { method: "POST", json: {}, tempo: 240000 });
+    status.textContent = dados.mensagem || "Conteúdo inicial do NOMAD disponível.";
+    await carregarZim();
+    await atualizarStatusIndiceZim();
+  } catch (erro) {
+    status.textContent = "Não foi possível adicionar o conteúdo inicial: " + mensagemErroZim(erro);
+  } finally {
+    botao.disabled = false;
+  }
+});
+
+$("#zim-arquivo")?.addEventListener("change", () => {
+  const badge = $("#zim-kiwix-status");
+  $("#zim-abrir").disabled = !$("#zim-arquivo").value ||
+    badge?.textContent === "Kiwix não instalado" ||
+    badge?.textContent === "Leitor em execução";
+});
+$("#zim-instalar-kiwix")?.addEventListener("click", async () => {
+  const botao = $("#zim-instalar-kiwix");
+  const status = $("#zim-instalacao-status");
+  botao.disabled = true;
+  status.textContent = "Baixando e validando o pacote oficial Kiwix Tools. Isso pode levar alguns minutos…";
+  try {
+    const dados = await api("/api/zim/instalar", { method: "POST", json: {}, tempo: 180000 });
+    status.textContent = dados.mensagem || "Kiwix instalado.";
+    await carregarZim();
+  } catch (erro) {
+    status.textContent = "Instalação não concluída: " + mensagemErroZim(erro);
+    botao.disabled = false;
+  }
+});
+$("#zim-abrir")?.addEventListener("click", async () => {
+  const botao = $("#zim-abrir");
+  const status = $("#zim-leitor-status");
+  const arquivo = $("#zim-arquivo")?.value;
+  if (!arquivo) return;
+  botao.disabled = true;
+  status.textContent = "Iniciando leitor local…";
+  try {
+    const dados = await api("/api/zim/iniciar", { method: "POST", json: { arquivo }, tempo: 15000 });
+    atualizarEstadoKiwix(dados);
+  } catch (erro) {
+    status.textContent = "Não foi possível iniciar o leitor: " + mensagemErroZim(erro);
+    botao.disabled = false;
+  }
+});
+$("#zim-fechar")?.addEventListener("click", async () => {
+  const botao = $("#zim-fechar");
+  botao.disabled = true;
+  $("#zim-leitor-status").textContent = "Encerrando o leitor iniciado pelo Optimus…";
+  try {
+    const dados = await api("/api/zim/parar", { method: "POST", json: {} });
+    atualizarEstadoKiwix(dados);
+  } catch (erro) {
+    $("#zim-leitor-status").textContent = "Falha ao encerrar o leitor: " + erro.message;
+    botao.disabled = false;
+  }
+});
+$("#zim-busca-form")?.addEventListener("submit", async (evento) => {
+  evento.preventDefault();
+  const termo = $("#zim-busca-termo").value.trim();
+  const fonte = $("#zim-busca-fonte").value;
+  const status = $("#zim-busca-status");
+  const lista = $("#zim-busca-resultados");
+  const botao = $("#zim-buscar");
+  if (termo.length < 2) return;
+  botao.disabled = true;
+  status.textContent = "Pesquisando localmente nos índices disponíveis…";
+  lista.innerHTML = "";
+  const tarefas = [];
+  if (fonte !== "documentos") tarefas.push(api("/api/zim/rag?q=" + encodeURIComponent(termo))
+    .then((d) => ({ tipo: "zim", dados: d })).catch((erro) => ({ tipo: "zim", erro })));
+  if (fonte !== "zim") tarefas.push(api("/api/biblioteca?q=" + encodeURIComponent(termo))
+    .then((d) => ({ tipo: "documentos", dados: d })).catch((erro) => ({ tipo: "documentos", erro })));
+  try {
+    const respostas = await Promise.all(tarefas);
+    const itens = [];
+    const avisos = [];
+    for (const resposta of respostas) {
+      if (resposta.erro) { avisos.push(resposta.tipo + ": " + resposta.erro.message); continue; }
+      if (resposta.tipo === "zim") {
+        itens.push(...(resposta.dados.resultados || []));
+        if (!resposta.dados.resultados?.length) avisos.push("Indexe os arquivos ZIM para habilitar o RAG local.");
+      } else {
+        itens.push(...(resposta.dados.resultados || []).map((r) => ({
+          titulo: r.titulo || "Documento", trecho: r.trecho || "",
+          citacao: r.citacao || r.fonte || "Documento local",
+          fonte: r.fonte || "", tipo_fonte: "Documento"
+        })));
+      }
+    }
+    lista.innerHTML = itens.length ? itens.map((r) =>
+      '<li><div><b>' + esc(r.titulo || "Resultado") + '</b><small class="sutil"> ' +
+      esc(r.tipo_fonte || "Fonte") + ' · ' + esc(r.citacao || r.arquivo_zim || "") +
+      (r.hash_trecho ? ' · SHA-256 ' + esc(r.hash_trecho.slice(0, 12)) : '') +
+      '</small><p>' + esc(r.trecho || "Trecho não fornecido pelo índice.") + '</p>' +
+      (r.url && r.url.startsWith("http://127.0.0.1") ? '<a href="' + esc(r.url) + '" target="_blank" rel="noopener noreferrer">Abrir fonte local ↗</a>' : "") +
+      '</div></li>'
+    ).join("") : '<li class="sutil">Nenhum resultado encontrado nas fontes selecionadas.</li>';
+    status.textContent = itens.length + " resultado(s) · recuperação híbrida ZIM + documentos locais. " +
+      (avisos.length ? avisos.slice(0, 3).join(" · ") : "As citações indicam a origem do trecho.");
+  } catch (erro) {
+    status.textContent = "Falha na busca: " + erro.message;
+  } finally { botao.disabled = false; }
+});
+
+// ---------- Indexação incremental e RAG ZIM ----------
+async function atualizarStatusIndiceZim() {
+  const alvo = $("#zim-index-status");
+  if (!alvo) return;
+  try {
+    const s = await api("/api/zim/status");
+    const vetores = Number(s.com_embeddings || 0);
+    const artigos = Number(s.artigos_indexados || 0);
+    const trechos = Number(s.trechos || 0);
+    if (!trechos) {
+      alvo.textContent = (artigos || 0) + " artigos · 0 trechos · " +
+        (s.mensagem || "Nenhum conteúdo foi indexado ainda.") +
+        (s.arquivos_zim_disponiveis ? " A indexação pode ser iniciada ou retomada." : "");
+      return;
+    }
+    alvo.textContent = artigos + " artigos · " + trechos + " trechos · " + (vetores
+      ? vetores + " embeddings locais; busca híbrida ativa."
+      : "sem embeddings; busca lexical ativa.") +
+      " A indexação pode ser retomada a qualquer momento.";
+  } catch (erro) { alvo.textContent = "Índice ZIM ainda não disponível: " + mensagemErroZim(erro); }
+}
+$("#zim-indexar")?.addEventListener("click", async () => {
+  const botao = $("#zim-indexar"), status = $("#zim-index-status");
+  botao.disabled = true;
+  status.textContent = "Preparando a indexação. Se necessário, libzim e o modelo de embeddings leve serão instalados localmente; depois serão processadas até 150 entradas…";
+  try {
+    const resultado = await api("/api/zim/indexar", { method: "POST", json: { limite: 150 } });
+    if (resultado.erro) throw new Error(resultado.erro);
+    if (resultado.sem_arquivos) {
+      await atualizarStatusIndiceZim();
+      status.textContent = resultado.mensagem || "Adicione arquivos .zim antes de indexar.";
+      return;
+    }
+    const erros = resultado.erros || [];
+    status.textContent = (resultado.artigos_processados || 0) + " entradas processadas · " +
+      (resultado.indexados || 0) + " artigos indexados · " +
+      (resultado.trechos || 0) + " trechos atualizados · " +
+      (resultado.embeddings_atualizados || 0) + " embeddings preenchidos." +
+      (resultado.modelo_embedding ? " Modelo: " + resultado.modelo_embedding + "." : " Modo lexical.") +
+      (resultado.preparacao_embedding?.erro ? " Embeddings: " + resultado.preparacao_embedding.erro : "") +
+      (erros.length ? " Avisos: " + erros.slice(0, 2).map(e => e.erro).join(" | ") : "");
+    await atualizarStatusIndiceZim();
+  } catch (erro) {
+    status.textContent = "Não foi possível indexar: " + erro.message;
+  } finally { botao.disabled = false; }
+});
+atualizarStatusIndiceZim();
+
+// ---------- Command Center: inventário local de integrações ----------
+async function carregarModulos() {
+  const estadoEl = $("#modulos-estado");
+  const grade = $("#modulos-grade");
+  if (!estadoEl || !grade) return;
+  estadoEl.textContent = "Verificando executáveis e serviços locais…";
+  try {
+    await verificarCompatibilidadeApi();
+    const [dados, telemetria] = await Promise.all([
+      api("/api/modulos"), api("/api/modulos/recursos")
+    ]);
+    desenharRecursosModulos(telemetria.recursos || {});
+    const itens = dados.modulos || [];
+    grade.innerHTML = itens.map((m) => {
+      const status = m.estado === "disponivel" ? "Disponível" :
+        m.estado === "instalado_parado" ? "Instalado · parado" :
+        m.estado === "nativo" ? "Recurso nativo do Optimus" :
+        m.estado === "permissao_necessaria" ? "Permissão necessária" : "Não instalado";
+      return `<article class="cartao"><div class="linha entre"><b>${esc(m.nome)}</b><span class="selo">${esc(status)}</span></div>
+        <p>${esc(m.descricao)}</p><small class="sutil">${esc(m.detalhe || "Detecção local")}</small></article>`;
+    }).join("") || '<p class="sutil">Nenhum módulo foi identificado.</p>';
+    estadoEl.textContent = `${itens.length} componentes verificados · ${new Date().toLocaleTimeString("pt-BR")}`;
+  } catch (erro) {
+    estadoEl.textContent = "Não foi possível consultar o inventário: " + mensagemErroApi(erro);
+  }
+}
+function formatarBytes(valor) {
+  if (valor == null) return "Indisponível";
+  const unidades = ["B", "KB", "MB", "GB", "TB"];
+  let n = Number(valor), i = 0;
+  while (n >= 1024 && i < unidades.length - 1) { n /= 1024; i++; }
+  return n.toLocaleString("pt-BR", { maximumFractionDigits: 1 }) + " " + unidades[i];
+}
+function desenharRecursosModulos(r) {
+  const alvo = $("#modulos-recursos");
+  if (!alvo) return;
+  const memoriaUsada = Math.max(0, (r.memoria_total_bytes || 0) - (r.memoria_disponivel_bytes || 0));
+  const discoUsado = Math.max(0, (r.disco_total_bytes || 0) - (r.disco_livre_bytes || 0));
+  const cards = [
+    ["Processador", (r.cpu_percentual ?? 0) + "% em uso", (r.cpu_nucleos_fisicos ?? "—") + " núcleos físicos · " + (r.cpu_nucleos_logicos ?? "—") + " lógicos"],
+    ["Memória RAM", formatarBytes(memoriaUsada) + " / " + formatarBytes(r.memoria_total_bytes), (r.memoria_percentual ?? "—") + "% utilizada"],
+    ["Armazenamento", formatarBytes(discoUsado) + " / " + formatarBytes(r.disco_total_bytes), (r.disco_percentual ?? "—") + "% utilizado"],
+    ["Sistema", (r.processos ?? "—") + " processos", "Ligado há " + Math.floor((r.uptime_segundos || 0) / 3600) + " horas"]
+  ];
+  alvo.innerHTML = cards.map(([titulo, valor, detalhe]) =>
+    '<article class="cartao"><b>' + esc(titulo) + '</b><h3>' + esc(valor) + '</h3><small class="sutil">' + esc(detalhe) + '</small></article>'
+  ).join("");
+  const atualizado = $("#modulos-recursos-atualizado");
+  if (atualizado) atualizado.textContent = "Atualizado às " + new Date().toLocaleTimeString("pt-BR");
+}
+$("#modulos-atualizar")?.addEventListener("click", carregarModulos);
+$("#lab-executar")?.addEventListener("click", async () => {
+  const estadoEl = $("#lab-estado");
+  const botao = $("#lab-executar");
+  const resultado = $("#lab-resultado");
+  if (!estadoEl || !botao || !resultado) return;
+  estadoEl.textContent = "Processando localmente…";
+  botao.disabled = true;
+  $("#lab-copiar").disabled = true;
+  try {
+    const dados = await api("/api/laboratorio", {
+      method: "POST", json: {
+        operacao: $("#lab-operacao").value,
+        texto: $("#lab-entrada").value
+      }
+    });
+    resultado.value = dados.resultado ?? "";
+    estadoEl.textContent = "Concluído neste computador.";
+    $("#lab-copiar").disabled = false;
+  } catch (erro) {
+    resultado.value = "";
+    estadoEl.textContent = "Falha: " + erro.message;
+  } finally { botao.disabled = false; }
+});
+$("#lab-limpar")?.addEventListener("click", () => {
+  $("#lab-entrada").value = "";
+  $("#lab-resultado").value = "";
+  $("#lab-estado").textContent = "";
+  $("#lab-copiar").disabled = true;
+});
+$("#lab-copiar")?.addEventListener("click", async () => {
+  try {
+    await navigator.clipboard.writeText($("#lab-resultado").value);
+    $("#lab-estado").textContent = "Resultado copiado.";
+  } catch (erro) { $("#lab-estado").textContent = "Não foi possível copiar: " + erro.message; }
+});
+
+// ---------- Central visual de documentos e PDF ----------
+let pdfFerramentas = [];
+let pdfEnviados = [];
+let pdfCategoriaAtiva = "Todas";
+const PDF_CATEGORIAS = ["Todas", "Criar e converter", "Organizar páginas", "Editar e anotar",
+  "Otimizar e reparar", "Segurança e privacidade", "Verificar e analisar", "Formulários e assinatura"];
+const PDF_ROTULOS = {
+  pdf_info:"Informações do PDF", pdf_ler:"Extrair texto", pdf_juntar:"Unir PDFs",
+  pdf_unir_documentos:"Unir PDFs, imagens e Office", pdf_documento_para_pdf:"Word, Excel e PowerPoint para PDF",
+  pdf_dividir_pares_impares:"Separar páginas pares e ímpares", pdf_paginas_por_folha:"Várias páginas por folha",
+  pdf_imprimir_livreto:"Preparar impressão em livreto",
+  pdf_extrair:"Extrair páginas", pdf_remover:"Eliminar páginas", pdf_organizar:"Ordenar páginas",
+  pdf_dividir:"Dividir PDF", pdf_girar:"Girar páginas", pdf_proteger:"Proteger com senha",
+  pdf_desbloquear:"Desbloquear PDF", pdf_comprimir:"Comprimir PDF", pdf_marca:"Adicionar marca d'água",
+  pdf_numeros:"Adicionar números de página", pdf_assinar:"Inserir assinatura visual",
+  pdf_localizar_termos:"Buscar texto sensível", pdf_censurar:"Censurar conteúdo",
+  pdf_comparar:"Comparar textos", pdf_ocr:"OCR de documentos escaneados",
+  pdf_converter:"Converter PDF", pdf_resumir:"Resumir documento",
+  pdf_imagens_para_pdf:"Imagens para PDF", pdf_para_imagens:"PDF para imagens",
+  pdf_cortar:"Recortar páginas", pdf_metadados:"Editar metadados", pdf_reparar:"Reparar PDF",
+  pdf_para_markdown:"PDF para Markdown", pdf_html_para_pdf:"HTML para PDF",
+  pdf_formularios:"Ler e preencher formulários", pdf_para_excel:"PDF para Excel",
+  pdf_para_powerpoint:"PDF para PowerPoint", pdf_comparar_visual:"Comparar visualmente",
+  pdf_editar:"Adicionar texto, formas ou imagem", pdf_assinar_digital:"Assinar com certificado digital",
+  pdf_pdfa:"Converter para PDF/A", pdf_para_word_ocr:"PDF para Word com OCR",
+  pdf_extrair_imagens:"Extrair imagens do PDF", pdf_copiar:"Criar cópia do PDF",
+  pdf_criar_formulario:"Criar formulário preenchível", pdf_workflow:"Automatizar fluxo de PDF"
+};
+function pdfCategoria(nome) {
+  if (["pdf_juntar","pdf_unir_documentos","pdf_dividir","pdf_dividir_pares_impares","pdf_extrair","pdf_remover","pdf_organizar","pdf_girar","pdf_paginas_por_folha","pdf_imprimir_livreto"].includes(nome)) return "Organizar páginas";
+  if (["pdf_imagens_para_pdf","pdf_documento_para_pdf","pdf_para_imagens","pdf_converter","pdf_html_para_pdf","pdf_para_word_ocr","pdf_para_excel","pdf_para_powerpoint","pdf_para_markdown","pdf_pdfa"].includes(nome)) return "Criar e converter";
+  if (["pdf_cortar","pdf_marca","pdf_numeros","pdf_editar"].includes(nome)) return "Editar e anotar";
+  if (["pdf_comprimir","pdf_reparar","pdf_ocr"].includes(nome)) return "Otimizar e reparar";
+  if (["pdf_proteger","pdf_desbloquear","pdf_assinar","pdf_assinar_digital","pdf_censurar","pdf_metadados"].includes(nome)) return "Segurança e privacidade";
+  if (["pdf_formularios","pdf_criar_formulario"].includes(nome)) return "Formulários e assinatura";
+  return "Verificar e analisar";
+}
+function pdfAtual() { return pdfFerramentas.find(x => x.nome === $("#pdf-ferramenta").value); }
+function desenharFiltrosPDF() {
+  const busca = ($("#pdf-busca")?.value || "").trim().toLocaleLowerCase("pt-BR");
+  const categorias = PDF_CATEGORIAS.filter(c => c === "Todas" || pdfFerramentas.some(f => pdfCategoria(f.nome) === c));
+  $("#pdf-filtros").innerHTML = categorias.map(c => {
+    const total = c === "Todas" ? pdfFerramentas.length : pdfFerramentas.filter(f => pdfCategoria(f.nome) === c).length;
+    return `<button type="button" class="pdf-filtro ${pdfCategoriaAtiva === c ? "ativo" : ""}" data-pdf-categoria="${esc(c)}">${esc(c)} <span>${total}</span></button>`;
+  }).join("");
+  const lista = pdfFerramentas.filter(f => {
+    const texto = [PDF_ROTULOS[f.nome] || f.nome, f.descricao, f.nome].join(" ").toLocaleLowerCase("pt-BR");
+    return (pdfCategoriaAtiva === "Todas" || pdfCategoria(f.nome) === pdfCategoriaAtiva) && (!busca || texto.includes(busca));
+  });
+  $("#pdf-ferramentas-grid").innerHTML = lista.length ? lista.map(f => {
+    const selecionada = $("#pdf-ferramenta").value === f.nome;
+    const icone = {"Criar e converter":"⇄","Organizar páginas":"▤","Editar e anotar":"✎","Otimizar e reparar":"◈","Segurança e privacidade":"♢","Formulários e assinatura":"✒","Verificar e analisar":"⌕"}[pdfCategoria(f.nome)] || "▧";
+    return `<button type="button" class="pdf-ferramenta ${selecionada ? "selecionada" : ""}" data-pdf-tool="${esc(f.nome)}" aria-pressed="${selecionada}">
+      <span class="pdf-ferramenta-icone">${icone}</span><b>${esc(PDF_ROTULOS[f.nome] || f.nome.replaceAll("_"," "))}</b>
+      <small>${esc(f.descricao || "")}</small></button>`;
+  }).join("") : '<p class="sutil">Nenhuma ferramenta encontrada nesta categoria.</p>';
+}
+async function carregarPDF() {
+  const estadoEl = $("#pdf-estado-inicial");
+  try {
+    const dados = await api("/api/pdf");
+    pdfFerramentas = dados.ferramentas || [];
+    if (!pdfFerramentas.length) throw new Error("Nenhuma ferramenta PDF foi registrada.");
+    desenharFiltrosPDF(); desenharArquivosPDF();
+    estadoEl.textContent = `${pdfFerramentas.length} ferramentas carregadas · processamento local` +
+      (dados.dependencias_instaladas ? "" : " · algumas operações exigem instalar o extra PDF");
+  } catch (e) { estadoEl.textContent = "⚠️ Não foi possível carregar o catálogo: " + e.message; }
+}
+function selecionarFerramentaPDF(nome) {
+  const f = pdfFerramentas.find(x => x.nome === nome);
+  if (!f) return;
+  $("#pdf-ferramenta").value = nome;
+  $("#pdf-operacao-selecionada").classList.remove("oculto");
+  $("#pdf-estado-inicial").classList.add("oculto");
+  $("#pdf-titulo-operacao").textContent = PDF_ROTULOS[nome] || nome.replaceAll("_"," ");
+  desenharFiltrosPDF(); desenharParametrosPDF();
+  $("#pdf-operacao-selecionada").scrollIntoView({behavior:"smooth",block:"nearest"});
+}
+function desenharArquivosPDF() {
+  $("#pdf-lista-arquivos").innerHTML = pdfEnviados.length
+    ? pdfEnviados.map((f,i) => `<div class="pdf-arquivo"><span>📄 ${esc(f.nome)}</span><small>${(f.tamanho/1048576).toFixed(2)} MB</small><button type="button" class="icone" data-pdf-remover="${i}" title="Remover da seleção">✕</button></div>`).join("")
+    : '<p class="sutil">Nenhum documento adicionado ainda.</p>';
+  $("#pdf-executar").disabled = !pdfEnviados.length || !pdfAtual();
+}
+function desenharParametrosPDF() {
+  const f = pdfAtual();
+  $("#pdf-descricao").textContent = f ? f.descricao : "";
+  $("#pdf-parametros").innerHTML = (f ? Object.entries(f.parametros || {}) : []).map(([nome,info]) => {
+    const tipo = info.type === "integer" || info.type === "number" ? "number" : "text";
+    let valor = "";
+    if (nome === "arquivo" && pdfEnviados[0]) valor = pdfEnviados[0].arquivo;
+    if (nome === "arquivos" && pdfEnviados.length) valor = pdfEnviados.map(x=>x.arquivo).join(";");
+    if ((nome === "arquivo_a" || nome === "arquivo1") && pdfEnviados[0]) valor = pdfEnviados[0].arquivo;
+    if ((nome === "arquivo_b" || nome === "arquivo2" || nome === "certificado" || nome === "perfil_icc") && pdfEnviados[1]) valor = pdfEnviados[1].arquivo;
+    const obrigatorio = (f.obrigatorios || []).includes(nome), sensivel = /senha|password/i.test(nome);
+    return `<label>${esc(nome.replaceAll("_"," "))}${obrigatorio ? " *" : ""}<input class="campo" data-pdf-param="${esc(nome)}" type="${sensivel ? "password" : tipo}" ${sensivel ? 'autocomplete="new-password"' : ""} value="${esc(valor)}" placeholder="${esc(info.description || nome)}" ${obrigatorio && !valor ? "required" : ""}></label>`;
+  }).join("");
+  $("#pdf-executar").disabled = !pdfEnviados.length || !f;
+}
+$("#pdf-filtros").addEventListener("click", e => {
+  const b = e.target.closest("[data-pdf-categoria]");
+  if (!b) return; pdfCategoriaAtiva = b.dataset.pdfCategoria; desenharFiltrosPDF();
+});
+$("#pdf-busca").addEventListener("input", desenharFiltrosPDF);
+$("#pdf-ferramentas-grid").addEventListener("click", e => {
+  const b = e.target.closest("[data-pdf-tool]"); if (b) selecionarFerramentaPDF(b.dataset.pdfTool);
+});
+$("#pdf-limpar-operacao").addEventListener("click", () => {
+  $("#pdf-ferramenta").value = ""; $("#pdf-operacao-selecionada").classList.add("oculto");
+  $("#pdf-estado-inicial").classList.remove("oculto"); desenharFiltrosPDF();
+});
+$("#pdf-enviar").addEventListener("click", async () => {
+  const arquivos = [...($("#pdf-arquivos").files || [])];
+  if (!arquivos.length) { $("#pdf-estado-inicial").textContent = "Selecione pelo menos um documento."; return; }
+  for (const arquivo of arquivos) {
+    const extensao = arquivo.name.toLowerCase().split(".").pop();
+    if (!["pdf","jpg","jpeg","png","tif","tiff","bmp","html","htm","doc","docx","xls","xlsx","ppt","pptx","odt","ods","odp","rtf","txt","csv","p12","pfx","icc"].includes(extensao)) {
+      $("#pdf-estado-inicial").textContent = "Formato não aceito: " + extensao; continue;
+    }
+    $("#pdf-estado-inicial").textContent = "Enviando " + arquivo.name + "…";
+    try {
+      const r = await api("/api/pdf/upload?nome=" + encodeURIComponent(arquivo.name), {
+        method:"POST",headers:{"Content-Type":"application/octet-stream"},body:arquivo,tempo:180000
+      });
+      pdfEnviados.push(r); desenharArquivosPDF();
+    } catch(e) { $("#pdf-estado-inicial").textContent = "Falha no envio de " + arquivo.name + ": " + e.message; }
+  }
+  $("#pdf-arquivos").value = ""; desenharParametrosPDF();
+  if (pdfEnviados.length) $("#pdf-estado-inicial").textContent = pdfEnviados.length + " arquivo(s) pronto(s) para processar.";
+});
+$("#pdf-lista-arquivos").addEventListener("click", e => {
+  const b = e.target.closest("[data-pdf-remover]"); if (!b) return;
+  pdfEnviados.splice(Number(b.dataset.pdfRemover),1); desenharArquivosPDF(); desenharParametrosPDF();
+});
+$("#pdf-executar").addEventListener("click", async () => {
+  const f = pdfAtual(); if (!f) return;
+  const argumentos = {};
+  for (const campo of $$("[data-pdf-param]")) {
+    const nome = campo.dataset.pdfParam, valor = campo.value.trim();
+    if (valor === "" && !(f.obrigatorios || []).includes(nome)) continue;
+    argumentos[nome] = campo.type === "number" ? Number(valor) : valor;
+  }
+  for (const nome of f.obrigatorios || []) {
+    if (argumentos[nome] === "" || argumentos[nome] === undefined) {
+      $("#pdf-estado").textContent = "Preencha o campo obrigatório: " + nome; return;
+    }
+  }
+  $("#pdf-executar").disabled = true; $("#pdf-estado").textContent = "Processando localmente…";
+  $("#pdf-resultado").textContent = "A operação está em andamento. Não feche o Optimus.";
+  try {
+    const r = await api("/api/pdf/executar",{method:"POST",json:{ferramenta:f.nome,argumentos},tempo:300000});
+    const resultado = r.resultado || {};
+    const mensagem = resultado.mensagem || resultado.resultado || resultado.texto || "Operação concluída.";
+    const detalhes = Object.entries(resultado).filter(([k])=>!["mensagem","destino","zip","arquivos"].includes(k))
+      .map(([k,v])=>`<div><b>${esc(k.replaceAll("_"," "))}:</b> ${esc(typeof v==="object"?JSON.stringify(v):v)}</div>`).join("");
+    const links = (r.arquivos||[]).map(x=>`<a class="botao pequeno" href="/api/pdf/arquivo?nome=${encodeURIComponent(x.nome)}" download>⬇ Baixar ${esc(x.nome)}</a>`).join(" ");
+    $("#pdf-resultado").innerHTML = `<p class="sucesso">✅ ${esc(mensagem)}</p>${detalhes}${links ? `<div class="linha">${links}</div>` : ""}`;
+    $("#pdf-estado").textContent = "Operação concluída.";
+  } catch(e) { $("#pdf-resultado").textContent = "Falha: " + e.message; $("#pdf-estado").textContent = "A operação não foi concluída."; }
+  finally { $("#pdf-executar").disabled = !pdfEnviados.length; }
+});
+
 $$(".menu button").forEach((b) => b.addEventListener("click", () => irPara(b.dataset.tela)));
 $$("#hud-nav button").forEach((b) => b.addEventListener("click", () => {
   const destino = b.dataset.ir;
@@ -651,6 +1250,64 @@ $("#form-fato").addEventListener("submit", async (e) => {
   await api("/api/memoria", { method: "POST", json: { texto: e.target.texto.value } }); e.target.reset(); carregarMemoria();
 });
 
+// ---------- Biblioteca de documentos ----------
+async function buscarBiblioteca(consulta) {
+  const status = $("#biblioteca-busca-status"), saida = $("#biblioteca-resultados");
+  status.textContent = "Pesquisando nos documentos locais…";
+  saida.innerHTML = "";
+  try {
+    const d = await api("/api/biblioteca?q=" + encodeURIComponent(consulta));
+    status.textContent = d.total ? d.total + " trecho(s) encontrado(s)." : "Nenhum trecho encontrado. Tente outros termos ou confira se a pasta foi indexada.";
+    saida.innerHTML = (d.resultados || []).map((r) => {
+      const citacao = String(r.citacao || "");
+      return `<article class="cartao"><b>${esc(r.titulo || "Documento")}</b>
+        <p class="sutil">${esc(r.fonte || "")}</p>
+        <p>${esc(r.trecho || "")}</p>
+        <small class="sutil">Fonte para citação: ${esc(citacao)}</small></article>`;
+    }).join("");
+  } catch (erro) {
+    status.textContent = "Falha na pesquisa: " + erro.message;
+  }
+}
+$("#form-biblioteca-busca").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const consulta = e.currentTarget.elements.q.value.trim();
+  if (consulta) await buscarBiblioteca(consulta);
+});
+async function carregarBiblioteca() {
+  const lista = $("#biblioteca-lista");
+  try {
+    const d = await api("/api/biblioteca");
+    $("#biblioteca-total").textContent = String(d.total || 0);
+    lista.innerHTML = (d.documentos || []).map((x) => {
+      const fonte = String(x.fonte || "").replace(/^biblioteca:/, "");
+      return `<li><span>📄 <b>${esc(x.titulo || fonte.split(/[\\\\/]/).pop() || "Documento")}</b><br><small class="sutil">${esc(fonte)} · ${Number(x.trechos || 0)} trecho(s)</small></span></li>`;
+    }).join("") || '<li class="sutil">Nenhum documento indexado. Informe uma pasta acima para começar.</li>';
+  } catch (erro) { lista.innerHTML = `<li class="erro">${esc(erro.message)}</li>`; }
+}
+$("#form-biblioteca").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const form = e.currentTarget, status = $("#biblioteca-status");
+  const botao = form.querySelector('button[type="submit"]');
+  botao.disabled = true; status.textContent = "Indexando arquivos localmente…";
+  try {
+    const r = await api("/api/biblioteca", {method:"POST", json:{pasta:form.elements.pasta.value.trim(), recursivo:form.elements.recursivo.checked}, tempo:300000});
+    status.textContent = r.mensagem + (r.erros?.length ? " Erros: " + r.erros.map(x => x.arquivo + ": " + x.erro).join(" | ") : "");
+    await carregarBiblioteca();
+  } catch (erro) { status.textContent = "Falha na indexação: " + erro.message; }
+  finally { botao.disabled = false; }
+});
+$("#atualizar-biblioteca").addEventListener("click", carregarBiblioteca);
+$("#form-biblioteca-esquecer").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const form = e.currentTarget, pasta = form.elements.pasta.value.trim();
+  if (!pasta || !confirm("Remover do conhecimento local os documentos desta pasta? Os arquivos originais não serão apagados.")) return;
+  try {
+    const r = await api("/api/biblioteca", {method:"DELETE", json:{pasta}});
+    $("#biblioteca-status").textContent = r.mensagem; form.reset(); await carregarBiblioteca();
+  } catch (erro) { $("#biblioteca-status").textContent = "Falha ao remover: " + erro.message; }
+});
+
 // ---------- Ações ----------
 async function carregarAcoes() {
   const d = await api("/api/acoes");
@@ -664,20 +1321,50 @@ $("#verificar-atualizacao").addEventListener("click", async () => {
   const estadoEl = $("#atualizacao-estado"); const baixar = $("#baixar-atualizacao");
   estadoEl.textContent = "Verificando no GitHub…"; baixar.classList.add("oculto");
   try {
-    const d = await api("/api/atualizacao");
+    const d = await api("/api/atualizacao", { tempo: 60000 });
     if (d.erro) { estadoEl.textContent = "⚠️ " + d.erro; return; }
     if (d.atualizado) { estadoEl.textContent = "✅ " + (d.mensagem || "Você já está na versão mais nova."); return; }
     estadoEl.textContent = `🚀 ${d.mensagem || "Há atualização disponível."} Clique em "Baixar e aplicar".`;
     baixar.classList.remove("oculto");
   } catch (e) { estadoEl.textContent = "⚠️ Não consegui verificar: " + e.message; }
 });
+async function aguardarReinicioOptimus(estadoEl) {
+  const inicio = Date.now();
+  while (Date.now() - inicio < 90000) {
+    try {
+      const resposta = await fetch("/api/versao", {
+        cache: "no-store",
+        headers: senha ? { "X-Optimus-Senha": senha } : {}
+      });
+      if (!resposta.ok) throw new Error("servidor reiniciando");
+      const versao = await resposta.json();
+      if (Number(versao.api_contrato) >= API_CONTRATO_MINIMO) {
+        estadoEl.textContent = "✅ Nova versão carregada. Atualizando a interface…";
+        window.location.reload();
+        return;
+      }
+    } catch (_) {}
+    estadoEl.textContent = "Reiniciando o servidor do Optimus… aguardando a nova versão.";
+    await new Promise(resolve => setTimeout(resolve, 1000));
+  }
+  estadoEl.textContent = "A atualização foi aplicada, mas o servidor não voltou automaticamente. Feche completamente o Optimus e abra novamente.";
+}
 $("#baixar-atualizacao").addEventListener("click", async (ev) => {
   const estadoEl = $("#atualizacao-estado"); ev.target.disabled = true;
   estadoEl.textContent = "Baixando e aplicando (sem perder seus dados)…";
   try {
-    const d = await api("/api/atualizacao", { method: "POST", json: {} });
-    if (d.erro || d.ok === false) { estadoEl.textContent = "⚠️ " + (d.erro || d.mensagem); }
-    else { estadoEl.textContent = "✅ " + (d.mensagem || "Atualizado!") + " Reinicie o Optimus para usar a nova versão."; ev.target.classList.add("oculto"); }
+    const d = await api("/api/atualizacao", { method: "POST", json: {}, tempo: 1500000 });
+    if (d.erro || d.ok === false) {
+      estadoEl.textContent = "⚠️ " + (d.erro || d.mensagem);
+    } else if (d.reiniciando) {
+      ev.target.classList.add("oculto");
+      estadoEl.textContent = "Atualização aplicada. Reiniciando o Optimus automaticamente…";
+      await aguardarReinicioOptimus(estadoEl);
+    } else {
+      estadoEl.textContent = "✅ " + (d.mensagem || "Atualização aplicada.") +
+        " Feche completamente o Optimus e abra novamente para carregar o servidor atualizado.";
+      ev.target.classList.add("oculto");
+    }
   } catch (e) { estadoEl.textContent = "⚠️ Falha ao atualizar: " + e.message; }
   finally { ev.target.disabled = false; }
 });
@@ -702,8 +1389,8 @@ function desenharCelular(d) {
   const partes = [];
   if (d.dica) partes.push("⚠️ " + esc(d.dica));
   if (d.ligado) {
-    if (d.url_seguro) partes.push(`✅ Acesso pelo celular ligado. No celular (mesma rede Wi-Fi), leia o QR code ou abra <code>${esc(d.url_seguro)}</code> e entre com a senha. Esse endereço seguro (https) libera o microfone e a câmera. Na primeira vez o navegador avisa sobre o certificado deste PC: toque em “Avançado” e “Continuar”. Sem microfone, também funciona <code>${esc(d.url)}</code>.`);
-    else partes.push(`✅ Acesso pelo celular ligado. No celular (mesma rede Wi-Fi), leia o QR code ou abra <code>${esc(d.url)}</code> e entre com a senha. O microfone do celular só abre em https: instale <code>pip install cryptography</code> e religue o acesso para ganhar o endereço seguro.`);
+    if (d.url_seguro) partes.push(`✅ Acesso pelo celular ligado. No celular (mesma rede Wi-Fi), leia o QR code ou abra <code>${esc(d.url_seguro)}</code> e entre com a senha. Esse endereço seguro (https) libera o microfone e a câmera. Na primeira vez o navegador avisa sobre o certificado deste PC: toque em “Avançado” e “Continuar”. Sem microfone, também funciona <code>${esc(d.url)}</code>. Para usar de fora de casa (4G/5G ou outro Wi-Fi), ative o Cloudflare Tunnel na seção Acesso externo abaixo.`);
+    else partes.push(`✅ Acesso pelo celular ligado. No celular (mesma rede Wi-Fi), leia o QR code ou abra <code>${esc(d.url)}</code> e entre com a senha. O microfone do celular só abre em https: instale <code>pip install cryptography</code> e religue o acesso para ganhar o endereço seguro. Para usar de fora de casa (4G/5G ou outro Wi-Fi), ative o Cloudflare Tunnel na seção Acesso externo abaixo.`);
     partes.push("Se o celular não abrir, libere o Optimus (Python) no firewall do computador para redes privadas.");
     if (!d.qr) partes.push("Para ver o QR code, instale: <code>pip install segno</code>");
   }
@@ -716,8 +1403,10 @@ function desenharCelular(d) {
 async function mostrarCelular(nova) {
   const estadoEl = $("#celular-estado");
   estadoEl.textContent = "Carregando…";
-  try { desenharCelular(await api("/api/celular" + (nova ? "?nova_chave=1" : ""))); }
-  catch (e) { estadoEl.textContent = "⚠️ " + e.message; }
+  try {
+    desenharCelular(await api("/api/celular" + (nova ? "?nova_chave=1" : "")));
+    await mostrarTunel();
+  } catch (e) { estadoEl.textContent = "⚠️ " + e.message; }
 }
 $("#mostrar-celular").addEventListener("click", () => mostrarCelular(false));
 $("#trocar-agenda").addEventListener("click", () => mostrarCelular(true));
@@ -736,16 +1425,165 @@ $("#desligar-celular").addEventListener("click", async () => {
   catch (e) { $("#celular-estado").textContent = "⚠️ " + e.message; }
 });
 
+// ---------- Acesso externo seguro (Cloudflare Tunnel) ----------
+let consultaTunelId = 0;
+function desenharTunel(d) {
+  const estadoEl = $("#tunel-estado");
+  const qr = $("#tunel-qr");
+  const figura = (svg, legenda) => svg
+    ? "<figure class=\"qr\">" + svg + "<figcaption>" + esc(legenda) + "</figcaption></figure>" : "";
+  qr.innerHTML = figura(d.qr, "Abrir Optimus pela internet") +
+    figura(d.agenda_qr, "Assinar agenda pela internet");
+  if (d.erro) estadoEl.textContent = "⚠️ " + d.erro;
+  else if (d.url) estadoEl.innerHTML = "✅ Acesso HTTPS ativo: <a href=\"" + esc(d.url) + "\" target=\"_blank\" rel=\"noopener noreferrer\">" + esc(d.url) + "</a><br>Leia o QR Code ou abra o endereço em qualquer rede (4G/5G, Wi-Fi externo ou computador). Entre com a senha exclusiva. O endereço é temporário e o computador precisa permanecer ligado e conectado à internet." + (d.agenda ? "<br>Agenda externa: <a href=\"" + esc(d.agenda) + "\" target=\"_blank\" rel=\"noopener noreferrer\">Assinar agenda</a>" : "");
+  else if (d.iniciando) estadoEl.textContent = "⏳ Conectando ao Cloudflare… O Optimus verificará automaticamente até o endereço HTTPS e os QR Codes ficarem prontos.";
+  else estadoEl.textContent = "Acesso externo desligado.";
+  $("#desligar-tunel").classList.toggle("oculto", !d.ligado && !d.iniciando);
+  $("#ligar-tunel").classList.toggle("oculto", !!d.ligado || !!d.iniciando);
+}
+async function acompanharTunel(id) {
+  let intervalo = 1000;
+  while (id === consultaTunelId) {
+    await new Promise(resolve => setTimeout(resolve, intervalo));
+    if (id !== consultaTunelId) return;
+    try {
+      const d = await api("/api/tunel");
+      if (id !== consultaTunelId) return;
+      desenharTunel(d);
+      if (!d.iniciando) return;
+      intervalo = Math.min(5000, Math.round(intervalo * 1.35));
+    } catch (e) {
+      if (id !== consultaTunelId) return;
+      $("#tunel-estado").textContent = "⚠️ " + e.message + " Tentarei novamente automaticamente.";
+      intervalo = Math.min(5000, Math.round(intervalo * 1.5));
+    }
+  }
+}
+async function mostrarTunel() {
+  const id = ++consultaTunelId;
+  const el = $("#tunel-estado");
+  el.textContent = "Verificando acesso externo…";
+  try {
+    const d = await api("/api/tunel");
+    if (id !== consultaTunelId) return;
+    desenharTunel(d);
+    if (d.iniciando) void acompanharTunel(id);
+  } catch (e) {
+    if (id === consultaTunelId) el.textContent = "⚠️ " + e.message;
+  }
+}
+$("#ligar-tunel").addEventListener("click", async () => {
+  const campo = $("#tunel-senha"), valor = campo.value;
+  const el = $("#tunel-estado");
+  if (valor.length < 12) { el.textContent = "Use uma senha exclusiva com pelo menos 12 caracteres."; return; }
+  const id = ++consultaTunelId;
+  $("#ligar-tunel").disabled = true;
+  el.textContent = "Iniciando Cloudflare Tunnel…";
+  try {
+    const d = await api("/api/tunel", { method: "POST", json: { senha: valor }, tempo: 90000 });
+    if (id !== consultaTunelId) return;
+    senha = valor;
+    try { sessionStorage.setItem("optimus_senha", senha); } catch (e) {}
+    campo.value = "";
+    desenharTunel(d);
+    if (d.iniciando) void acompanharTunel(id);
+  } catch (e) {
+    if (id !== consultaTunelId) return;
+    senha = valor;
+    try { sessionStorage.setItem("optimus_senha", senha); } catch (err) {}
+    el.textContent = "⚠️ " + e.message;
+  } finally { $("#ligar-tunel").disabled = false; }
+});
+$("#desligar-tunel").addEventListener("click", async () => {
+  ++consultaTunelId;
+  const el = $("#tunel-estado");
+  el.textContent = "Encerrando túnel…";
+  try { desenharTunel(await api("/api/tunel/desligar", { method: "POST", json: {} })); }
+  catch (e) { el.textContent = "⚠️ " + e.message; }
+});
+$("#atualizar-tunel").addEventListener("click", mostrarTunel);
+
 // ---------- Casa ----------
 let vigiaCameras = null;
+async function atualizarHomeAssistantGerenciado() {
+  const diag = $("#ha-gerenciado-diagnostico"), badge = $("#ha-gerenciado-badge");
+  const status = $("#ha-gerenciado-status"), abrir = $("#ha-gerenciado-abrir");
+  try {
+    await verificarCompatibilidadeApi();
+    const d = await api("/api/casa/gerenciado");
+    const rt = d.runtime || {}, c = d.container || {}, tarefa = d.tarefa || {};
+    badge.textContent = c.rodando ? "Em execução" : c.instalado ? "Instalado / parado" : rt.docker_instalado ? (rt.docker_ativo === null ? "Permissão necessária" : rt.docker_ativo ? "Pronto para instalar" : "Docker parado") : "Não instalado";
+    diag.textContent = [
+      "Sistema: " + (rt.sistema || "desconhecido"),
+      "Docker: " + (rt.docker_instalado ? (rt.docker_ativo === null ? "permissão administrativa necessária" : rt.docker_ativo ? "ativo " + (rt.docker_versao || "") : "instalado, mas parado") : "não instalado"),
+      "Home Assistant: " + (c.rodando ? "rodando" : c.instalado ? c.estado : "não instalado"),
+      d.nota || "", rt.observacao || "", d.erro || ""
+    ].filter(Boolean).join(" · ");
+    abrir.disabled = !c.rodando;
+    abrir.dataset.url = d.url || "";
+    if (c.rodando && $("#casa-url") && !$("#casa-url").value.trim()) {
+      $("#casa-url").value = d.url || "";
+    }
+    if (tarefa.estado === "executando") {
+      status.textContent = tarefa.mensagem || "Operação em andamento…";
+      return true;
+    }
+    if (tarefa.estado === "falhou") status.textContent = "⚠️ " + (tarefa.erro || "A operação falhou.");
+    else if (tarefa.estado === "concluido") status.textContent = "✅ " + (tarefa.mensagem || "Operação concluída.");
+    const logs = $("#ha-gerenciado-logs");
+    if (tarefa.resultado && tarefa.resultado.logs) {
+      logs.textContent = tarefa.resultado.logs;
+      logs.classList.remove("oculto");
+    }
+    return false;
+  } catch (e) {
+    badge.textContent = "Falha no diagnóstico";
+    diag.textContent = mensagemErroApi(e);
+    return false;
+  }
+}
+async function executarAcaoHomeAssistant(acao) {
+  const status = $("#ha-gerenciado-status");
+  const botoes = $$("#ha-gerenciado button");
+  if (acao === "desinstalar" && !window.confirm("Remover o container Home Assistant? Os dados e backups serão preservados.")) return;
+  botoes.forEach((b) => { b.disabled = true; });
+  status.textContent = "Solicitando operação ao Optimus…";
+  try {
+    await api("/api/casa/gerenciado", { method: "POST", json: { acao }, tempo: 30000 });
+    let emAndamento = true;
+    const inicio = Date.now();
+    while (emAndamento && Date.now() - inicio < 20 * 60 * 1000) {
+      await new Promise((resolve) => setTimeout(resolve, 1800));
+      emAndamento = await atualizarHomeAssistantGerenciado();
+    }
+    if (emAndamento) status.textContent = "A operação continua em segundo plano. Use Atualizar status para acompanhar.";
+  } catch (e) {
+    status.textContent = "⚠️ " + e.message;
+  } finally {
+    botoes.forEach((b) => { b.disabled = false; });
+    await atualizarHomeAssistantGerenciado();
+  }
+}
+$("#ha-gerenciado-instalar").addEventListener("click", () => executarAcaoHomeAssistant("instalar"));
+$("#ha-gerenciado-atualizar").addEventListener("click", atualizarHomeAssistantGerenciado);
+$("#ha-gerenciado-abrir").addEventListener("click", () => {
+  const url = $("#ha-gerenciado-abrir").dataset.url;
+  if (url) window.open(url, "_blank", "noopener,noreferrer");
+});
+$$("[data-ha-acao]").forEach((b) => b.addEventListener("click", () => executarAcaoHomeAssistant(b.dataset.haAcao)));
+
 async function carregarCasa() {
+  await atualizarHomeAssistantGerenciado();
   const d = await api("/api/config");
-  $("#casa-url").value = d.config.casa.url || ""; $("#casa-token").value = d.config.casa.token || "";
+  $("#casa-url").value = d.config.casa.url || $("#ha-gerenciado-abrir").dataset.url || "";
+  $("#casa-token").value = d.config.casa.token || "";
   try {
     const c = await api("/api/cameras");
-    $("#cameras").innerHTML = c.cameras.map((x) => `<figure class="cartao camera"><img data-camera="${esc(x.id)}" alt="${esc(x.nome)}">${String(x.id).startsWith("ip:") ? `<button class="icone" data-apagar-camera="${esc(x.id)}" title="Remover câmera">🗑️</button>` : ""}<figcaption>${esc(x.nome)} <span class="sutil">ao vivo</span></figcaption></figure>`).join("")
+    $("#cameras").innerHTML = c.cameras.map((x) => `<figure class="cartao camera"><img data-camera="${esc(x.id)}" alt="${esc(x.nome)}">${String(x.id).startsWith("ip:") ? `<button class="icone" data-apagar-camera="${esc(x.id)}" title="Remover câmera">🗑️</button>` : ""}<figcaption>${esc(x.nome)} <span class="sutil">prévia ~1,2 s</span></figcaption></figure>`).join("")
       || '<p class="sutil">Nenhuma câmera adicionada ainda. Adicione uma câmera Wi-Fi acima, ligue uma webcam no cabo USB, ou conecte o Home Assistant.</p>';
   } catch (e) { $("#cameras").innerHTML = `<p class="sutil">⚠️ ${esc(e.message)}</p>`; }
+  if (d.config.casa.token) await carregarAparelhosCasa();
+  else await carregarInventarioCasa();
   clearInterval(vigiaCameras);
   const atualizar = () => {
     if (!$("#tela-casa").classList.contains("ativa")) { clearInterval(vigiaCameras); return; }
@@ -763,12 +1601,139 @@ async function carregarCasa() {
   };
   atualizar(); vigiaCameras = setInterval(atualizar, 1200);
 }
+async function carregarInventarioCasa() {
+  const painel = $("#casa-inventario");
+  if (!painel) return;
+  try {
+    const dados = await api("/api/casa/registro");
+    const itens = dados.dispositivos || [];
+    painel.innerHTML = itens.length ? '<p class="sutil">' + itens.length +
+      ' dispositivo(s) registrados</p>' + itens.map((item) =>
+      '<article class="linha entre cartao"><div><b>' + esc(item.nome) +
+      '</b><p class="sutil">' + esc(item.integracao) + ' · ' + esc(item.id) +
+      (item.comodo ? ' · ' + esc(item.comodo) : '') + '</p><span class="sutil">' +
+      esc(item.disponibilidade) + ' · estado ' + esc(item.confianca_estado) +
+      '</span></div><button type="button" class="botao perigo" data-casa-remover="' +
+      esc(item.id) + '">Remover do inventário</button></article>').join("") :
+      '<p class="sutil">Ainda não há dispositivos registrados. Conecte o Home Assistant e atualize os aparelhos.</p>';
+  } catch (erro) {
+    painel.innerHTML = '<p class="sutil">Não foi possível carregar o inventário: ' + esc(erro.message) + '</p>';
+  }
+}
+$("#casa-inventario")?.addEventListener("click", async (evento) => {
+  const botao = evento.target.closest("[data-casa-remover]");
+  if (!botao) return;
+  botao.disabled = true;
+  try {
+    await api("/api/casa/registro-remover", {method: "POST", json: {id: botao.dataset.casaRemover}});
+    await carregarInventarioCasa();
+  } catch (erro) {
+    botao.disabled = false;
+    $("#casa-conexao-status").textContent = "⚠️ " + erro.message;
+  }
+});
+async function carregarAparelhosCasa() {
+  const painel = $("#casa-aparelhos");
+  painel.innerHTML = '<p class="sutil">Consultando aparelhos no Home Assistant…</p>';
+  try {
+    const dados = await api("/api/casa/aparelhos");
+    const itens = dados.aparelhos || [];
+    painel.innerHTML = itens.length ? itens.map((item) => {
+      const estadoAtual = String(item.estado || "unknown").toLowerCase();
+      let servico = "turn_on", rotulo = "Ligar";
+      if (item.dominio === "cover") {
+        servico = estadoAtual === "open" ? "close_cover" : "open_cover";
+        rotulo = estadoAtual === "open" ? "Fechar" : "Abrir";
+      } else if (item.dominio === "lock") {
+        servico = estadoAtual === "locked" ? "unlock" : "lock";
+        rotulo = estadoAtual === "locked" ? "Destrancar" : "Trancar";
+      } else if (["light", "switch", "fan", "media_player", "climate", "humidifier", "water_heater"].includes(item.dominio)) {
+        servico = ["on", "heat", "cool", "playing"].includes(estadoAtual) ? "turn_off" : "turn_on";
+        rotulo = servico === "turn_off" ? "Desligar" : "Ligar";
+      } else if (item.dominio === "vacuum") {
+        servico = estadoAtual === "cleaning" ? "stop" : "start";
+        rotulo = servico === "stop" ? "Parar" : "Iniciar limpeza";
+      }
+      const controle = item.controlavel
+        ? '<button type="button" class="botao primario" data-casa-controle="' + esc(item.entity_id) +
+          '" data-casa-servico="' + esc(servico) + '">' + esc(rotulo) + '</button>'
+        : '<span class="sutil">Somente leitura</span>';
+      return '<article class="cartao">' +
+        '<div class="linha entre"><b>' + esc(item.nome) + '</b><span class="selo">' +
+        esc(item.estado) + '</span></div><p class="sutil">' + esc(item.entity_id) +
+        (item.unidade ? ' · ' + esc(item.unidade) : '') + '</p>' + controle + '</article>';
+    }).join("") : '<p class="sutil">Nenhum aparelho controlável foi encontrado. Adicione integrações e dispositivos no Home Assistant e atualize esta lista.</p>';
+  } catch (erro) {
+    painel.innerHTML = '<p class="sutil">⚠️ ' + esc(erro.message) +
+      '. Conclua o onboarding do Home Assistant e salve um token de acesso válido.</p>';
+  }
+  await carregarInventarioCasa();
+}
+$("#casa-aparelhos").addEventListener("click", async (evento) => {
+  const botao = evento.target.closest("[data-casa-controle]");
+  if (!botao) return;
+  botao.disabled = true;
+  try {
+    await api("/api/casa/controle", { method: "POST", json: {
+      entity_id: botao.dataset.casaControle, servico: botao.dataset.casaServico
+    }});
+    await carregarAparelhosCasa();
+  } catch (erro) {
+    botao.disabled = false;
+    $("#casa-conexao-status").textContent = "⚠️ " + erro.message;
+  }
+});
 async function executarFerramenta(texto) { irPara("chat"); entrada.value = texto; enviar(); }
-$("#casa-salvar").onclick = async () => {
-  await api("/api/config", { method: "POST", json: { casa: { url: $("#casa-url").value.trim(), token: $("#casa-token").value.trim() } } });
-  executarFerramenta("Liste os aparelhos da minha casa");
+async function testarHomeAssistant() {
+  const status = $("#casa-conexao-status");
+  status.textContent = "Testando endereço e token…";
+  try {
+    const r = await api("/api/casa/testar", { method: "POST", json: {
+      url: $("#casa-url").value.trim(), token: $("#casa-token").value.trim()
+    }});
+    status.textContent = r.ok ? "✅ " + r.mensagem : "⚠️ " + (r.erro || "Não foi possível conectar.");
+    return !!r.ok;
+  } catch (e) {
+    status.textContent = "⚠️ " + e.message;
+    return false;
+  }
+}
+$("#casa-testar").onclick = testarHomeAssistant;
+$("#casa-onvif-descobrir").onclick = async () => {
+  const saida = $("#casa-onvif-resultados");
+  saida.textContent = "Procurando câmeras ONVIF na rede local…";
+  try {
+    const d = await api("/api/cameras/descobrir", { method: "POST", json: {} });
+    saida.innerHTML = d.total ? (d.itens || []).map((item) =>
+      `<article class="cartao"><b>Câmera ONVIF encontrada</b>
+        <p>IP: ${esc(item.ip || "não informado")}</p>
+        <p>Endpoint: ${(item.endpoints || []).map(esc).join("<br>")}</p>
+        <p class="sutil">Autenticação: não verificada. Informe abaixo o endereço RTSP ou snapshot e as credenciais da câmera.</p></article>`
+    ).join("") : `<p class="sutil">${esc(d.mensagem || "Nenhuma câmera encontrada.")}</p>`;
+  } catch (e) { saida.textContent = "Falha na descoberta: " + e.message; }
 };
-$("#casa-atualizar").onclick = () => executarFerramenta("Liste os aparelhos da minha casa e o estado de cada um");
+$("#casa-salvar").onclick = async () => {
+  const status = $("#casa-conexao-status");
+  status.textContent = "Salvando configuração local…";
+  try {
+    await api("/api/config", { method: "POST", json: { casa: {
+      url: $("#casa-url").value.trim(), token: $("#casa-token").value.trim()
+    }}});
+    if (await testarHomeAssistant()) await carregarAparelhosCasa();
+  } catch (e) { status.textContent = "⚠️ Não foi possível salvar: " + e.message; }
+};
+$("#casa-atualizar").onclick = carregarAparelhosCasa;
+$("#casa-diagnostico").onclick = async () => {
+  const status = $("#casa-conexao-status");
+  status.textContent = "Verificando serviço, API e credenciais…";
+  await atualizarHomeAssistantGerenciado();
+  try {
+    const d = await api("/api/casa/aparelhos");
+    status.textContent = "✅ Home Assistant conectado · " + d.total + " aparelho(s) controlável(is) encontrado(s).";
+  } catch (erro) {
+    status.textContent = "Diagnóstico: " + erro.message;
+  }
+};
 $("#casa-bluetooth").onclick = () => executarFerramenta("Procure aparelhos Bluetooth por perto");
 $("#casa-rede").onclick = () => executarFerramenta("Quais aparelhos estão conectados na rede da casa?");
 $("#cam-adicionar").onclick = async () => {
@@ -928,12 +1893,37 @@ $("#botao-baixar").onclick = async () => {
 // ---------- Início ----------
 async function iniciar() {
   Hud.iniciar($("#hud-orbe")); Hud.relogio();
-  if (window.innerWidth <= 760) { entrada.placeholder = "Fale com o Optimus…"; $("#botao-ao-vivo").title = "Ao vivo"; } irPara(modoHud ? "hud" : "chat");
-  Hud.boot();
-  await Promise.all([atualizarSistema(), carregarPersonas(), carregarConversas()]);
-  if ("Notification" in window && Notification.permission === "default") Notification.requestPermission();
+  if (window.innerWidth <= 760) { entrada.placeholder = "Fale com o Optimus…"; $("#botao-ao-vivo").title = "Ao vivo"; }
+  irPara(modoHud ? "hud" : "chat");
+
+  // A animação nunca pode bloquear a aplicação. Mesmo se algum script de HUD falhar,
+  // removemos a camada de abertura e deixamos a interface apresentar o erro real.
+  const boot = document.getElementById("boot");
+  const liberarBoot = () => { if (boot && boot.isConnected) boot.remove(); };
+  const watchdogBoot = setTimeout(liberarBoot, 4000);
+  try { await Promise.race([Promise.resolve(Hud.boot()), new Promise(resolve => setTimeout(resolve, 2500))]); }
+  catch (erro) { console.error("Falha na animação de inicialização:", erro); }
+  finally { clearTimeout(watchdogBoot); liberarBoot(); }
+
+  // Uma API indisponível não pode impedir o carregamento das demais partes da tela.
+  const resultados = await Promise.allSettled([
+    atualizarSistema(), carregarPersonas(), carregarConversas()
+  ]);
+  const falhas = resultados.filter(x => x.status === "rejected");
+  if (falhas.length) {
+    console.error("Falha parcial na inicialização do Optimus:", falhas.map(x => x.reason));
+    if (falhas.length === resultados.length) definirEstado("erro", "Servidor sem resposta — verifique a conexão");
+    else if ($("#estado-texto").textContent === "Pronto") definirEstado("erro", "Inicialização parcial — consulte a conexão");
+  }
+  if ("Notification" in window && Notification.permission === "default") {
+    try { await Notification.requestPermission(); } catch (erro) { console.debug("Notificações indisponíveis:", erro); }
+  }
 }
-iniciar();
+iniciar().catch(erro => {
+  console.error("Falha crítica ao iniciar o Optimus:", erro);
+  const boot = document.getElementById("boot"); if (boot) boot.remove();
+  definirEstado("erro", "Falha ao iniciar: " + (erro.message || "erro inesperado"));
+});
 setInterval(atualizarSistema, 4000);
 
 // ---------- Gestos pela câmera (veja gestos.js) ----------

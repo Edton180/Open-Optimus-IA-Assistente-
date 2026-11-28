@@ -63,3 +63,78 @@ ativo = true
 
 Também dá para trocar o motor principal inteiro para a nuvem: `optimus config motor.backend groq` e
 `optimus config motor.chave_api SUA_CHAVE`.
+
+## Acessar o Optimus pelo celular fora da rede (4G/5G ou outro Wi-Fi)
+
+O acesso remoto usa **Cloudflare Quick Tunnel**: o Optimus continua escutando apenas em
+`127.0.0.1`, enquanto o processo `cloudflared` cria uma URL HTTPS temporária. Não é necessário
+abrir portas no roteador nem colocar o computador diretamente na internet.
+
+### Pela interface
+
+1. Instale o `cloudflared` no computador:
+   https://developers.cloudflare.com/cloudflare-one/connections/connect-apps/install-and-setup/installation/
+2. Abra **Configurações > Celular e agenda** no Optimus.
+3. Em **Acesso externo**, informe uma senha exclusiva com pelo menos 12 caracteres e toque em
+   **Ativar acesso externo**.
+4. Leia o QR code com o celular usando dados móveis (4G/5G) ou outro Wi-Fi. O segundo QR code
+   assina a agenda no endereço externo.
+5. Para encerrar, toque em **Encerrar acesso externo**. O túnel também é encerrado quando o
+   servidor Optimus é desligado normalmente.
+
+### Pelo terminal
+
+Defina uma senha forte e inicie:
+
+```bash
+optimus config web.senha "uma-senha-exclusiva-com-mais-de-12-caracteres"
+optimus gui --tunel
+```
+
+O comando requer o executável `cloudflared` instalado e cria o túnel enquanto o Optimus estiver
+em execução. Use `Ctrl+C` para encerrar o servidor e o túnel.
+
+### Limites e segurança
+
+- O endereço Quick Tunnel é temporário e pode mudar ao reiniciar; gere um QR novo após reconectar.
+- O computador precisa ficar ligado, sem suspensão, e conectado à internet.
+- A senha protege o painel e as APIs. Use senha exclusiva, não a reutilize em outros serviços.
+- A URL da agenda contém um token de acesso próprio: trate-a como privada e use **Trocar link da
+  agenda** se ela for compartilhada por engano.
+- Não configure encaminhamento de portas (port forwarding) no roteador para a porta do Optimus.
+- O Cloudflare Tunnel é um serviço de terceiros e a conexão depende da disponibilidade da Cloudflare.
+- Para um endereço permanente, configure um túnel nomeado na sua conta Cloudflare; o Quick Tunnel
+  é destinado a testes e uso temporário.
+
+## Descobrir dispositivos na rede local
+
+- `rede_local` lê apenas o cache ARP/neighbor que o sistema já conhece; é rápido, mas pode omitir aparelhos.
+- `rede_wifi_varrer` faz uma descoberta ativa limitada à LAN privada das interfaces IPv4 ativas, combinando ping e cache ARP/neighbor.
+- Por segurança, a ferramenta só aceita uma sub-rede privada que pertença a uma interface local ativa e tenha no máximo 256 endereços por execução. Não varre IPs públicos, não faz port scan e não tenta autenticar ou alterar dispositivos.
+- O resultado diferencia dispositivos que responderam ao ping dos que só estavam no cache. MAC pode não estar disponível e o fabricante/hostname ainda não são inferidos nesta versão; aparelhos que bloqueiam ping e não aparecem no cache podem não ser encontrados.
+
+A varredura ativa pede confirmação pelo mecanismo de risco do Optimus. Faça isso apenas em redes que você administra ou tem autorização para diagnosticar.
+
+
+## Acesso externo com Cloudflare Tunnel
+
+A opção **Acesso externo** usa um Cloudflare Quick Tunnel, encaminhando apenas para
+`127.0.0.1` na porta local do Optimus. O módulo `optimus.network.cloudflare_tunnel`
+localiza o `cloudflared` instalado ou baixa o executável oficial da versão estável mais
+recente. A instalação automática só é aceita quando o GitHub fornece um digest SHA-256
+para o asset e a verificação confere. O executável fica na pasta privada de dados do Optimus.
+
+O Quick Tunnel gera um endereço temporário `trycloudflare.com`; ele não cria hostname
+permanente, não altera DNS e não precisa de token Cloudflare. Para domínio próprio,
+hostname estável, DNS gerenciado e túnel nomeado, será necessária a integração autenticada
+com a API Cloudflare (Account ID, Zone ID, hostname e token com permissões mínimas). Essa
+configuração não deve ser confundida com a senha local do Optimus.
+
+A senha do Optimus deve ter pelo menos 12 caracteres. O computador precisa permanecer
+ligado enquanto o túnel estiver em uso. O painel só exibe o endereço como conectado depois que o Optimus recebe uma resposta HTTP
+200 com conteúdo HTML pelo hostname HTTPS público. Se a verificação demorar, o estado fica
+como iniciando e continua sendo monitorado em segundo plano.
+
+No Android/Termux, o instalador seleciona o binário Linux ARM64 quando a arquitetura é
+aarch64. A execução pode depender da versão do Android, permissões do Termux e suporte
+do binário no dispositivo.

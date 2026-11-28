@@ -22,6 +22,10 @@ from optimus.estudio import pasta_estudio
 from optimus.estudio.audio import ErroEstudio
 
 
+class _InstalacaoCancelada(Exception):
+    """Interrompe o lote sem registrar cancelamento como falha de um modelo."""
+
+
 @dataclass
 class Item:
     id: str
@@ -40,14 +44,24 @@ class Item:
         if self.forma == "pacote":
             from optimus.pacotes import modulo_instalado
 
-            if not modulo_instalado(self.modulo):
-                return False
-            if self.id == "kokoro":  # o pacote sozinho não fala: precisa dos arquivos de voz
-                from optimus.voice import tts
-
-                return tts.kokoro_instalado()
-            return True
-        return bool(self.pastas) and all(p.exists() for p in self.pastas)
+            presente = modulo_instalado(self.modulo)
+            # Pacote instalado sem os pesos não é um motor pronto para uso offline.
+            if self.id in {"omnivoice", "chatterbox", "faster-whisper", "demucs", "kokoro"}:
+                return presente and _marcador(self.id).is_file()
+            return presente
+        if self.id.startswith("whisper-"):
+            pasta = self.pastas[0] if self.pastas else None
+            return bool(pasta and pasta.is_dir()
+                        and (list(pasta.glob("*-tokens.txt")) or (pasta / "tokens.txt").is_file())
+                        and list(pasta.glob("*encoder*.onnx"))
+                        and list(pasta.glob("*decoder*.onnx")))
+        if self.id.startswith("piper-"):
+            pasta = self.pastas[0] if self.pastas else None
+            # O catálogo legado considera o arquivo ONNX como marcador do download da voz;
+            # tokens/espeak são verificados pelo motor sherpa-onnx ao inicializar a síntese.
+            return bool(pasta and pasta.is_dir() and any(pasta.glob("*.onnx")))
+        return bool(self.pastas) and all(p.is_file() and p.stat().st_size > 0
+                                         for p in self.pastas)
 
     def ocupado_mb(self) -> float:
         total = 0
@@ -72,12 +86,17 @@ def _comando(pacote: str) -> str:
     return comando_pip(pacote)
 
 
+def _marcador(ident: str) -> Path:
+    return pasta_estudio() / "modelos" / ".prontos" / f"{ident}.ok"
+
+
 def catalogo() -> list[Item]:
     from optimus.estudio import diarizar, piper, transcrever
 
     itens = [
-        Item("omnivoice", "OmniVoice", "clonagem", "Apache-2.0", 2500,
-             "Clonagem, criação de voz por descrição e 600+ idiomas (modelo do Hugging Face)",
+        Item("omnivoice", "OmniVoice", "clonagem",
+             "Apache-2.0 (código) / CC-BY-NC-4.0 (pesos)", 2500,
+             "Clonagem e criação de voz em 600+ idiomas. Atenção: os pesos oficiais são CC-BY-NC-4.0 (uso não comercial).",
              "pacote", "omnivoice", "omnivoice"),
         Item("chatterbox", "Chatterbox Multilingual", "clonagem", "MIT", 3000,
              "Clonagem em 23 idiomas e conversor de voz (voz para voz)",
@@ -135,18 +154,62 @@ def _pip(*argumentos: str) -> str:
     return saida
 
 
-def instalar(ident: str, progresso=None) -> dict:
+class _InstalacaoCancelada(Exception):
+    """Sinal interno para interromper a instalação em lote sem registrar falha."""
+
+
+def instalar(ident: str, progresso=None, cancelado=None) -> dict:
+    def verificar_cancelamento():
+        if cancelado and cancelado():
+            raise _InstalacaoCancelada("Instalação cancelada pelo usuário.")
+
+    def atualizar(pct, msg):
+        verificar_cancelamento()
+        if progresso:
+            progresso(pct, msg)
+
+    verificar_cancelamento()
     item = obter(ident)
     if item.forma == "pacote":
-        (progresso or (lambda *a: None))(0.05, f"Instalando {item.nome} (pip)…")
+        atualizar(0.05, f"Instalando {item.nome} (pip)…")
         _pip("install", item.pacote)
+        verificar_cancelamento()
         importlib.invalidate_caches()
-    elif item.baixar:
-        item.baixar(progresso)
-    if item.id == "kokoro":
-        from optimus.voice import tts
+        # Pré-carrega os pesos agora, não apenas na primeira utilização do recurso.
+        if item.id in {"omnivoice", "chatterbox", "faster-whisper"}:
+            try:
+                from huggingface_hub import snapshot_download
+            except ImportError:
+                _pip("install", "huggingface_hub>=0.24")
+                from huggingface_hub import snapshot_download
 
-        tts.baixar_kokoro(progresso)
+            verificar_cancelamento()
+            repositorios = {
+                "omnivoice": "k2-fsa/OmniVoice",
+                "chatterbox": "ResembleAI/chatterbox",
+                "faster-whisper": "Systran/faster-whisper-small",
+            }
+            snapshot_download(repo_id=repositorios[item.id])
+            verificar_cancelamento()
+        elif item.id == "demucs":
+            # O Demucs baixa o checkpoint oficial e o deixa no cache do torch hub.
+            from demucs.pretrained import get_model
+
+            verificar_cancelamento()
+            get_model(name="htdemucs")
+            verificar_cancelamento()
+        elif item.id == "kokoro":
+            from optimus.voice import tts
+
+            if not tts.baixar_kokoro(atualizar):
+                raise ErroEstudio("Não foi possível baixar os pesos do Kokoro.")
+        if item.id in {"omnivoice", "chatterbox", "faster-whisper", "demucs", "kokoro"}:
+            marcador = _marcador(item.id)
+            marcador.parent.mkdir(parents=True, exist_ok=True)
+            marcador.write_text("ok", encoding="utf-8")
+    elif item.baixar:
+        item.baixar(atualizar if progresso or cancelado else None)
+        verificar_cancelamento()
     if not item.instalado():  # nunca dizer que instalou sem conferir
         if item.forma == "pacote":
             from optimus.pacotes import python_do_optimus
@@ -158,6 +221,73 @@ def instalar(ident: str, progresso=None) -> dict:
         raise ErroEstudio(f"O download de {item.nome} terminou incompleto. Tente de novo.")
     return item.para_dict()
 
+
+
+def instalar_todos(progresso=None, ids: list[str] | None = None, cancelado=None) -> dict:
+    """Instala sequencialmente todos os motores e pesos do catálogo.
+
+    Faz uma pré-verificação de espaço, preserva os itens já instalados e continua
+    após falhas individuais para não perder o progresso dos demais downloads.
+    """
+    itens = catalogo()
+    selecionados = [i for i in itens if ids is None or i.id in set(ids)]
+    faltantes = [i for i in selecionados if not i.instalado()]
+    estimativa = sum(i.tamanho_mb for i in faltantes)
+    # Em perfis recém-criados a pasta ainda não existe; disk_usage exige um caminho existente.
+    diretorio_estudio = pasta_estudio()
+    diretorio_estudio.mkdir(parents=True, exist_ok=True)
+    livre = shutil.disk_usage(diretorio_estudio).free // (1024 * 1024)
+    reserva = max(1024, int(estimativa * 0.25))
+    necessario = estimativa + reserva
+    if livre < necessario:
+        raise ErroEstudio(
+            f"Espaço insuficiente para instalar os modelos: estimativa de {estimativa} MB "
+            f"+ reserva de {reserva} MB; disponíveis {livre} MB. Libere espaço ou instale "
+            "os modelos individualmente."
+        )
+    resultados = []
+    total = max(1, len(selecionados))
+    def verificar_cancelamento():
+        if cancelado and cancelado():
+            raise _InstalacaoCancelada()
+
+    def retornar_cancelado():
+        return {"total": len(resultados), "instalados": sum(
+            r["estado"] in {"instalado", "já instalado"} for r in resultados),
+            "cancelado": True, "resultados": resultados}
+
+    for indice, item in enumerate(selecionados, 1):
+        if cancelado and cancelado():
+            return retornar_cancelado()
+        if item.instalado():
+            resultados.append({"id": item.id, "nome": item.nome, "estado": "já instalado"})
+            continue
+        if progresso:
+            progresso((indice - 1) / total, f"({indice}/{total}) Instalando {item.nome}…")
+        try:
+            def callback(pct, msg):
+                verificar_cancelamento()
+                if progresso:
+                    progresso(((indice - 1) + max(0.0, min(1.0, float(pct)))) / total, msg)
+
+            if cancelado:
+                resultado = instalar(item.id, callback if progresso or cancelado else None,
+                                     cancelado=cancelado)
+            else:
+                resultado = instalar(item.id, callback if progresso else None)
+            resultados.append({"id": item.id, "nome": item.nome, "estado": "instalado",
+                                "detalhes": resultado})
+            verificar_cancelamento()
+        except _InstalacaoCancelada:
+            return retornar_cancelado()
+        except Exception as erro:  # cada falha fica registrada; os outros modelos continuam
+            resultados.append({"id": item.id, "nome": item.nome, "estado": "falhou",
+                                "erro": f"{type(erro).__name__}: {erro}"})
+    falhas = [r for r in resultados if r["estado"] == "falhou"]
+    if progresso:
+        progresso(1.0, f"Instalação concluída: {len(resultados) - len(falhas)}/{len(resultados)}")
+    return {"total": len(resultados), "instalados": len(resultados) - len(falhas),
+            "falhas": falhas, "resultados": resultados}
 
 def remover(ident: str) -> dict:
     item = obter(ident)
