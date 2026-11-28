@@ -94,7 +94,8 @@ def _prontas() -> list[Perfil]:
                        "dicção nítida e coloquial, timbre médio/médio-agudo claro, projeção "
                        "próxima e seca, ritmo ágil sem atropelar, micro-pausas estratégicas, "
                        "perguntas curiosas, ênfase controlada em números e contrastes, "
-                       "fechamentos firmes e amigáveis.")
+                       "fechamentos firmes e amigáveis. Com a chave da ElevenLabs em "
+                       "Configurações, usa a voz original (Matheus) pela API.")
     instrucao_edton = omnivoice.instrucao(
         "narrador masculino jovem brasileiro, voz clara e brilhante, timbre médio-agudo, "
         "estilo educativo de ciência e tecnologia, conversacional e confiante, ritmo ágil, "
