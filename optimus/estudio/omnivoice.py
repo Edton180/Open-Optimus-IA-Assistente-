@@ -13,7 +13,6 @@ Opcional: `pip install omnivoice` (usa PyTorch; o modelo vem do Hugging Face na 
 
 from __future__ import annotations
 
-import importlib.util
 import re
 import threading
 import unicodedata
@@ -64,7 +63,9 @@ _ATRIBUTOS: list[tuple[tuple[str, ...], str]] = [
 
 def instalado() -> bool:
     try:
-        return importlib.util.find_spec("omnivoice") is not None
+        from optimus.pacotes import modulo_instalado
+
+        return modulo_instalado("omnivoice")
     except (ImportError, ValueError):
         return False
 

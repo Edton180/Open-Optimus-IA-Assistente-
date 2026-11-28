@@ -38,9 +38,9 @@ def _impressao() -> Path:
 
 def instalado() -> bool:
     try:
-        import importlib.util
+        from optimus.pacotes import modulo_instalado
 
-        return importlib.util.find_spec("sherpa_onnx") is not None
+        return modulo_instalado("sherpa_onnx")
     except (ImportError, ValueError):
         return False
 

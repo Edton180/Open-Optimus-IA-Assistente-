@@ -49,8 +49,8 @@ isolar = ["demucs>=4"]
 clonagem = ["chatterbox-tts>=0.1"]
 # Clonagem, vozes por descrição e 600+ idiomas (OmniVoice, Apache-2.0). Instala o PyTorch.
 omnivoice = ["omnivoice>=0.2"]
-# QR code para abrir o Optimus no celular
-celular = ["segno>=1.6"]
+# QR code para abrir o Optimus no celular e endereço https (o microfone só abre em https)
+celular = ["segno>=1.6", "cryptography>=41"]
 completo = ["optimus-assistente[voz,desktop,casa,pdf,seguranca,celular,estudio,conhecimento]"]
 dev = ["pytest>=8", "ruff>=0.4", "libzim>=3.8.0; python_version >= '3.11'", "libzim>=3.13.1,<4; python_version < '3.11'", "numpy>=1.24", "imageio-ffmpeg>=0.4", "pypdf>=4.0", "reportlab>=4.0", "python-docx>=1.1", "Pillow>=10.0", "pypdfium2>=4.28", "pytesseract>=0.3.10", "pdfplumber>=0.11", "openpyxl>=3.1", "python-pptx>=1.0", "pyHanko>=0.25"]
 

@@ -3,20 +3,22 @@
 from __future__ import annotations
 
 import argparse
-import importlib.util
 import shutil
 import sys
 
 
 def _instalado(modulo: str) -> bool:
     try:
-        return importlib.util.find_spec(modulo) is not None
+        from optimus.pacotes import modulo_instalado
+
+        return modulo_instalado(modulo)
     except (ImportError, ValueError):
         return False
 
 
 def diagnostico() -> list[tuple[str, bool, str]]:
     from optimus.estudio import audio, motores
+    from optimus.pacotes import comando_pip
     from optimus.voice import tts
 
     try:
@@ -25,20 +27,21 @@ def diagnostico() -> list[tuple[str, bool, str]]:
     except audio.ErroEstudio:
         tem_ffmpeg = False
     return [
-        ("ffmpeg (áudio e vídeo)", tem_ffmpeg, "pip install imageio-ffmpeg"),
-        ("Transcrição (faster-whisper)", _instalado("faster_whisper"), "pip install faster-whisper"),
+        ("ffmpeg (áudio e vídeo)", tem_ffmpeg, comando_pip("imageio-ffmpeg")),
+        ("Transcrição (faster-whisper)", _instalado("faster_whisper"),
+         comando_pip("faster-whisper")),
         ("Transcrição reserva e quem fala quando (sherpa-onnx)", _instalado("sherpa_onnx"),
-         "pip install sherpa-onnx"),
-        ("Separar voz da música (Demucs)", _instalado("demucs"), "pip install demucs"),
-        ("Audiolivro a partir de PDF (pypdf)", _instalado("pypdf"), "pip install pypdf"),
+         comando_pip("sherpa-onnx<2")),
+        ("Separar voz da música (Demucs)", _instalado("demucs"), comando_pip("demucs")),
+        ("Audiolivro a partir de PDF (pypdf)", _instalado("pypdf"), comando_pip("pypdf")),
         ("Vozes offline pt-BR (Kokoro)", tts.kokoro_instalado(), "optimus voz-diagnostico"),
-        ("Vozes online em 18 idiomas (Edge)", tts.edge_instalado(), "pip install edge-tts"),
+        ("Vozes online em 18 idiomas (Edge)", tts.edge_instalado(), comando_pip("edge-tts")),
         ("Clonagem, criar voz e 600+ idiomas (OmniVoice)", _instalado("omnivoice"),
-         "pip install omnivoice"),
+         comando_pip("omnivoice")),
         ("Clonagem em 23 idiomas e conversor de voz (Chatterbox)",
-         motores.chatterbox_instalado(), "pip install chatterbox-tts"),
+         motores.chatterbox_instalado(), comando_pip("chatterbox-tts")),
         ("Vozes Piper offline (sherpa-onnx < 2)", _instalado("sherpa_onnx"),
-         'pip install "sherpa-onnx<2"'),
+         comando_pip("sherpa-onnx<2")),
         ("Placa de vídeo", motores.dispositivo() != "cpu" or bool(shutil.which("nvidia-smi")),
          "opcional: deixa clonagem e transcrição bem mais rápidas"),
     ]

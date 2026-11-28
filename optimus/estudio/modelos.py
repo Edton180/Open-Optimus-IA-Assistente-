@@ -42,10 +42,9 @@ class Item:
 
     def instalado(self) -> bool:
         if self.forma == "pacote":
-            try:
-                presente = importlib.util.find_spec(self.modulo) is not None
-            except (ImportError, ValueError):
-                return False
+            from optimus.pacotes import modulo_instalado
+
+            presente = modulo_instalado(self.modulo)
             # Pacote instalado sem os pesos não é um motor pronto para uso offline.
             if self.id in {"omnivoice", "chatterbox", "faster-whisper", "demucs", "kokoro"}:
                 return presente and _marcador(self.id).is_file()
@@ -77,7 +76,14 @@ class Item:
         return {"id": self.id, "nome": self.nome, "tipo": self.tipo, "licenca": self.licenca,
                 "tamanho_mb": self.tamanho_mb, "descricao": self.descricao,
                 "forma": self.forma, "pacote": self.pacote, "instalado": self.instalado(),
+                "comando": _comando(self.pacote) if self.forma == "pacote" else "",
                 "ocupado_mb": self.ocupado_mb() if self.forma == "arquivo" else None}
+
+
+def _comando(pacote: str) -> str:
+    from optimus.pacotes import comando_pip
+
+    return comando_pip(pacote)
 
 
 def _marcador(ident: str) -> Path:
@@ -204,6 +210,15 @@ def instalar(ident: str, progresso=None, cancelado=None) -> dict:
     elif item.baixar:
         item.baixar(atualizar if progresso or cancelado else None)
         verificar_cancelamento()
+    if not item.instalado():  # nunca dizer que instalou sem conferir
+        if item.forma == "pacote":
+            from optimus.pacotes import python_do_optimus
+
+            raise ErroEstudio(f"O pip terminou, mas o Optimus ainda não encontra {item.nome} "
+                              f"(módulo {item.modulo}) no Python {python_do_optimus()}. "
+                              "Feche e abra o Optimus; se continuar, instale com: "
+                              + _comando(item.pacote))
+        raise ErroEstudio(f"O download de {item.nome} terminou incompleto. Tente de novo.")
     return item.para_dict()
 
 

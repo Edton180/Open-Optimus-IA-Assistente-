@@ -1094,7 +1094,7 @@ function falar(texto) { Voz.falar(texto); }
 const PALAVRA = /\b(optimus|óptimus|optimos|ótimos|otimus|ótimus|optimu|op timus|opitimus|optmus)\b[,.!?]?\s*/i;
 const PARE = /^(pare|para|parar|chega|silêncio|silencio|cala a boca|já chega|stop)\b/i;
 function abrirJanela() { aoVivo.janelaAte = Date.now() + 25000; }
-function avisoVoz(texto) { $("#rodape-voz").textContent = texto; }
+function avisoVoz(texto, html) { if (html) $("#rodape-voz").innerHTML = texto; else $("#rodape-voz").textContent = texto; }
 
 Voz.ev.onNivel = (tipo, n) => Hud.nivel(n);
 Voz.ev.onEstado = (s) => { if (s === "falando") definirEstado("falando", "Falando…"); };
@@ -1145,7 +1145,7 @@ async function alternarAoVivo(ligar) {
   const botao = $("#botao-ao-vivo");
   if (ligar) {
     const ok = await Voz.iniciarEscuta();
-    if (!ok) { avisoVoz("⚠️ Não consegui abrir o microfone. Libere o microfone para este site (cadeado na barra de endereço)."); return; }
+    if (!ok) { avisoMicrofone(); return; }
     aoVivo.ligado = true; abrirJanela();
     botao.classList.add("ligado"); botao.textContent = "🔴 Ao vivo";
     avisoVoz(`Ao vivo: fale “Optimus…” ou bata duas palmas. Diga “pare” para interromper. Reconhecimento: ${Voz.modo === "navegador" ? "do navegador" : "Whisper no PC"}.`);
@@ -1178,7 +1178,8 @@ mic.addEventListener("click", async () => {
     if (texto) enviar(texto); else definirEstado("pronto", "Não ouvi nada, tente de novo");
   } catch (e) {
     definirEstado("erro", "Reconhecimento de voz indisponível");
-    avisoVoz("⚠️ " + (e.message === "not-allowed" ? "Microfone bloqueado: libere o microfone para este site." : e.message));
+    if (!window.isSecureContext) avisoMicrofone();
+    else avisoVoz("⚠️ " + (e.message === "not-allowed" ? "Microfone bloqueado: libere o microfone para este site." : e.message));
   }
   gravandoManual = false; mic.classList.remove("gravando");
 });
@@ -1368,6 +1369,18 @@ $("#baixar-atualizacao").addEventListener("click", async (ev) => {
   finally { ev.target.disabled = false; }
 });
 
+// O navegador só abre o microfone em https ou neste PC (localhost). Pela rede (http://IP)
+// ele recusa sem perguntar: mostra o endereço seguro em vez de mandar liberar o cadeado.
+async function avisoMicrofone() {
+  if (window.isSecureContext) { avisoVoz("⚠️ Não consegui abrir o microfone. Libere o microfone para este site (cadeado na barra de endereço)."); return; }
+  let seguro = "";
+  try { seguro = (await api("/api/celular", { tempo: 5000 })).url_seguro || ""; } catch (e) {}
+  const caminho = seguro ? seguro + location.pathname + location.search : "";
+  avisoVoz(seguro
+    ? `⚠️ Pelo endereço http o navegador bloqueia o microfone. Abra o endereço seguro: <a href="${esc(caminho)}">${esc(seguro)}</a> (na primeira vez, toque em “Avançado” e “Continuar”).`
+    : "⚠️ Pelo endereço http da rede o navegador bloqueia o microfone. No PC, instale <code>pip install cryptography</code> e religue o acesso pelo celular para ganhar um endereço https.", true);
+}
+
 // ---------- Celular e agenda ----------
 function desenharCelular(d) {
   const estadoEl = $("#celular-estado"); const qr = $("#celular-qr");
@@ -1376,7 +1389,8 @@ function desenharCelular(d) {
   const partes = [];
   if (d.dica) partes.push("⚠️ " + esc(d.dica));
   if (d.ligado) {
-    partes.push(`✅ Acesso pela rede local ligado. Conecte o celular ao mesmo Wi-Fi, leia o QR Code ou abra <code>${esc(d.url)}</code> e entre com a senha. Para usar de fora de casa (4G/5G ou outro Wi-Fi), ative o Cloudflare Tunnel na seção Acesso externo abaixo.`);
+    if (d.url_seguro) partes.push(`✅ Acesso pelo celular ligado. No celular (mesma rede Wi-Fi), leia o QR code ou abra <code>${esc(d.url_seguro)}</code> e entre com a senha. Esse endereço seguro (https) libera o microfone e a câmera. Na primeira vez o navegador avisa sobre o certificado deste PC: toque em “Avançado” e “Continuar”. Sem microfone, também funciona <code>${esc(d.url)}</code>. Para usar de fora de casa (4G/5G ou outro Wi-Fi), ative o Cloudflare Tunnel na seção Acesso externo abaixo.`);
+    else partes.push(`✅ Acesso pelo celular ligado. No celular (mesma rede Wi-Fi), leia o QR code ou abra <code>${esc(d.url)}</code> e entre com a senha. O microfone do celular só abre em https: instale <code>pip install cryptography</code> e religue o acesso para ganhar o endereço seguro. Para usar de fora de casa (4G/5G ou outro Wi-Fi), ative o Cloudflare Tunnel na seção Acesso externo abaixo.`);
     partes.push("Se o celular não abrir, libere o Optimus (Python) no firewall do computador para redes privadas.");
     if (!d.qr) partes.push("Para ver o QR code, instale: <code>pip install segno</code>");
   }
@@ -1767,23 +1781,56 @@ async function carregarConfig() {
   desenharDestinos();
   carregarFamilias();
 }
+function nomeInstalado(lista, nome) {
+  return lista.includes(nome) || (!nome.includes(":") && lista.includes(nome + ":latest"));
+}
 async function carregarFamilias() {
   try {
     const d = await api("/api/modelos/catalogo");
-    $("#familias-memoria").textContent = `Memória útil para o modelo: ${d.memoria_util_gb} GB (${d.gpu ? "placa de vídeo" : "RAM, sem placa de vídeo"}). Modelos de outras empresas também rodam pelo Ollama; para usar nuvem (OpenAI, Gemini, Grok, DeepSeek…), adicione em “Outras IAs e PCs”.`;
-    $("#familias").innerHTML = d.familias.map((f) => `<div class="cartao familia"><h3>${esc(f.familia)}</h3>
-      ${f.recomendado ? `<p><b>${esc(f.recomendado.nome)}</b> · ~${f.recomendado.memoria_gb} GB<br><span class="sutil">${esc(f.recomendado.descricao)}</span></p>
-      <button type="button" class="botao pequeno" data-usar-modelo="${esc(f.recomendado.nome)}">Baixar e usar</button>` : '<p class="sutil">Nenhum modelo desta família cabe neste PC.</p>'}
-      ${f.proximo ? `<p class="sutil">Próximo: ${esc(f.proximo.nome)} (~${f.proximo.memoria_gb} GB) não cabe ainda.</p>` : ""}</div>`).join("");
+    const instalados = d.instalados || [], downloads = d.downloads || {};
+    const atual = ($("[name='motor.modelo']") || {}).value || "";
+    $("#familias-memoria").textContent = `Memória útil para o modelo: ${d.memoria_util_gb} GB (${d.gpu ? "placa de vídeo" : "RAM, sem placa de vídeo"}). Instalados no Ollama: ${instalados.length ? instalados.join(", ") : "nenhum"}. Modelos de outras empresas também rodam pelo Ollama; para usar nuvem (OpenAI, Gemini, Grok, DeepSeek…), adicione em “Outras IAs e PCs”.`;
+    $("#familias").innerHTML = d.familias.map((f) => {
+      if (!f.recomendado) return `<div class="cartao familia"><h3>${esc(f.familia)}</h3><p class="sutil">Nenhum modelo desta família cabe neste PC.</p></div>`;
+      const nome = f.recomendado.nome, ja = nomeInstalado(instalados, nome), p = downloads[nome] || {};
+      let botao;
+      if (ja && atual === nome) botao = '<span class="sutil">✅ Instalado e em uso</span>';
+      else if (ja) botao = `<span class="sutil">✅ Instalado</span> <button type="button" class="botao pequeno" data-usar-modelo="${esc(nome)}" data-instalado="1">Usar</button>`;
+      else if (p.terminou === false) botao = `<button type="button" class="botao pequeno" disabled data-usar-modelo="${esc(nome)}">Baixando… ${esc(p.pct || 0)}%</button>`;
+      else botao = `<button type="button" class="botao pequeno" data-usar-modelo="${esc(nome)}">Baixar e usar</button>${p.erro ? `<div class="sutil">❌ ${esc(p.erro)}</div>` : ""}`;
+      return `<div class="cartao familia"><h3>${esc(f.familia)}</h3>
+        <p><b>${esc(nome)}</b> · ~${f.recomendado.memoria_gb} GB<br><span class="sutil">${esc(f.recomendado.descricao)}</span></p>${botao}
+        ${f.proximo ? `<p class="sutil">Próximo: ${esc(f.proximo.nome)} (~${f.proximo.memoria_gb} GB) não cabe ainda.</p>` : ""}</div>`;
+    }).join("");
+    Object.entries(downloads).forEach(([nome, p]) => { if (p.terminou === false) acompanharDownload(nome); });
   } catch (e) { $("#familias").innerHTML = `<p class="sutil">⚠️ ${esc(e.message)}</p>`; }
+}
+const vigiasDownload = {};
+function acompanharDownload(modelo, aoTerminar) {
+  if (vigiasDownload[modelo]) return;
+  vigiasDownload[modelo] = setInterval(async () => {
+    let p = {};
+    try { p = (await api("/api/modelos/progresso", { tempo: 8000 }))[modelo] || {}; } catch (e) { return; }
+    const texto = p.terminou ? (p.ok ? `✅ ${modelo} instalado` : `❌ Não consegui baixar ${modelo}: ${p.erro || "o Ollama está ligado?"}`) : `Baixando ${modelo}: ${p.pct || 0}% ${p.status || ""}`;
+    $("#progresso-baixar").textContent = texto;
+    $$(`#familias [data-usar-modelo="${CSS.escape(modelo)}"]`).forEach((b) => { if (!p.terminou) b.textContent = `Baixando… ${p.pct || 0}%`; });
+    if (p.terminou) {
+      clearInterval(vigiasDownload[modelo]); delete vigiasDownload[modelo];
+      if (aoTerminar) aoTerminar(p);
+      atualizarSistema(); carregarFamilias();
+    }
+  }, 1000);
 }
 $("#familias").addEventListener("click", async (e) => {
   const b = e.target.closest("[data-usar-modelo]"); if (!b) return;
   const modelo = b.dataset.usarModelo;
-  b.disabled = true; b.textContent = "Baixando…";
+  b.disabled = true;
   await api("/api/config", { method: "POST", json: { motor: { modelo } } });
-  $("#modelo-baixar").value = modelo; $("#botao-baixar").click();
   $("[name='motor.modelo']").value = modelo;
+  if (b.dataset.instalado) { atualizarSistema(); carregarFamilias(); return; }
+  b.textContent = "Baixando… 0%";
+  await api("/api/modelos/baixar", { method: "POST", json: { modelo } });
+  acompanharDownload(modelo);
 });
 $("#lista-vozes").addEventListener("click", async (e) => {
   const ouvir = e.target.closest("[data-ouvir]"); const usar = e.target.closest("[data-usar]");
@@ -1837,12 +1884,10 @@ $("#form-config").addEventListener("submit", async (e) => {
 });
 $("#botao-baixar").onclick = async () => {
   const modelo = $("#modelo-baixar").value.trim(); if (!modelo) return;
-  await api("/api/modelos/baixar", { method: "POST", json: { modelo } });
-  const vigiar = setInterval(async () => {
-    const p = (await api("/api/modelos/progresso"))[modelo] || {};
-    $("#progresso-baixar").textContent = p.terminou ? (p.ok ? `✅ ${modelo} instalado` : `❌ Não consegui baixar ${modelo}. O Ollama está ligado?`) : `Baixando ${modelo}: ${p.pct || 0}% ${p.status || ""}`;
-    if (p.terminou) { clearInterval(vigiar); atualizarSistema(); }
-  }, 1000);
+  $("#progresso-baixar").textContent = `Baixando ${modelo}…`;
+  try { await api("/api/modelos/baixar", { method: "POST", json: { modelo } }); }
+  catch (e) { $("#progresso-baixar").textContent = "❌ " + e.message; return; }
+  acompanharDownload(modelo);
 };
 
 // ---------- Início ----------

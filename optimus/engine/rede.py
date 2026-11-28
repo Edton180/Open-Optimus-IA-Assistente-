@@ -215,9 +215,12 @@ class MotorRede(Motor):
         return sorted(set(nomes))
 
     def baixar(self, modelo, progresso=None) -> bool:
-        for destino in self._candidatos():
-            if destino.local and destino.motor.baixar(modelo, progresso):
+        locais = [d for d in self._candidatos() if d.local]
+        for destino in locais:
+            if destino.motor.baixar(modelo, progresso):
                 return True
+        if not locais and progresso:
+            progresso({"error": "nenhum Ollama ligado neste PC para baixar o modelo"})
         return False
 
     def estado(self) -> list[dict[str, Any]]:

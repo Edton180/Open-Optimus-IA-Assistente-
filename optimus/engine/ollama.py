@@ -204,24 +204,52 @@ class MotorOllama(Motor):
                 if dados.get(k) is not None}
 
     def baixar(self, modelo: str, progresso=None) -> bool:
+        """Baixa pelo /api/pull. Só devolve True quando o Ollama diz "success" e o modelo
+        aparece na lista; um erro do Ollama chega ao `progresso` como {"error": ...}."""
+        avisar = progresso or (lambda _dados: None)
         try:
             with httpx.stream("POST", f"{self.url}/api/pull", json={"model": modelo},
-                              timeout=None) as resposta:
+                              timeout=httpx.Timeout(30.0, read=None)) as resposta:
                 if resposta.status_code != 200:
+                    resposta.read()
+                    avisar({"error": _erro_ollama(resposta.text) or
+                            f"o Ollama respondeu {resposta.status_code}"})
                     return False
                 for linha in resposta.iter_lines():
                     if not linha:
                         continue
-                    dados = json.loads(linha)
+                    try:
+                        dados = json.loads(linha)
+                    except ValueError:
+                        continue
                     if dados.get("error"):
+                        avisar({"error": str(dados["error"])})
                         return False
-                    if progresso:
-                        progresso(dados)
+                    avisar(dados)
                     if dados.get("status") == "success":
-                        return True
-        except httpx.HTTPError:
+                        break
+                else:
+                    avisar({"error": "o download parou antes de terminar"})
+                    return False
+        except httpx.HTTPError as erro:
+            avisar({"error": f"não consegui falar com o Ollama ({erro})"})
+            return False
+        if not _tem_modelo(self.modelos(), modelo):  # lista vazia também não confirma
+            avisar({"error": "o Ollama terminou, mas o modelo não aparece na lista"})
             return False
         return True
+
+
+def _tem_modelo(instalados: list[str], modelo: str) -> bool:
+    alvo = modelo if ":" in modelo else modelo + ":latest"
+    return modelo in instalados or alvo in instalados
+
+
+def _erro_ollama(texto: str) -> str:
+    try:
+        return str(json.loads(texto).get("error") or "")
+    except (ValueError, AttributeError):
+        return texto.strip()[:300]
 
 
 def _para_ollama(mensagens: list[dict[str, Any]]) -> list[dict[str, Any]]:
