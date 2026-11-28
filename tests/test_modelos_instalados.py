@@ -143,6 +143,8 @@ def test_sucesso_confere_a_lista_do_ollama():
         assert motor.baixar("qwen3.5:0.8b") is True
         OllamaPull.tags = ["outro:1b"]
         assert motor.baixar("qwen3.5:0.8b") is False
+        OllamaPull.tags = []  # lista vazia depois do pull também não confirma
+        assert motor.baixar("qwen3.5:0.8b") is False
     finally:
         httpd.shutdown()
 

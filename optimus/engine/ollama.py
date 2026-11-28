@@ -234,7 +234,7 @@ class MotorOllama(Motor):
         except httpx.HTTPError as erro:
             avisar({"error": f"não consegui falar com o Ollama ({erro})"})
             return False
-        if self.modelos() and not _tem_modelo(self.modelos(), modelo):
+        if not _tem_modelo(self.modelos(), modelo):  # lista vazia também não confirma
             avisar({"error": "o Ollama terminou, mas o modelo não aparece na lista"})
             return False
         return True
