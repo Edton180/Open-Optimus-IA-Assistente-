@@ -206,16 +206,20 @@ def test_https_para_o_microfone_do_celular(tmp_path, monkeypatch):
 
     from optimus.web import certificado
 
+    import ipaddress
+
+    rede = ipaddress.ip_network("10.0.0.0/24")  # IPs de exemplo da rede de casa
+    ip_a, ip_b = str(rede[20]), str(rede[30])
     monkeypatch.setattr(certificado, "pasta_base", lambda: tmp_path)
-    if certificado.garantir(["192.168.1.16"]) is None:
+    if certificado.garantir([ip_a]) is None:
         pytest.skip("sem cryptography e sem openssl neste ambiente")
     cert, chave = certificado.arquivos()
     assert cert.exists() and chave.exists()
     # mesmo IP: reaproveita; IP novo: recria
     antes = cert.read_bytes()
-    certificado.garantir(["192.168.1.16"])
+    certificado.garantir([ip_a])
     assert cert.read_bytes() == antes
-    certificado.garantir(["192.168.0.50"])
+    certificado.garantir([ip_b])
     assert cert.read_bytes() != antes
 
     config = Config()
